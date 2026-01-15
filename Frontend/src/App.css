@@ -1,0 +1,360 @@
+/* ========================================= */
+/* --- 1. VARIABILE & TEME --- */
+/* ========================================= */
+:root {
+  /* TEMA LIGHT (Implicita - Zi) */
+  --bg-primary: #f4f7fe;   /* Fundal gri foarte deschis */
+  --bg-secondary: #ffffff; /* Fundal alb curat (carduri) */
+  --text-primary: #2b3674; /* Text albastru inchis (elegant) */
+
+  /* MODIFICAT: Culoare mai inchisa pentru a fi mai vizibila pe alb */
+  --text-secondary: #5a6a85; /* Era #707eae (prea deschis) */
+
+  --accent: #4318ff;       /* Albastru electric (culoarea brandului) */
+  --accent-hover: #2e0db8; /* Albastru mai inchis cand pui mouse-ul */
+  --card-shadow: 0 10px 30px rgba(0,0,0,0.03); /* Umbra fina sub carduri */
+  --border-color: #e0e5f2; /* Linii subtiri gri */
+  --success: #05cd99;      /* Verde (succes) */
+  --danger: #ef4444;       /* Rosu (eroare) */
+}
+
+/* Cand utilizatorul schimba tema pe INTUNERIC (Dark Mode) */
+[data-theme='dark'] {
+  --bg-primary: #0b1437;   /* Albastru foarte inchis (aproape negru) */
+  --bg-secondary: #111c44; /* Albastru inchis (carduri) */
+  --text-primary: #ffffff; /* Text alb */
+  --text-secondary: #a3aed0; /* Text gri deschis pe fundal inchis */
+  --accent: #7551ff;       /* Albastru neon */
+  --accent-hover: #5a3ac7;
+  --card-shadow: 0 10px 30px rgba(0,0,0,0.2); /* Umbra mai puternica */
+  --border-color: #2b3674;
+}
+
+/* ========================================= */
+/* --- 2. SETARI GLOBALE --- */
+/* ========================================= */
+* {
+  box-sizing: border-box; /* Marimea include padding-ul */
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Font modern */
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s, color 0.3s; /* Animatie fina la schimbarea temei */
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  transition: all 0.2s ease; /* Butoanele se anima cand treci peste ele */
+}
+
+h1, h2, h3 { color: var(--text-primary); }
+p { color: var(--text-secondary); }
+
+/* ========================================= */
+/* --- 3. LAYOUT PRINCIPAL --- */
+/* ========================================= */
+.app-container {
+  display: flex;
+  height: 100vh; /* Ocupa tot ecranul pe inaltime */
+  width: 100vw;  /* Ocupa tot ecranul pe latime */
+  overflow: hidden; /* Fara scroll pe containerul mare */
+}
+
+/* ========================================= */
+/* --- 4. SIDEBAR (Meniul din stanga) --- */
+/* ========================================= */
+.sidebar {
+  width: 280px;
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  padding: 30px;
+  border-right: 1px solid var(--border-color);
+  transition: background 0.3s;
+  overflow-y: auto; /* Scroll daca meniul e prea lung */
+}
+
+.nav-btn {
+  background: transparent;
+  padding: 15px;
+  text-align: left;
+  font-size: 1rem;
+  /* MODIFICAT: Folosim culoarea principala dar cu transparenta pentru vizibilitate mai buna */
+  color: var(--text-primary);
+  opacity: 0.7;
+
+  border-radius: 10px;
+  margin-bottom: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-btn:hover {
+  background-color: var(--bg-primary);
+  opacity: 1;
+}
+
+/* Butonul activ (pagina curenta) */
+.nav-btn.active {
+  background-color: var(--accent);
+  color: white;
+  opacity: 1;
+  box-shadow: 0 5px 15px rgba(67, 24, 255, 0.4);
+}
+
+.theme-toggle {
+  padding: 10px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 10px;
+  font-weight: bold;
+}
+
+/* ========================================= */
+/* --- 5. MAIN CONTENT --- */
+/* ========================================= */
+.main-content {
+  flex: 1; /* Ocupa restul spatiului ramas */
+  padding: 40px;
+  overflow-y: auto; /* Scroll doar aici pe desktop */
+}
+
+/* ========================================= */
+/* --- 6. SPLASH SCREEN --- */
+/* ========================================= */
+.splash-screen {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: var(--accent);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  z-index: 9999;
+  /* Fortam culorile sa fie albe pe fundalul albastru */
+  --accent: #ffffff;
+  --text-secondary: #e0e0e0;
+}
+
+.logo-anim {
+  animation: fadeInLogo 1.5s ease-out;
+}
+
+@keyframes fadeInLogo {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ========================================= */
+/* --- 7. INPUTURI & LOGIN --- */
+/* ========================================= */
+.login-container {
+  width: 100vw; height: 100vh;
+  display: flex; justify-content: center; align-items: center;
+  background: var(--bg-primary);
+  padding: 20px;
+}
+
+.login-box {
+  background: var(--bg-secondary);
+  padding: 40px;
+  border-radius: 20px;
+  box-shadow: var(--card-shadow);
+  text-align: center;
+  width: 100%;
+  max-width: 400px;
+}
+
+/* Stil general pentru input-uri si select-uri */
+.login-input, select {
+  width: 100%;
+  padding: 15px;
+  margin: 8px 0;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 1rem;
+  outline: none;
+}
+
+.login-input:focus, select:focus {
+  border-color: var(--accent);
+}
+
+/* --- TEXTAREA (NOU ADĂUGAT PENTRU MOTIVE) --- */
+textarea {
+  width: 100%;
+  padding: 15px;
+  margin: 8px 0;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary); /* Se adaptează la temă */
+  color: var(--text-primary);    /* Scrisul va fi vizibil */
+  font-size: 1rem;
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+}
+
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(67, 24, 255, 0.1);
+}
+
+/* --- INPUT NUMERIC (NOU) --- */
+input[type="number"] {
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-weight: bold;
+  text-align: center;
+}
+
+/* ========================================= */
+/* --- 8. COMPONENTE VIZUALE --- */
+/* ========================================= */
+.card, .table-container, .ai-box {
+  background: var(--bg-secondary);
+  padding: 25px;
+  border-radius: 20px;
+  box-shadow: var(--card-shadow);
+  transition: transform 0.2s;
+  margin-bottom: 20px;
+}
+
+/* --- BUTON SECUNDAR (NOU - Albastru Deschis) --- */
+.btn-secondary {
+  background-color: #e0e7ff !important;
+  color: #4318ff !important;
+  border: 1px solid #c7d2fe !important;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.btn-secondary:hover {
+  background-color: #c7d2fe !important;
+  transform: translateY(-1px);
+}
+
+/* Grid-uri */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 25px;
+  margin-bottom: 30px;
+}
+
+.grid-2-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+}
+
+.big-number {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; padding: 20px; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); }
+td { padding: 20px; border-bottom: 1px solid var(--border-color); font-weight: 600; }
+
+.badge {
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  display: inline-block;
+}
+
+.animate-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ========================================= */
+/* --- 📱 MOBILE RESPONSIVE --- */
+/* ========================================= */
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+    height: auto;
+    overflow-y: auto;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 15px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    align-items: center;
+    gap: 10px;
+  }
+
+  .sidebar > div:first-child {
+    display: none;
+  }
+
+  .nav-btn {
+    margin-bottom: 0;
+    white-space: nowrap;
+    padding: 10px 15px;
+    font-size: 0.9rem;
+    background: var(--bg-primary);
+  }
+
+  .main-content {
+    padding: 15px;
+    overflow: visible;
+  }
+
+  .stats-grid, .grid-2-cols {
+    grid-template-columns: 1fr !important;
+    gap: 15px;
+  }
+
+  .table-container {
+    padding: 15px;
+    overflow-x: auto;
+  }
+
+  th, td {
+    padding: 10px;
+    font-size: 0.9rem;
+  }
+
+  .login-box {
+    width: 100%;
+    max-width: 100%;
+    box-shadow: none;
+  }
+
+  h1 { font-size: 1.8rem; }
+  h2 { font-size: 1.5rem; }
+}
