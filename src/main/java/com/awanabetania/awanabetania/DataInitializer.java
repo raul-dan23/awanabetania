@@ -16,9 +16,12 @@ import java.util.Optional;
 @Component
 public class DataInitializer implements CommandLineRunner {
 
-    @Autowired private DepartmentRepository departmentRepository;
-    @Autowired private LeaderRepository leaderRepository;
-    @Autowired private ChildRepository childRepository;
+    @Autowired
+    private DepartmentRepository departmentRepository;
+    @Autowired
+    private LeaderRepository leaderRepository;
+    @Autowired
+    private ChildRepository childRepository;
 
     @Override
     public void run(String... args) throws Exception {
@@ -36,17 +39,8 @@ public class DataInitializer implements CommandLineRunner {
         createDept("Agapă", 2, 5);
 
         // 2. LIDERI (User: Admin / Pass: 1234)
-        createLeader("Admin", "Director", "DIRECTOR", "0700999999", null);
-        createLeader("Popescu", "Andrei", "LIDER", "0700111222", "Jocuri");
-        createLeader("Ionescu", "Maria", "LIDER", "0700333444", "Verset");
-        createLeader("Radu", "Mihai", "LIDER", "0700555666", "Secretariat");
-        createLeader("Stan", "Elena", "LIDER", "0700777888", "Lecție");
+        createLeader("Raul", "Macovei", "DIRECTOR", "0774650819", null);
 
-        // 3. COPII (Pentru echipe)
-        createChild("Micu", "Ionut", 8);
-        createChild("Mare", "Vasile", 9);
-        createChild("Popa", "Ana", 7);
-        createChild("Dinu", "George", 10);
 
         System.out.println("✅ Datele sunt gata!");
     }
@@ -68,15 +62,4 @@ public class DataInitializer implements CommandLineRunner {
         }
     }
 
-    private void createChild(String name, String surname, int age) {
-        boolean exists = childRepository.findAll().stream()
-                .anyMatch(c -> c.getName().equalsIgnoreCase(name) && c.getSurname().equalsIgnoreCase(surname));
-        if (!exists) {
-            Child c = new Child();
-            c.setName(name); c.setSurname(surname); c.setBirthDate(LocalDate.now().minusYears(age));
-            c.setParentName("Părinte"); c.setParentPhone("0700000000"); c.setPassword("1234");
-            c.setSeasonPoints(0); c.setIsSuspended(false);
-            childRepository.save(c);
-        }
-    }
 }

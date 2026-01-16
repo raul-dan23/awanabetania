@@ -8,6 +8,8 @@ import com.awanabetania.awanabetania.Repository.NotificationRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,18 +52,27 @@ public class DashboardController {
         // Aici ne ocupam de notificari (clopotelul de sus)
         if (leaderId != null) {
             // Luam mesajele private (pentru el) sau cele publice (pentru toata lumea - ALL)
+            // Repository-ul se asigura ca le aduce doar pe cele VIZIBILE (ne-sterse)
             List<Notification> notifications = notificationRepository.findByVisibleToOrVisibleToOrderByIdDesc(String.valueOf(leaderId), "ALL");
 
-            // Pastram doar textul mesajului si luam doar ultimele 5 (cele mai noi)
-            List<String> notifMessages = notifications.stream()
-                    .map(Notification::getMessage)
-                    .limit(5)
+            // --- MODIFICARE IMPORTANTA AICI ---
+            // Inainte luam doar textul (.map(Notification::getMessage)).
+            // Acum trimitem TOT obiectul (cu ID, Message, Date) ca sa putem da click pe X (stergere).
+            // Luam ultimele 10 notificari, nu doar 5, ca sa fie mai util.
+            List<Notification> recentNotifications = notifications.stream()
+                    .limit(10)
                     .collect(Collectors.toList());
 
-            stats.put("notifications", notifMessages);
+            stats.put("notifications", recentNotifications);
         } else {
-            // Daca nu e nimeni logat, afisam un mesaj standard de bun venit
-            stats.put("notifications", List.of("Bine ai venit!"));
+            // Daca nu e nimeni logat, facem o notificare falsa de bun venit,
+            // ca sa nu crape frontend-ul care asteapta obiecte.
+            Notification welcome = new Notification();
+            welcome.setId(0);
+            welcome.setMessage("Bine ai venit!");
+            welcome.setDate(LocalDate.now());
+
+            stats.put("notifications", List.of(welcome));
         }
 
         // Aici punem orarul serii (momentan este fix, scris de mana)

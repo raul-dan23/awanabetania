@@ -5,8 +5,8 @@ import AwanaLogo from './AwanaLogo';
 // ==========================================
 // CONFIGURARE GLOBALA
 // ==========================================
-const API_URL = 'http://localhost:8080/api';
-// const API_URL = 'http://192.168.2.186:8080/api';
+//const API_URL = 'http://localhost:8080/api';
+const API_URL = 'http://awana.annadanut.ro:8080/api';
 
 // ==========================================
 // 1. SPLASH SCREEN
@@ -895,7 +895,7 @@ const Registry = ({ user }) => {
 };
 
 // ==========================================
-// 10. DASHBOARD
+// 10. DASHBOARD (FINAL - STERGE CHENARUL GALBEN)
 // ==========================================
 const Dashboard = ({ user }) => {
     const [stats, setStats] = useState(null);
@@ -906,6 +906,32 @@ const Dashboard = ({ user }) => {
         const url = user ? `${API_URL}/dashboard/stats?leaderId=${user.id}` : `${API_URL}/dashboard/stats`;
         fetch(url).then(r => r.ok ? r.json() : null).then(data => { if(data) { setStats(data); setLoading(false); }}).catch(() => setLoading(false));
     }, [user]);
+
+    // --- FUNCTIA MAGICĂ DE REACTUALIZARE ---
+    const handleDeleteNotification = (id) => {
+        if(!window.confirm("Ștergi notificarea?")) return;
+
+        // 1. Trimitem cererea la server
+        fetch(`${API_URL}/notifications/${id}`, { method: 'DELETE' })
+            .then(res => {
+                if(res.ok) {
+                    // 2. AICI STERGE CHENARUL: Actualizam starea locala (filtram lista)
+                    setStats(prevStats => {
+                        // Cream o lista noua care contine TOT, minus elementul cu ID-ul sters
+                        const newNotifications = prevStats.notifications.filter(n => n.id !== id);
+
+                        // Returnam obiectul stats actualizat
+                        return {
+                            ...prevStats,
+                            notifications: newNotifications
+                        };
+                    });
+                } else {
+                    alert("Eroare la ștergere.");
+                }
+            })
+            .catch(() => alert("Eroare server."));
+    };
 
     const getProgressMessages = () => {
         if (!isChild) return [];
@@ -920,6 +946,7 @@ const Dashboard = ({ user }) => {
     if (!stats) return <div className="animate-in"><p>Eroare incarcare date.</p></div>;
 
     const progressMsgs = getProgressMessages();
+    // Pentru copii nu aratam notificarile din baza de date, doar progresul
     const notificationsToDisplay = isChild ? [] : (stats.notifications || []);
 
     return (
@@ -934,12 +961,64 @@ const Dashboard = ({ user }) => {
                 <div className="card" style={{overflowY:'auto', maxHeight:'160px'}}><h3>📞 Directori</h3>{stats.directors && stats.directors.map(dir => (<div key={dir.id} style={{borderBottom:'1px solid #eee', padding:'5px 0', fontSize:'0.9rem'}}><strong>{dir.name} {dir.surname}</strong><br/><span style={{color:'var(--accent)'}}>{dir.phoneNumber || '-'}</span></div>))}</div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
-                <div className="card"><h3 style={{marginBottom:'15px'}}>🔔 {isChild ? 'Notificari' : 'Notificari & Feedback'}</h3>{isChild && progressMsgs.map((msg, i) => (<div key={i} style={{background:'#eff6ff', borderLeft:'4px solid #3b82f6', color:'#1e40af', padding:'15px', borderRadius:'8px', marginBottom:'10px', fontWeight:'bold', fontSize:'0.95rem'}}>{msg}</div>))}{notificationsToDisplay.length > 0 ? (notificationsToDisplay.map((n, i) => (<div key={i} style={{background:'#fff3cd', color:'#856404', padding:'15px', borderRadius:'8px', marginBottom:'10px', whiteSpace:'pre-wrap', borderLeft:'4px solid #ffc107', fontSize:'0.9rem'}}>{n}</div>))) : ((!isChild || progressMsgs.length === 0) && <p style={{color:'#888'}}>Nu ai notificari noi.</p>)}</div>
+                <div className="card">
+                    <h3 style={{marginBottom:'15px'}}>🔔 {isChild ? 'Notificari' : 'Notificari & Feedback'}</h3>
+
+                    {/* Mesaje Copii (Raman la fel) */}
+                    {isChild && progressMsgs.map((msg, i) => (<div key={i} style={{background:'#eff6ff', borderLeft:'4px solid #3b82f6', color:'#1e40af', padding:'15px', borderRadius:'8px', marginBottom:'10px', fontWeight:'bold', fontSize:'0.95rem'}}>{msg}</div>))}
+
+                    {/* NOTIFICARI LIDERI */}
+                    {notificationsToDisplay.length > 0 ? (
+                        notificationsToDisplay.map((n) => (
+                            <div key={n.id} style={{
+                                background:'#fff3cd',
+                                color:'#856404',
+                                padding:'15px',
+                                paddingRight:'35px', // Loc pentru X
+                                borderRadius:'8px',
+                                marginBottom:'10px',
+                                whiteSpace:'pre-wrap',
+                                borderLeft:'4px solid #ffc107',
+                                fontSize:'0.9rem',
+                                position: 'relative' // Necesar pt X
+                            }}>
+                                {/* Mesajul */}
+                                {n.message}
+
+                                {/* Butonul X */}
+                                <div
+                                    onClick={() => handleDeleteNotification(n.id)}
+                                    style={{
+                                        position: 'absolute',
+                                        top: '5px',
+                                        right: '5px',
+                                        width: '24px',
+                                        height: '24px',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: '#856404',
+                                        fontWeight: 'bold',
+                                        fontSize: '1.2rem',
+                                        opacity: 0.5
+                                    }}
+                                    title="Șterge"
+                                    onMouseOver={(e) => e.target.style.opacity = 1}
+                                    onMouseOut={(e) => e.target.style.opacity = 0.5}
+                                >
+                                    ×
+                                </div>
+                            </div>
+                        ))
+                    ) : ((!isChild || progressMsgs.length === 0) && <p style={{color:'#888'}}>Nu ai notificari noi.</p>)}
+                </div>
                 <div className="card"><h3 style={{marginBottom:'15px'}}>📌 Planificare</h3>{stats.reminders && stats.reminders.map((r, i) => <div key={i} style={{padding:'10px', borderBottom:'1px solid #eee'}}>✅ {r}</div>)}</div>
             </div>
         </div>
     );
 };
+
 
 // ==========================================
 // 11. MY PROFILE
