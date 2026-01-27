@@ -12,9 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -39,12 +36,6 @@ public class AuthController {
 
     @Autowired
     private DepartmentRepository departmentRepository;
-
-    /**
-     * Numele fisierului secret care sta in folderul proiectului.
-     * In el scriem codurile (ex: AWANA2024) pe care liderii trebuie sa le bage la inregistrare.
-     */
-    private static final String CODES_FILE = "codes.txt";
 
     /**
      * Metoda de LOGIN.
@@ -126,12 +117,14 @@ public class AuthController {
 
         // CAZUL 2: Inregistrare LIDER (Mai complex, cere securitate)
         else {
-            // PASUL 1: Securitate. Verificam daca stie codul secret din fisierul codes.txt
+            // PASUL 1: Securitate. Verificam codul secret (MODIFICAT: Acum nu mai citim din fisier)
             if (!isValidCode(request.getRegistrationCode())) {
                 return ResponseEntity.badRequest().body("Cod de acces invalid! Cere un cod valid de la Director.");
             }
 
             // PASUL 2: Verificam sa nu existe deja un lider cu acest nume
+            // Nota: Asigura-te ca ai metoda findByNameAndSurname in LeaderRepository!
+            // Daca nu o ai, sterge if-ul acesta sau adaug-o in Repository.
             if (leaderRepository.findByNameAndSurname(request.getName(), request.getSurname()).isPresent()) {
                 return ResponseEntity.badRequest().body("Lider existent!");
             }
@@ -161,22 +154,21 @@ public class AuthController {
     }
 
     /**
-     * Metoda ajutatoare (privata) care citeste fisierul codes.txt.
-     * Verifica daca codul introdus de utilizator se afla in acel fisier.
+     * MODIFICAT: Verificam codul direct din cod, fara fisiere externe.
+     * Asta rezolva problema cu "codes.txt not found".
+     * Aici poti adauga sau sterge codurile acceptate.
      */
     private boolean isValidCode(String code) {
         if (code == null || code.trim().isEmpty()) return false;
-        try {
-            // Citim toate liniile din fisier
-            List<String> validCodes = Files.readAllLines(Paths.get(CODES_FILE));
 
-            // Verificam daca codul primit exista in lista
-            return validCodes.stream()
-                    .anyMatch(line -> line.trim().equals(code.trim()));
-        } catch (IOException e) {
-            System.err.println("EROARE: Nu am putut citi fisierul " + CODES_FILE + ". Asigura-te ca exista in folderul proiectului!");
-            e.printStackTrace();
-            return false; // Daca fisierul lipseste, blocam tot din motive de securitate
-        }
+        // Lista codurilor valide pentru inregistrare
+        // Poti adauga aici oricate vrei
+        List<String> validCodes = List.of(
+                "AWANA2024",      // Cod principal
+                "BETANIA",        // Alt cod
+                "DIRECTOR_KEY"    // Cod pt directori
+        );
+
+        return validCodes.contains(code.trim());
     }
 }

@@ -10,7 +10,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Aceasta clasa reprezinta un departament (ex: Secretari, Jocuri, Timp Biblic).
+ * Aceasta clasa reprezinta un departament (ex: Secretari, Jocuri).
  * Aici setam regulile despre cati oameni sunt necesari.
  */
 @Entity

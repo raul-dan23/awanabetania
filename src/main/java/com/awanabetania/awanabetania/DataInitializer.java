@@ -30,7 +30,6 @@ public class DataInitializer implements CommandLineRunner {
         // 1. DEPARTAMENTE
         createDept("Lecție", 1, 3);
         createDept("Jocuri", 2, 6);
-        createDept("Verset", 2, 5);
         createDept("Media", 1, 2);
         createDept("Social Media", 1, 2);
         createDept("Sală", 2, 4);

@@ -5,8 +5,10 @@ import AwanaLogo from './AwanaLogo';
 // ==========================================
 // CONFIGURARE GLOBALA
 // ==========================================
-//const API_URL = 'http://localhost:8080/api';
-const API_URL = 'http://awana.annadanut.ro:8080/api';
+const API_URL = 'http://localhost:8080/api';
+//const API_URL = 'http://192.168.2.186:8080/api';
+
+
 
 // ==========================================
 // 1. SPLASH SCREEN
@@ -390,7 +392,7 @@ const LeadersRegistry = () => {
 // ==========================================
 /**
  * Componenta pentru acordarea punctelor individuale.
- * Bifam ce a facut copilul (biblie, uniforma) si salvam.
+ * Bifam ce a facut copilul (prieten, uniforma) si salvam.
  */
 const ScoringWidget = () => {
     const [children, setChildren] = useState([]);
@@ -484,7 +486,7 @@ const ScoringWidget = () => {
 
                 <label style={{display:'flex', alignItems:'center', gap:'10px', padding:'10px', background:'#f9f9f9', borderRadius:'8px', cursor:'pointer'}}>
                     <input type="checkbox" style={{width:'20px', height:'20px'}} name="hasBible" checked={pointsData.hasBible} onChange={handleCheckbox}/>
-                    <span>📖 Biblie</span>
+                    <span>📖 Caiet</span>
                 </label>
 
                 <label style={{display:'flex', alignItems:'center', gap:'10px', padding:'10px', background:'#f9f9f9', borderRadius:'8px', cursor:'pointer'}}>
@@ -575,7 +577,7 @@ const TeamsManager = () => {
 
             {mode === 'selection' && (
                 <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px'}}>
-                    <div style={{gridColumn:'span 2', display:'flex', gap:'5px', overflowX:'auto', paddingBottom:'10px'}}>{teams.map(c => <button key={c} onClick={()=>setMyColor(c)} style={{flex:1, padding:'10px', borderRadius:'8px', fontWeight:'bold', textTransform:'uppercase', border:'none', background:myColor===c?teamStyles[c].border:'#f3f4f6', color:myColor===c?'white':'#666'}}>Sunt {c}</button>)}</div>
+                    <div style={{gridColumn:'span 2', display:'flex', gap:'5px', overflowX:'auto', paddingBottom:'10px'}}>{teams.map(c => <button key={c} onClick={()=>setMyColor(c)} style={{flex:1, padding:'10px', borderRadius:'8px', fontWeight:'bold', textTransform:'uppercase', border:'none', background:myColor===c?teamStyles[c].border:'#f3f4f6', color:myColor===c?'white':'#666'}}>{c}</button>)}</div>
                     <div className="card" style={{height:'500px', display:'flex', flexDirection:'column', border:'1px dashed #ccc'}}><h3 style={{marginTop:0}}>👶 Disponibili ({availableKids.length})</h3><div style={{overflowY:'auto', flex:1}}>{availableKids.map(c => (<div key={c.id} onClick={()=>pickChild(c.id)} style={{padding:'10px', borderBottom:'1px solid #eee', cursor:'pointer', display:'flex', justifyContent:'space-between', background:'white'}}><strong>{c.name} {c.surname}</strong><span>+</span></div>))}</div></div>
                     <div className="card" style={{height:'500px', display:'flex', flexDirection:'column', background:currentTheme.bg, border:`2px solid ${currentTheme.border}`}}><h3 style={{marginTop:0, color:currentTheme.text, textTransform:'uppercase'}}>Echipa Mea</h3><div style={{fontSize:'2.5rem', fontWeight:'bold', color:currentTheme.text}}>{scores.total} <span style={{fontSize:'1rem'}}>pct</span></div><div style={{fontSize:'0.8rem', marginBottom:'10px', color:currentTheme.text}}>(Indiv: {scores.individual} + Joc: {scores.game})</div><div style={{overflowY:'auto', flex:1}}>{myTeamMembers.map(c => <div key={c.id} style={{padding:'5px 0', borderBottom:`1px solid ${currentTheme.text}40`, color:currentTheme.text}}>✅ {c.name} {c.surname}</div>)}</div></div>
                 </div>
@@ -816,8 +818,8 @@ const Registry = ({ user }) => {
         const streak = child.attendanceStreak || 0;
         const lessons = child.lessonsCompleted || 0;
         const msgs = [];
-        if (!child.hasShirt) msgs.push(5-streak <= 0 ? "🎁 Eligibil TRICOU!" : `👕 Mai are ${5-streak} prezente pana la Tricou.`);
-        else if (!child.hasHat) msgs.push(10-streak <= 0 ? "🎁 Eligibil CACIULA!" : `🧢 Mai are ${10-streak} prezente pana la Caciula.`);
+        if (!child.hasShirt) msgs.push(5-streak <= 0 ? "🎁 Primeste TRICOU!" : `👕 Mai are ${5-streak} prezente pana la Tricou.`);
+        else if (!child.hasHat) msgs.push(10-streak <= 0 ? "🎁 Primeste CACIULA!" : `🧢 Mai are ${10-streak} prezente pana la Caciula.`);
         msgs.push(`🏅 Mai are ${3-(lessons%3)} lectii pana la Insigna.`);
         return msgs;
     };
