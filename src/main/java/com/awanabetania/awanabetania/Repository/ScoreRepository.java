@@ -2,6 +2,8 @@ package com.awanabetania.awanabetania.Repository;
 
 import com.awanabetania.awanabetania.Model.Score;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -35,4 +37,11 @@ public interface ScoreRepository extends JpaRepository<Score, Integer> {
      * Aceasta metoda este CRITICA pentru TeamController, ca sa adune punctele la echipa.
      */
     Optional<Score> findByChildIdAndMeetingId(Integer childId, Integer meetingId);
+
+    // FIX: Stergere
+    @Modifying
+    @Query("DELETE FROM Score s WHERE s.child.id = ?1")
+    void deleteByChildId(Integer childId);
+
 }
+

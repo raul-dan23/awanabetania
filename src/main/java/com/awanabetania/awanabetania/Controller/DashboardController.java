@@ -9,75 +9,62 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-/**
- * Aceasta clasa pregateste datele pentru prima pagina (Dashboard).
- * Cand deschizi aplicatia, acest cod ruleaza ca sa iti arate statistici si noutati.
- */
 @RestController
 @RequestMapping("/api/dashboard")
 @CrossOrigin(origins = "*")
 public class DashboardController {
 
-    // Avem nevoie de acces la tabele pentru a numara copiii, liderii si mesajele
     @Autowired private ChildRepository childRepository;
     @Autowired private LeaderRepository leaderRepository;
     @Autowired private NotificationRepository notificationRepository;
 
-    /**
-     * Aceasta metoda strange toate informatiile necesare pentru ecranul principal.
-     * Primeste ID-ul liderului ca sa stim ce mesaje sa ii aratam doar lui.
-     */
     @GetMapping("/stats")
     public Map<String, Object> getDashboardStats(@RequestParam(required = false) Integer leaderId) {
         Map<String, Object> stats = new HashMap<>();
-
-        // Punem in pachet numele clubului si cati oameni sunt inscrisi in total
         stats.put("clubName", "Awana Betania");
         stats.put("kidsCount", childRepository.count());
         stats.put("leadersCount", leaderRepository.count());
 
-        // Cautam in lista cine sunt sefii (Directori sau Coordonatori) ca sa ii afisam separat
         List<Leader> directors = leaderRepository.findAll().stream()
-                .filter(l -> l.getRole() != null &&
-                        (l.getRole().equalsIgnoreCase("DIRECTOR") || l.getRole().equalsIgnoreCase("COORDONATOR")))
+                .filter(l -> l.getRole() != null && (l.getRole().equalsIgnoreCase("DIRECTOR") || l.getRole().equalsIgnoreCase("COORDONATOR")))
                 .collect(Collectors.toList());
         stats.put("directors", directors);
 
-        // Aici ne ocupam de notificari (clopotelul de sus)
         if (leaderId != null) {
-            // Luam mesajele private (pentru el) sau cele publice (pentru toata lumea - ALL)
-            // Repository-ul se asigura ca le aduce doar pe cele VIZIBILE (ne-sterse)
-            List<Notification> notifications = notificationRepository.findByVisibleToOrVisibleToOrderByIdDesc(String.valueOf(leaderId), "ALL");
+            Leader currentLeader = leaderRepository.findById(leaderId).orElse(null);
 
-            // --- MODIFICARE IMPORTANTA AICI ---
-            // Inainte luam doar textul (.map(Notification::getMessage)).
-            // Acum trimitem TOT obiectul (cu ID, Message, Date) ca sa putem da click pe X (stergere).
-            // Luam ultimele 10 notificari, nu doar 5, ca sa fie mai util.
-            List<Notification> recentNotifications = notifications.stream()
-                    .limit(10)
+            // 1. Notificari publice (ALL)
+            List<Notification> publicN = notificationRepository.findByVisibleTo("ALL");
+
+            // 2. Notificari personale (ID)
+            List<Notification> personalN = notificationRepository.findByVisibleTo(String.valueOf(leaderId));
+
+            // 3. Notificari Director (doar daca are rolul)
+            List<Notification> directorN = new ArrayList<>();
+            if (currentLeader != null &&
+                    (currentLeader.getRole().equalsIgnoreCase("DIRECTOR") || currentLeader.getRole().equalsIgnoreCase("COORDONATOR"))) {
+                directorN = notificationRepository.findByVisibleTo("DIRECTOR");
+            }
+
+            // Combinare si sortare
+            List<Notification> finalN = Stream.of(publicN, personalN, directorN)
+                    .flatMap(Collection::stream)
+                    .distinct()
+                    .sorted(Comparator.comparing(Notification::getId).reversed())
+                    .limit(20)
                     .collect(Collectors.toList());
 
-            stats.put("notifications", recentNotifications);
+            stats.put("notifications", finalN);
         } else {
-            // Daca nu e nimeni logat, facem o notificare falsa de bun venit,
-            // ca sa nu crape frontend-ul care asteapta obiecte.
-            Notification welcome = new Notification();
-            welcome.setId(0);
-            welcome.setMessage("Bine ai venit!");
-            welcome.setDate(LocalDate.now());
-
-            stats.put("notifications", List.of(welcome));
+            Notification w = new Notification(); w.setId(0); w.setMessage("Bine ai venit!"); w.setDate(LocalDate.now());
+            stats.put("notifications", List.of(w));
         }
 
-        // Aici punem orarul serii (momentan este fix, scris de mana)
         stats.put("reminders", List.of("📅 18:00 - Incepere", "📅 19:30 - Premierea"));
-
         return stats;
     }
 }

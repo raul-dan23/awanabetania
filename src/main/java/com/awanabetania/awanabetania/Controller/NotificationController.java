@@ -1,7 +1,7 @@
 package com.awanabetania.awanabetania.Controller;
 
-import com.awanabetania.awanabetania.Model.*;
-import com.awanabetania.awanabetania.Repository.*;
+import com.awanabetania.awanabetania.Model.Notification;
+import com.awanabetania.awanabetania.Repository.NotificationRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,37 +17,38 @@ public class NotificationController {
     @Autowired
     private NotificationRepository notificationRepository;
 
-    // GET: Aduce doar notificarile active (ne-sterse)
+    /**
+     * Returnează notificările active pentru un anumit lider + cele publice ("ALL").
+     * Folosește metoda 'findMyActiveNotifications' definită în Repository.
+     */
     @GetMapping
-    public List<Notification> getAll() {
-        // Acum metoda aceasta exista in Repository si nu mai da eroare
-        return notificationRepository.findByIsVisibleTrueOrderByIdDesc();
-    }
-
-    // GET pentru un lider specific (Optional, daca folosesti filtrarea)
-    @GetMapping("/{leaderId}")
-    public List<Notification> getForLeader(@PathVariable String leaderId) {
+    public List<Notification> getMyNotifications(@RequestParam String leaderId) {
+        // Apelăm metoda cu parametrii String, String
         return notificationRepository.findMyActiveNotifications(leaderId, "ALL");
     }
 
-    // POST: Adauga o notificare noua
+    /**
+     * Adaugă o notificare manuală (dacă e nevoie vreodată din Postman/Frontend).
+     */
     @PostMapping("/add")
-    public Notification add(@RequestBody Notification n) {
-        // AICI ERA EROAREA: Am schimbat LocalDateTime in LocalDate
-        n.setDate(LocalDate.now());
-        n.setIsVisible(true);
-        return notificationRepository.save(n);
+    public Notification addNotification(@RequestBody Notification notification) {
+        notification.setDate(LocalDate.now());
+        notification.setIsVisible(true);
+        return notificationRepository.save(notification);
     }
 
-    // DELETE: "Stergere logica" - O ascundem
+    /**
+     * Ștergere logică (Soft Delete).
+     * Când apeși X în Dashboard, se apelează asta.
+     */
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> hideNotification(@PathVariable Integer id) {
-        Notification n = notificationRepository.findById(id).orElse(null);
-        if (n == null) return ResponseEntity.badRequest().body("Nu exista.");
-
-        n.setIsVisible(false); // O ascundem
-        notificationRepository.save(n); // Salvam modificarea
-
-        return ResponseEntity.ok("Notificare ștearsă (ascunsă)!");
+    public ResponseEntity<?> deleteNotification(@PathVariable Integer id) {
+        return notificationRepository.findById(id)
+                .map(notification -> {
+                    notification.setIsVisible(false); // Nu o ștergem fizic, doar o ascundem
+                    notificationRepository.save(notification);
+                    return ResponseEntity.ok().build();
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 }

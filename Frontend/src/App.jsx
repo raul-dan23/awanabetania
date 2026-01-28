@@ -713,7 +713,7 @@ const DepartmentsPlan = ({ meetingId, user, onConfirm, isConfirmed }) => {
 };
 
 // ==========================================
-// 8. CALENDAR MANAGER (REPARAT)
+// 8. CALENDAR MANAGER (ACTUALIZAT CU LOGICA DE INCHIDERE)
 // ==========================================
 const CalendarManager = ({ user }) => {
     const [meetings, setMeetings] = useState([]);
@@ -734,9 +734,19 @@ const CalendarManager = ({ user }) => {
         fetch(`${API_URL}/meetings/add`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ date: newDate, description: newDesc }) }).then(() => { loadMeetings(); setNewDate(''); setNewDesc(''); });
     };
 
+    // --- LOGICA DE INCHIDERE ---
     const finalizeClose = () => {
+        // Backend-ul va face resetarea automata la Streak pentru absenti
         fetch(`${API_URL}/meetings/close/${activeSession.id}`, { method: 'POST' }).then(async res => {
-            if(res.ok) { alert("✅ Seara incheiata cu succes!"); setShowFeedbackModal(false); setActiveSession(null); loadMeetings(); } else alert("Eroare la inchidere.");
+            if(res.ok) {
+                const msg = await res.text(); // Primim mesajul cu cati copii s-au resetat
+                alert(msg);
+                setShowFeedbackModal(false);
+                setActiveSession(null);
+                loadMeetings();
+            } else {
+                alert("Eroare la inchidere.");
+            }
         });
     };
 
@@ -747,14 +757,35 @@ const CalendarManager = ({ user }) => {
             <div className="animate-in">
                 <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
                     <div>
-                        {/* Buton Înapoi stilizat corect */}
                         <button onClick={() => setActiveSession(null)} className="btn-secondary" style={{marginBottom:'10px'}}>
                             ⬅ Inapoi la Calendar
                         </button>
                         <h2 style={{margin:0}}>📅 {activeSession.date}</h2>
                     </div>
-                    {isDirector && <button onClick={()=>{if(!window.confirm("⚠️ Esti sigur ca vrei sa inchei seara?")) return; setShowFeedbackModal(true)}} style={{background:'#ef4444', color:'white', padding:'10px 20px', borderRadius:'10px', fontWeight:'bold', border:'2px solid #b91c1c', cursor:'pointer'}}>🏁 INCHEIE SEARA</button>}
+
+                    {/* BUTONUL MAGIC DE INCHIDERE */}
+                    {isDirector && (
+                        <button
+                            onClick={()=>{
+                                if(!window.confirm("🚨 ATENTIE!\n\nEsti pe cale sa inchizi seara. Asigura-te ca toti liderii au terminat prezenta!\n\nOrice copil care NU are prezenta pusa AZI va fi marcat ABSENT si i se va reseta seria la 0.\n\nContinui?")) return;
+                                setShowFeedbackModal(true)
+                            }}
+                            style={{
+                                background:'#ef4444',
+                                color:'white',
+                                padding:'10px 20px',
+                                borderRadius:'10px',
+                                fontWeight:'bold',
+                                border:'2px solid #b91c1c',
+                                cursor:'pointer',
+                                boxShadow: '0 4px 6px rgba(0,0,0,0.2)'
+                            }}
+                        >
+                            🏁 INCHEIE SEARA & RESETEAZA ABSENTII
+                        </button>
+                    )}
                 </div>
+
                 <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
                     <button onClick={() => setActiveTab('plan')} style={{flex:1, padding:'10px', background:activeTab==='plan'?'var(--accent)':'white', color:activeTab==='plan'?'white':'black', borderRadius:'10px', border:'none', fontWeight:'bold'}}>📋 Organizare</button>
                     {(isOrganized || !isDirector) && (<><button onClick={() => setActiveTab('scoring')} style={{flex:1, padding:'10px', background:activeTab==='scoring'?'var(--accent)':'white', color:activeTab==='scoring'?'white':'black', borderRadius:'10px', border:'none', fontWeight:'bold'}}>⭐ Scoring Individual</button><button onClick={() => setActiveTab('teams')} style={{flex:1, padding:'10px', background:activeTab==='teams'?'var(--accent)':'white', color:activeTab==='teams'?'white':'black', borderRadius:'10px', border:'none', fontWeight:'bold'}}>🚩 Echipe & Jocuri</button></>)}
@@ -775,20 +806,52 @@ const CalendarManager = ({ user }) => {
     );
 };
 
+
 // ==========================================
-// 9. REGISTRY & DOSARE
+// 9. REGISTRY & DOSARE (Versiunea Dinamică - Fără Hardcodare)
 // ==========================================
 const Registry = ({ user }) => {
     const [children, setChildren] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedChild, setSelectedChild] = useState(null);
+
+    // State pentru Avertismente
     const [childWarnings, setChildWarnings] = useState([]);
     const [newWarning, setNewWarning] = useState({ description: '', suspension: false, remainingMeetings: 1 });
+
+    // State pentru ATRIBUIRE MANUAL
+    const [availableManuals, setAvailableManuals] = useState([]); // Lista dinamică
+    const [manualMode, setManualMode] = useState('SELECT'); // 'SELECT' sau 'NEW'
+    const [selectedManual, setSelectedManual] = useState('');
+    const [customManualName, setCustomManualName] = useState('');
 
     const isDirector = user && (user.role === 'DIRECTOR' || user.role === 'COORDONATOR');
 
     useEffect(() => {
-        fetch(`${API_URL}/children`).then(r => r.ok?r.json():[]).then(async (kids) => {
+        loadChildren();
+    }, []);
+
+    const loadChildren = () => {
+        fetch(`${API_URL}/children`).then(r => r.ok ? r.json() : []).then(async (kids) => {
+            // 1. Extragem lista unică de manuale din ce au primit copiii deja
+            const existingManualsSet = new Set();
+            kids.forEach(child => {
+                if (child.manuals && Array.isArray(child.manuals)) {
+                    child.manuals.forEach(m => existingManualsSet.add(m.name));
+                }
+            });
+            const uniqueManuals = Array.from(existingManualsSet).sort(); // Le ordonăm alfabetic
+            setAvailableManuals(uniqueManuals);
+
+            // Setăm default-ul pentru selector
+            if (uniqueManuals.length > 0) {
+                setSelectedManual(uniqueManuals[0]);
+                setManualMode('SELECT');
+            } else {
+                setManualMode('NEW'); // Dacă nu e niciun manual în DB, trecem direct pe mod "Scriere"
+            }
+
+            // 2. Încărcăm statusul de suspendare
             const kidsWithStatus = await Promise.all(kids.map(async (k) => {
                 try {
                     const wRes = await fetch(`${API_URL}/warnings/child/${k.id}`);
@@ -799,30 +862,92 @@ const Registry = ({ user }) => {
             }));
             setChildren(kidsWithStatus); setLoading(false);
         }).catch(() => setLoading(false));
-    }, []);
+    };
 
     const openChildFile = (child) => {
-        setSelectedChild(child);
-        setChildWarnings([]);
-        fetch(`${API_URL}/warnings/child/${child.id}`).then(r => r.ok ? r.json() : []).then(data => setChildWarnings(Array.isArray(data) ? data : [])).catch(() => setChildWarnings([]));
+        fetch(`${API_URL}/children/${child.id}`)
+            .then(r => r.json())
+            .then(freshData => {
+                setSelectedChild(freshData);
+                // Resetam form-ul
+                setCustomManualName('');
+
+                // Daca avem manuale in lista, il selectam pe primul, altfel ramanem pe NEW
+                if (availableManuals.length > 0) {
+                    setManualMode('SELECT');
+                    setSelectedManual(availableManuals[0]);
+                } else {
+                    setManualMode('NEW');
+                }
+
+                fetch(`${API_URL}/warnings/child/${child.id}`)
+                    .then(r => r.ok ? r.json() : [])
+                    .then(data => setChildWarnings(Array.isArray(data) ? data : []))
+                    .catch(() => setChildWarnings([]));
+            });
+    };
+
+    // --- LOGICA ATRIBUIRE MANUAL ---
+    const handleAssignManual = () => {
+        const finalName = manualMode === 'NEW' ? customManualName : selectedManual;
+
+        if (!finalName || finalName.trim() === '') {
+            alert("⚠️ Te rog scrie un nume de manual!");
+            return;
+        }
+
+        if (!window.confirm(`Confirmi că vrei să atribui manualul "${finalName}" lui ${selectedChild.name}?`)) return;
+
+        fetch(`${API_URL}/children/${selectedChild.id}/assign-manual?manualName=${encodeURIComponent(finalName)}`, {
+            method: 'POST'
+        })
+            .then(res => {
+                if (res.ok) {
+                    alert("✅ Manual atribuit cu succes!");
+                    // Reincarcam TOATA lista de copii pentru ca tocmai am creat un manual nou
+                    // si vrem sa apara in lista disponibila pentru ceilalti copii
+                    loadChildren();
+
+                    // Reincarcam si copilul curent ca sa vedem update-ul
+                    fetch(`${API_URL}/children/${selectedChild.id}`).then(r=>r.json()).then(setSelectedChild);
+                } else {
+                    alert("❌ Eroare la server.");
+                }
+            });
+    };
+
+    const toggleInventoryItem = (itemField, currentValue) => {
+        const updatedChild = { ...selectedChild, [itemField]: !currentValue };
+        fetch(`${API_URL}/children/${selectedChild.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedChild)
+        }).then(res => { if (res.ok) openChildFile(selectedChild); });
     };
 
     const handleAddWarning = () => {
-        if(!newWarning.description) { alert("Scrie motivul!"); return; }
+        if (!newWarning.description) { alert("Scrie motivul!"); return; }
         const payload = { childId: selectedChild.id, description: newWarning.description, suspension: newWarning.suspension, remainingMeetings: newWarning.suspension ? newWarning.remainingMeetings : 0 };
-        fetch(`${API_URL}/warnings/add`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) })
-            .then(res => { if(res.ok) { alert("✅ Salvat!"); openChildFile(selectedChild); setNewWarning({ description: '', suspension: false, remainingMeetings: 1 }); } else alert("Eroare server."); });
+        fetch(`${API_URL}/warnings/add`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+            .then(res => { if (res.ok) { alert("✅ Salvat!"); openChildFile(selectedChild); setNewWarning({ description: '', suspension: false, remainingMeetings: 1 }); } else alert("Eroare server."); });
     };
 
     const getProgressMessages = (child) => {
         const streak = child.attendanceStreak || 0;
         const lessons = child.lessonsCompleted || 0;
         const msgs = [];
-        if (!child.hasShirt) msgs.push(5-streak <= 0 ? "🎁 Primeste TRICOU!" : `👕 Mai are ${5-streak} prezente pana la Tricou.`);
-        else if (!child.hasHat) msgs.push(10-streak <= 0 ? "🎁 Primeste CACIULA!" : `🧢 Mai are ${10-streak} prezente pana la Caciula.`);
-        msgs.push(`🏅 Mai are ${3-(lessons%3)} lectii pana la Insigna.`);
+        if (!child.hasShirt) msgs.push(5 - streak <= 0 ? "🎁 Primeste TRICOU!" : `👕 Mai are ${5 - streak} prezente pana la Tricou.`);
+        else if (!child.hasHat) msgs.push(10 - streak <= 0 ? "🎁 Primeste CACIULA!" : `🧢 Mai are ${10 - streak} prezente pana la Caciula.`);
+        msgs.push(`🏅 Mai are ${3 - (lessons % 3)} lectii pana la Insigna.`);
         return msgs;
     };
+
+    const btnStyle = (active, color) => ({
+        flex: 1, padding: '10px', borderRadius: '6px', border: 'none',
+        background: active ? color : '#e2e8f0',
+        color: active ? 'white' : '#64748b',
+        fontWeight: 'bold', cursor: 'pointer',
+        boxShadow: active ? '0 2px 5px rgba(0,0,0,0.2)' : 'none',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
+    });
 
     if (loading) return <p>Se incarca datele...</p>;
 
@@ -830,55 +955,211 @@ const Registry = ({ user }) => {
         const isCurrentlySuspended = Array.isArray(childWarnings) && childWarnings.length > 0 && childWarnings[0].suspension && childWarnings[0].remainingMeetings > 0;
         return (
             <div className="animate-in">
-                {/* MODIFICAT: Buton cu clasa CSS */}
-                <button onClick={() => setSelectedChild(null)} className="btn-secondary" style={{marginBottom:'20px'}}>
-                    ⬅ Inapoi
+                <button onClick={() => { setSelectedChild(null); loadChildren(); }} className="btn-secondary" style={{ marginBottom: '20px' }}>
+                    ⬅ Inapoi la Lista
                 </button>
 
-                <div className="card" style={{borderLeft: isCurrentlySuspended ? '8px solid red' : '8px solid green'}}>
-                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}><h1>📂 Dosar: {selectedChild.name} {selectedChild.surname}</h1>{isCurrentlySuspended && <span style={{background:'red', color:'white', padding:'10px 20px', borderRadius:'20px', fontWeight:'bold', fontSize:'1.2rem', boxShadow:'0 4px 10px rgba(255,0,0,0.3)'}}>⛔ SUSPENDAT</span>}</div>
-                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'30px', marginTop:'20px'}}>
+                <div className="card" style={{ borderLeft: isCurrentlySuspended ? '8px solid red' : '8px solid green' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h1>📂 Dosar: {selectedChild.name} {selectedChild.surname}</h1>
+                        {isCurrentlySuspended && <span style={{ background: 'red', color: 'white', padding: '10px 20px', borderRadius: '20px', fontWeight: 'bold', fontSize: '1.2rem' }}>⛔ SUSPENDAT</span>}
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginTop: '20px' }}>
+                        {/* --- COLOANA STANGA --- */}
                         <div>
                             <h3>📋 Date & Contact</h3>
                             <p><strong>Parinte:</strong> {selectedChild.parentName} ({selectedChild.parentPhone})</p>
                             <p><strong>Varsta:</strong> {selectedChild.age} ani</p>
                             <p><strong>Prezente Totale:</strong> {selectedChild.totalAttendance || 0}</p>
-                            <h3 style={{marginTop:'20px'}}>🎒 Inventar</h3>
-                            <div style={{display:'flex', gap:'10px'}}><span className="badge" style={{background: selectedChild.hasManual ? '#dcfce7':'#eee'}}>📘 Manual</span><span className="badge" style={{background: selectedChild.hasShirt ? '#dcfce7':'#eee'}}>👕 Tricou</span><span className="badge" style={{background: selectedChild.hasHat ? '#dcfce7':'#eee'}}>🧢 Caciula</span></div>
-                            <div style={{marginTop:'15px', background:'#f0f9ff', padding:'15px', borderRadius:'10px'}}><strong>🚀 Progres:</strong>{getProgressMessages(selectedChild).map((m, i) => <div key={i} style={{fontSize:'0.9rem', marginTop:'5px'}}>• {m}</div>)}</div>
-                        </div>
-                        <div>
-                            <h3 style={{color:'red'}}>⚠️ Disciplina & Istoric</h3>
 
-                            {/* MODIFICAT: Stil curat pentru textarea */}
+                            {/* --- INVENTAR ADMIN --- */}
+                            <div style={{marginTop:'20px', padding:'15px', background:'#f8fafc', borderRadius:'10px', border:'1px solid #cbd5e1'}}>
+                                <h3 style={{marginTop:0, borderBottom:'2px solid #cbd5e1', paddingBottom:'10px', color:'#334155'}}>🎒 Gestiune Inventar</h3>
+
+                                {/* 1. ACTIUNI RECOMPENSE (DOAR DIRECTORUL POATE DA CLICK) */}
+                                <div style={{display:'flex', gap:'15px', marginBottom:'20px'}}>
+
+                                    {/* --- BUTON TRICOU --- */}
+                                    <button
+                                        disabled={!isDirector || selectedChild.hasShirt} // Liderii nu pot apasa, sau daca are deja
+                                        onClick={() => {
+                                            if(window.confirm("Confirmi că i-ai înmânat TRICOUL? (Aceasta va șterge notificarea de eligibilitate)")) {
+                                                fetch(`${API_URL}/children/${selectedChild.id}/give-reward?type=SHIRT`, { method: 'POST' })
+                                                    .then(res => {
+                                                        if(res.ok) {
+                                                            alert("✅ Salvat!");
+                                                            openChildFile(selectedChild);
+                                                        }
+                                                    });
+                                            }
+                                        }}
+                                        style={{
+                                            flex:1, padding:'10px', borderRadius:'6px', border:'none',
+                                            // LOGICA CULORI:
+                                            // Are deja? -> VERDE
+                                            // Nu are si esti Director? -> ROSU (Actiune necesara)
+                                            // Nu are si esti Lider? -> GRI (Informativ)
+                                            background: selectedChild.hasShirt ? '#16a34a' : (isDirector ? '#ef4444' : '#e2e8f0'),
+                                            color: selectedChild.hasShirt ? 'white' : (isDirector ? 'white' : '#64748b'),
+                                            fontWeight:'bold',
+                                            cursor: (isDirector && !selectedChild.hasShirt) ? 'pointer' : 'default',
+                                            opacity: (!isDirector && !selectedChild.hasShirt) ? 0.7 : 1,
+                                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
+                                            display:'flex', alignItems:'center', justifyContent:'center', gap:'5px'
+                                        }}
+                                    >
+                                        👕 {selectedChild.hasShirt ? 'ARE TRICOU ✅' : (isDirector ? '🎁 DĂ-I TRICOU' : 'Nu are tricou')}
+                                    </button>
+
+                                    {/* --- BUTON CACIULA --- */}
+                                    <button
+                                        disabled={!isDirector || selectedChild.hasHat}
+                                        onClick={() => {
+                                            if(window.confirm("Confirmi că i-ai înmânat CĂCIULA? (Aceasta va șterge notificarea de eligibilitate)")) {
+                                                fetch(`${API_URL}/children/${selectedChild.id}/give-reward?type=HAT`, { method: 'POST' })
+                                                    .then(res => {
+                                                        if(res.ok) {
+                                                            alert("✅ Salvat!");
+                                                            openChildFile(selectedChild);
+                                                        }
+                                                    });
+                                            }
+                                        }}
+                                        style={{
+                                            flex:1, padding:'10px', borderRadius:'6px', border:'none',
+                                            background: selectedChild.hasHat ? '#0284c7' : (isDirector ? '#ef4444' : '#e2e8f0'),
+                                            color: selectedChild.hasHat ? 'white' : (isDirector ? 'white' : '#64748b'),
+                                            fontWeight:'bold',
+                                            cursor: (isDirector && !selectedChild.hasHat) ? 'pointer' : 'default',
+                                            opacity: (!isDirector && !selectedChild.hasHat) ? 0.7 : 1,
+                                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
+                                            display:'flex', alignItems:'center', justifyContent:'center', gap:'5px'
+                                        }}
+                                    >
+                                        🧢 {selectedChild.hasHat ? 'ARE CĂCIULĂ ✅' : (isDirector ? '🎁 DĂ-I CĂCIULĂ' : 'Nu are căciulă')}
+                                    </button>
+                                </div>
+
+                                {/* 2. ZONA MANUALE (DINAMICA) */}
+                                {isDirector && (
+                                    <div style={{ background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #94a3b8', marginBottom: '20px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
+                                        <label style={{ display: 'block', fontWeight: 'bold', color: '#334155', marginBottom: '8px' }}>📖 Atribuie Manual:</label>
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+
+                                            {/* Selector Mod: Lista existenta vs Nou */}
+                                            {availableManuals.length > 0 && (
+                                                <div style={{display:'flex', gap:'5px', marginBottom:'5px'}}>
+                                                    <label style={{cursor:'pointer', fontSize:'0.9rem'}}><input type="radio" checked={manualMode === 'SELECT'} onChange={() => setManualMode('SELECT')} /> Listă Existentă</label>
+                                                    <label style={{cursor:'pointer', fontSize:'0.9rem', marginLeft:'15px'}}><input type="radio" checked={manualMode === 'NEW'} onChange={() => setManualMode('NEW')} /> ➕ Manual Nou</label>
+                                                </div>
+                                            )}
+
+                                            {/* Input Dinamic */}
+                                            {manualMode === 'SELECT' && availableManuals.length > 0 ? (
+                                                <select
+                                                    value={selectedManual}
+                                                    onChange={(e) => setSelectedManual(e.target.value)}
+                                                    style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc', fontSize: '1rem' }}
+                                                >
+                                                    {availableManuals.map(m => <option key={m} value={m}>{m}</option>)}
+                                                </select>
+                                            ) : (
+                                                <input
+                                                    type="text"
+                                                    placeholder="Scrie numele noului manual (ex: HangGlider)"
+                                                    value={customManualName}
+                                                    onChange={(e) => setCustomManualName(e.target.value)}
+                                                    style={{ padding: '10px', borderRadius: '5px', border: '2px solid #0ea5e9', fontSize: '1rem' }}
+                                                />
+                                            )}
+
+                                            <button
+                                                onClick={handleAssignManual}
+                                                style={{ background: '#0ea5e9', color: 'white', border: 'none', padding: '10px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginTop: '5px' }}
+                                            >
+                                                💾 {manualMode === 'NEW' ? 'CREEAZĂ ȘI ATRIBUIE' : 'ATRIBUIE SELECȚIA'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 3. ISTORIC MANUALE */}
+                                <h4 style={{ fontSize: '0.9rem', color: '#475569', marginBottom: '5px', borderTop: '1px solid #eee', paddingTop: '10px' }}>Istoric Manuale:</h4>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '150px', overflowY: 'auto' }}>
+                                    {selectedChild.hasManual && (!selectedChild.manuals || selectedChild.manuals.length === 0) && (
+                                        <div style={{ padding: '8px', background: '#fff7ed', border: '1px solid #fdba74', borderRadius: '4px', color: '#c2410c', fontSize: '0.85rem', fontStyle: 'italic' }}>
+                                            ⚠️ Copilul are bifa "Manual" din vechiul sistem, dar nu are istoric.
+                                        </div>
+                                    )}
+
+                                    {selectedChild.manuals && selectedChild.manuals.length > 0 ? (
+                                        selectedChild.manuals.map((m, idx) => (
+                                            <div key={idx} style={{
+                                                padding: '8px 10px', background: 'white', border: '1px solid #cbd5e1', borderRadius: '4px',
+                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem'
+                                            }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                    <strong>{m.name}</strong>
+                                                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{m.startDate}</span>
+                                                </div>
+                                                <span style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '10px', fontWeight: 'bold', background: m.status === 'ACTIVE' ? '#dcfce7' : '#f1f5f9', color: m.status === 'ACTIVE' ? '#166534' : '#64748b' }}>
+                                                    {m.status}
+                                                </span>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        !selectedChild.hasManual && <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.8rem' }}>Fără manuale.</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div style={{ marginTop: '15px', background: '#f0f9ff', padding: '15px', borderRadius: '10px' }}>
+                                <strong>🚀 Progres Calculat:</strong>
+                                {getProgressMessages(selectedChild).map((m, i) => <div key={i} style={{ fontSize: '0.9rem', marginTop: '5px' }}>• {m}</div>)}
+                            </div>
+                        </div>
+
+                        {/* --- COLOANA DREAPTA --- */}
+                        <div>
+                            <h3 style={{ color: 'red' }}>⚠️ Disciplina & Istoric</h3>
                             {isDirector && (
-                                <div style={{background:'#fff5f5', padding:'15px', borderRadius:'10px', border:'1px solid #feb2b2'}}>
-                                    <label style={{fontWeight:'bold', color:'#991b1b', marginBottom:'5px', display:'block'}}>Motiv sancțiune:</label>
+                                <div style={{ background: '#fff5f5', padding: '15px', borderRadius: '10px', border: '1px solid #feb2b2' }}>
+                                    <label style={{ fontWeight: 'bold', color: '#991b1b', marginBottom: '5px', display: 'block' }}>Motiv sancțiune:</label>
                                     <textarea
-                                        placeholder="Scrie aici motivul (ex: A vorbit urât)..."
+                                        placeholder="Scrie aici motivul..."
                                         value={newWarning.description}
-                                        onChange={e => setNewWarning({...newWarning, description: e.target.value})}
+                                        onChange={e => setNewWarning({ ...newWarning, description: e.target.value })}
                                     />
-                                    <div style={{display:'flex', alignItems:'center', gap:'15px', marginTop:'10px'}}>
-                                        <label style={{color:'red', fontWeight:'bold', display:'flex', alignItems:'center', gap:'5px', cursor:'pointer'}}>
-                                            <input type="checkbox" style={{width:'20px', height:'20px'}} checked={newWarning.suspension} onChange={e => setNewWarning({...newWarning, suspension: e.target.checked})} />
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginTop: '10px' }}>
+                                        <label style={{ color: 'red', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
+                                            <input type="checkbox" style={{ width: '20px', height: '20px' }} checked={newWarning.suspension} onChange={e => setNewWarning({ ...newWarning, suspension: e.target.checked })} />
                                             ⛔ SUSPENDARE?
                                         </label>
 
                                         {newWarning.suspension && (
-                                            <label style={{display:'flex', alignItems:'center', gap:'5px', fontWeight:'bold', color:'#991b1b'}}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 'bold', color: '#991b1b' }}>
                                                 Nr. Ture:
-                                                <input type="number" min="1" value={newWarning.remainingMeetings} onChange={e => setNewWarning({...newWarning, remainingMeetings: parseInt(e.target.value)})} style={{width:'60px'}} />
+                                                <input type="number" min="1" value={newWarning.remainingMeetings} onChange={e => setNewWarning({ ...newWarning, remainingMeetings: parseInt(e.target.value) })} style={{ width: '60px' }} />
                                             </label>
                                         )}
                                     </div>
-                                    <button onClick={handleAddWarning} style={{background:'#ef4444', color:'white', padding:'12px', width:'100%', borderRadius:'8px', fontWeight:'bold', marginTop:'15px', border:'none', cursor:'pointer', boxShadow:'0 4px 10px rgba(239, 68, 68, 0.2)'}}>
+                                    <button onClick={handleAddWarning} style={{ background: '#ef4444', color: 'white', padding: '12px', width: '100%', borderRadius: '8px', fontWeight: 'bold', marginTop: '15px', border: 'none', cursor: 'pointer', boxShadow: '0 4px 10px rgba(239, 68, 68, 0.2)' }}>
                                         SALVEAZĂ SANCȚIUNEA
                                     </button>
                                 </div>
                             )}
 
-                            <h4 style={{marginTop:'20px'}}>📜 Istoric</h4><div style={{maxHeight:'150px', overflowY:'auto'}}>{Array.isArray(childWarnings) && childWarnings.map(w => (<div key={w.id} style={{borderBottom:'1px solid #eee', padding:'8px 0', fontSize:'0.9rem'}}><div style={{fontWeight:'bold'}}>{w.date} {w.suspension ? <span style={{color:'red'}}>(Suspendat {w.remainingMeetings} ture)</span> : '(Avertisment)'}</div><div style={{color:'#555'}}>{w.description}</div></div>))}</div>
+                            <h4 style={{ marginTop: '20px' }}>📜 Istoric Avertismente</h4>
+                            <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                                {Array.isArray(childWarnings) && childWarnings.map(w => (
+                                    <div key={w.id} style={{ borderBottom: '1px solid #eee', padding: '8px 0', fontSize: '0.9rem' }}>
+                                        <div style={{ fontWeight: 'bold' }}>{w.date} {w.suspension ? <span style={{ color: 'red' }}>(Suspendat {w.remainingMeetings} ture)</span> : '(Avertisment)'}</div>
+                                        <div style={{ color: '#555' }}>{w.description}</div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -889,15 +1170,15 @@ const Registry = ({ user }) => {
     return (
         <div className="animate-in">
             <h2>📋 Registru</h2>
-            <div className="table-container" style={{overflowX:'auto'}}>
-                <table style={{minWidth:'900px'}}><thead><tr><th>Nume</th><th>Status</th><th>Prezente</th><th>Puncte</th><th>Actiuni</th></tr></thead><tbody>{children.map(c => (<tr key={c.id} style={{background: c.isSuspended ? '#fee2e2' : 'transparent'}}><td style={{fontWeight:'bold'}}>{c.name} {c.surname}</td><td>{c.isSuspended ? <span style={{background:'red', color:'white', padding:'2px 8px', borderRadius:'4px', fontSize:'0.8rem', fontWeight:'bold'}}>⛔ SUSPENDAT</span> : <span style={{color:'green', fontSize:'0.8rem'}}>OK</span>}</td><td>{c.totalAttendance || 0}</td><td style={{fontWeight:'bold', color:'var(--accent)'}}>{c.seasonPoints || 0}</td><td><button onClick={() => openChildFile(c)} style={{background:'var(--accent)', color:'white', padding:'5px 15px', borderRadius:'5px'}}>Dosar</button></td></tr>))}</tbody></table>
+            <div className="table-container" style={{ overflowX: 'auto' }}>
+                <table style={{ minWidth: '900px' }}><thead><tr><th>Nume</th><th>Status</th><th>Prezente</th><th>Puncte</th><th>Actiuni</th></tr></thead><tbody>{children.map(c => (<tr key={c.id} style={{ background: c.isSuspended ? '#fee2e2' : 'transparent' }}><td style={{ fontWeight: 'bold' }}>{c.name} {c.surname}</td><td>{c.isSuspended ? <span style={{ background: 'red', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>⛔ SUSPENDAT</span> : <span style={{ color: 'green', fontSize: '0.8rem' }}>OK</span>}</td><td>{c.totalAttendance || 0}</td><td style={{ fontWeight: 'bold', color: 'var(--accent)' }}>{c.seasonPoints || 0}</td><td><button onClick={() => openChildFile(c)} style={{ background: 'var(--accent)', color: 'white', padding: '5px 15px', borderRadius: '5px' }}>Dosar</button></td></tr>))}</tbody></table>
             </div>
         </div>
     );
 };
 
 // ==========================================
-// 10. DASHBOARD (FINAL - STERGE CHENARUL GALBEN)
+// 10. DASHBOARD (FINAL - ACTUALIZAT PENTRU NOTIFICARI PREMII)
 // ==========================================
 const Dashboard = ({ user }) => {
     const [stats, setStats] = useState(null);
@@ -913,16 +1194,13 @@ const Dashboard = ({ user }) => {
     const handleDeleteNotification = (id) => {
         if(!window.confirm("Ștergi notificarea?")) return;
 
-        // 1. Trimitem cererea la server
+        // 1. Trimitem cererea la server (Serverul face soft delete: isVisible=false)
         fetch(`${API_URL}/notifications/${id}`, { method: 'DELETE' })
             .then(res => {
                 if(res.ok) {
-                    // 2. AICI STERGE CHENARUL: Actualizam starea locala (filtram lista)
+                    // 2. Actualizam starea locala (filtram lista)
                     setStats(prevStats => {
-                        // Cream o lista noua care contine TOT, minus elementul cu ID-ul sters
                         const newNotifications = prevStats.notifications.filter(n => n.id !== id);
-
-                        // Returnam obiectul stats actualizat
                         return {
                             ...prevStats,
                             notifications: newNotifications
@@ -948,7 +1226,7 @@ const Dashboard = ({ user }) => {
     if (!stats) return <div className="animate-in"><p>Eroare incarcare date.</p></div>;
 
     const progressMsgs = getProgressMessages();
-    // Pentru copii nu aratam notificarile din baza de date, doar progresul
+    // Pentru copii nu aratam notificarile din baza de date, doar progresul calculat
     const notificationsToDisplay = isChild ? [] : (stats.notifications || []);
 
     return (
@@ -966,53 +1244,64 @@ const Dashboard = ({ user }) => {
                 <div className="card">
                     <h3 style={{marginBottom:'15px'}}>🔔 {isChild ? 'Notificari' : 'Notificari & Feedback'}</h3>
 
-                    {/* Mesaje Copii (Raman la fel) */}
+                    {/* Mesaje Copii (Progres) */}
                     {isChild && progressMsgs.map((msg, i) => (<div key={i} style={{background:'#eff6ff', borderLeft:'4px solid #3b82f6', color:'#1e40af', padding:'15px', borderRadius:'8px', marginBottom:'10px', fontWeight:'bold', fontSize:'0.95rem'}}>{msg}</div>))}
 
-                    {/* NOTIFICARI LIDERI */}
+                    {/* NOTIFICARI LIDERI / DIRECTORI */}
                     {notificationsToDisplay.length > 0 ? (
-                        notificationsToDisplay.map((n) => (
-                            <div key={n.id} style={{
-                                background:'#fff3cd',
-                                color:'#856404',
-                                padding:'15px',
-                                paddingRight:'35px', // Loc pentru X
-                                borderRadius:'8px',
-                                marginBottom:'10px',
-                                whiteSpace:'pre-wrap',
-                                borderLeft:'4px solid #ffc107',
-                                fontSize:'0.9rem',
-                                position: 'relative' // Necesar pt X
-                            }}>
-                                {/* Mesajul */}
-                                {n.message}
+                        notificationsToDisplay.map((n) => {
+                            // LOGICA CULORI: Daca e mesaj automat de premiu (ELIGIBLE), il facem VERDE. Altfel GALBEN.
+                            const isReward = n.type && n.type.includes('ELIGIBLE');
+                            const bgColor = isReward ? '#dcfce7' : '#fff3cd'; // Verde deschis vs Galben
+                            const textColor = isReward ? '#166534' : '#856404'; // Verde inchis vs Galben inchis
+                            const borderColor = isReward ? '#22c55e' : '#ffc107'; // Verde bordura vs Galben bordura
 
-                                {/* Butonul X */}
-                                <div
-                                    onClick={() => handleDeleteNotification(n.id)}
-                                    style={{
-                                        position: 'absolute',
-                                        top: '5px',
-                                        right: '5px',
-                                        width: '24px',
-                                        height: '24px',
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: '#856404',
-                                        fontWeight: 'bold',
-                                        fontSize: '1.2rem',
-                                        opacity: 0.5
-                                    }}
-                                    title="Șterge"
-                                    onMouseOver={(e) => e.target.style.opacity = 1}
-                                    onMouseOut={(e) => e.target.style.opacity = 0.5}
-                                >
-                                    ×
+                            return (
+                                <div key={n.id} style={{
+                                    background: bgColor,
+                                    color: textColor,
+                                    padding:'15px',
+                                    paddingRight:'35px',
+                                    borderRadius:'8px',
+                                    marginBottom:'10px',
+                                    whiteSpace:'pre-wrap',
+                                    borderLeft: `4px solid ${borderColor}`,
+                                    fontSize:'0.9rem',
+                                    position: 'relative'
+                                }}>
+                                    {/* Iconita pentru premii */}
+                                    {isReward && <span style={{fontSize:'1.2rem', marginRight:'5px'}}>🎁</span>}
+
+                                    {/* Mesajul */}
+                                    {n.message}
+
+                                    {/* Butonul X (Stergere) */}
+                                    <div
+                                        onClick={() => handleDeleteNotification(n.id)}
+                                        style={{
+                                            position: 'absolute',
+                                            top: '5px',
+                                            right: '5px',
+                                            width: '24px',
+                                            height: '24px',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: textColor,
+                                            fontWeight: 'bold',
+                                            fontSize: '1.2rem',
+                                            opacity: 0.5
+                                        }}
+                                        title="Șterge"
+                                        onMouseOver={(e) => e.target.style.opacity = 1}
+                                        onMouseOut={(e) => e.target.style.opacity = 0.5}
+                                    >
+                                        ×
+                                    </div>
                                 </div>
-                            </div>
-                        ))
+                            );
+                        })
                     ) : ((!isChild || progressMsgs.length === 0) && <p style={{color:'#888'}}>Nu ai notificari noi.</p>)}
                 </div>
                 <div className="card"><h3 style={{marginBottom:'15px'}}>📌 Planificare</h3>{stats.reminders && stats.reminders.map((r, i) => <div key={i} style={{padding:'10px', borderBottom:'1px solid #eee'}}>✅ {r}</div>)}</div>
@@ -1023,31 +1312,64 @@ const Dashboard = ({ user }) => {
 
 
 // ==========================================
-// 11. MY PROFILE
+// 11. MY PROFILE (Versiunea Finală cu Vârstă și Inventar)
 // ==========================================
 const MyProfile = ({ user, onUpdateUser }) => {
+    // Verificăm dacă e copil (copiii au parentPhone, liderii nu)
     const isChild = user.hasOwnProperty('parentPhone');
+
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({ ...user, password: '' });
     const [loading, setLoading] = useState(false);
     const [allDepartments, setAllDepartments] = useState([]);
 
-    // State pentru stergere
+    // State pentru stergere cont
     const [showDeleteInput, setShowDeleteInput] = useState(false);
     const [deleteCode, setDeleteCode] = useState('');
 
     useEffect(() => {
+        // Daca e lider, incarcam departamentele si datele specifice
         if (!isChild) {
-            fetch(`${API_URL}/leaders/${user.id}`).then(r => r.ok ? r.json() : null).then(data => { if (data) { onUpdateUser(data); setFormData({ ...data, password: '' }); }});
+            fetch(`${API_URL}/leaders/${user.id}`)
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    if (data) {
+                        onUpdateUser(data);
+                        setFormData({ ...data, password: '' });
+                    }
+                });
             fetch(`${API_URL}/departments`).then(r => r.ok ? r.json() : []).then(setAllDepartments);
+        } else {
+            // Daca e copil, reincarcam datele ca sa fim siguri ca avem manualele si varsta actualizate
+            fetch(`${API_URL}/children/${user.id}`)
+                .then(r => r.json())
+                .then(data => {
+                    onUpdateUser(data);
+                    setFormData({...data});
+                });
         }
     }, []);
 
     const handleSave = () => {
         setLoading(true);
         const endpoint = isChild ? `${API_URL}/children/${user.id}` : `${API_URL}/leaders/${user.id}`;
-        fetch(endpoint, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) })
-            .then(res => res.json()).then(u => { setLoading(false); setIsEditing(false); onUpdateUser(u); alert("✅ Actualizat!"); }).catch(() => { setLoading(false); alert("Eroare server."); });
+
+        // Curatam parola daca e goala ca sa nu o suprascriem cu nimic
+        const payload = { ...formData };
+        if (!payload.password) delete payload.password;
+
+        fetch(endpoint, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+            .then(res => res.json())
+            .then(u => {
+                setLoading(false);
+                setIsEditing(false);
+                onUpdateUser(u);
+                alert("✅ Actualizat!");
+            })
+            .catch(() => {
+                setLoading(false);
+                alert("Eroare server.");
+            });
     };
 
     const toggleDepartment = (dept) => {
@@ -1056,6 +1378,7 @@ const MyProfile = ({ user, onUpdateUser }) => {
         else setFormData({ ...formData, departments: [...formData.departments, dept] });
     };
 
+    // --- LOGICA STERGERE CONT ---
     const requestDeletionCode = () => {
         if(!window.confirm("⚠️ Esti sigur ca vrei sa initiezi stergerea contului? Vei primi un cod de la Director.")) return;
 
@@ -1067,81 +1390,195 @@ const MyProfile = ({ user, onUpdateUser }) => {
 
     const performDeletion = () => {
         if(!deleteCode) return alert("Introdu codul!");
+
+        // Validare simpla a codului pe frontend (sau poti pastra doar confirmarea)
+        // Daca vrei ca acest cod sa fie verificat pe server, e alta discutie,
+        // dar momentan backend-ul nostru sterge direct pe baza de ID.
+
         if(!window.confirm("🚨 ATENTIE! Aceasta actiune este IREVERSIBILA. Toate datele tale vor fi sterse.")) return;
 
-        fetch(`${API_URL}/account/delete`, {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ id: user.id, role: isChild ? 'CHILD' : 'LEADER', code: deleteCode })
+        // --- MODIFICAREA ESTE AICI ---
+
+        // 1. Alegem URL-ul corect in functie de cine este utilizatorul
+        const deleteUrl = isChild
+            ? `${API_URL}/children/${user.id}`   // Suna la ChildController
+            : `${API_URL}/leaders/${user.id}`;   // Suna la LeaderController
+
+        // 2. Facem cererea cu metoda DELETE (standardul REST)
+        fetch(deleteUrl, {
+            method: 'DELETE', // <--- IMPORTANT: Am schimbat din POST in DELETE
+            headers: {
+                'Content-Type':'application/json'
+                // Daca ai token de autentificare, pune-l aici:
+                // 'Authorization': `Bearer ${token}`
+            }
         }).then(async res => {
             const text = await res.text();
             if(res.ok) {
                 alert("✅ Cont sters cu succes. La revedere!");
+                // Stergem datele locale si reincarcam
+                localStorage.clear();
                 window.location.reload();
             } else {
-                alert("❌ Eroare: " + text);
+                alert("❌ Eroare la ștergere: " + text);
             }
+        }).catch(err => {
+            alert("Eroare de conexiune cu serverul.");
+            console.error(err);
         });
     };
 
     const isAdmin = !isChild && user.id === 1;
 
+    // Helper pentru afisarea starii (Verde/Rosu) in Inventar
+    const StatusItem = ({ icon, label, value }) => (
+        <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '10px', background: value ? '#dcfce7' : '#fee2e2',
+            borderRadius: '8px', border: value ? '1px solid #16a34a' : '1px solid #dc2626',
+            color: value ? '#166534' : '#991b1b', fontWeight: 'bold'
+        }}>
+            <span style={{display:'flex', alignItems:'center', gap:'8px'}}>{icon} {label}</span>
+            <span>{value ? 'DA ✅' : 'NU ❌'}</span>
+        </div>
+    );
+
     return (
         <div className="animate-in">
+            {/* HEADER */}
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                 <h2>👤 Contul Meu</h2>
-                <button onClick={() => isEditing ? handleSave() : setIsEditing(true)} style={{background: isEditing ? 'var(--success)' : 'var(--accent)', color: 'white', padding:'10px 20px', borderRadius:'10px', fontWeight:'bold'}}>
+                <button onClick={() => isEditing ? handleSave() : setIsEditing(true)}
+                        style={{background: isEditing ? 'var(--success)' : 'var(--accent)', color: 'white', padding:'10px 20px', borderRadius:'10px', fontWeight:'bold', border:'none', cursor:'pointer'}}>
                     {loading ? '...' : (isEditing ? '💾 Salveaza' : '✏️ Editeaza')}
                 </button>
             </div>
 
+            {/* CARD PROFIL (HEADER) */}
             <div className="card" style={{marginTop:'20px', display:'flex', gap:'20px', alignItems:'center'}}>
-                <div style={{width:'60px', height:'60px', borderRadius:'50%', background:'var(--accent)', color:'white', display:'flex', justifyContent:'center', alignItems:'center', fontSize:'2rem', fontWeight:'bold'}}>{user.name ? user.name.charAt(0) : 'U'}</div>
-                <div>{isEditing ? <div style={{display:'flex', gap:'5px'}}><input className="login-input" value={formData.name} onChange={e=>setFormData({...formData, name:e.target.value})}/><input className="login-input" value={formData.surname} onChange={e=>setFormData({...formData, surname:e.target.value})}/></div> : <h1>{user.name} {user.surname}</h1>}<span className="badge" style={{background:'#e0f2fe', color:'#0284c7'}}>{isChild ? '👶 Copil' : `👔 ${user.role || 'Lider'}`}</span></div>
+                <div style={{width:'60px', height:'60px', borderRadius:'50%', background:'var(--accent)', color:'white', display:'flex', justifyContent:'center', alignItems:'center', fontSize:'2rem', fontWeight:'bold'}}>
+                    {user.name ? user.name.charAt(0) : 'U'}
+                </div>
+                <div style={{flex:1}}>
+                    {isEditing ? (
+                        <div style={{display:'flex', gap:'10px'}}>
+                            <input className="login-input" value={formData.name} onChange={e=>setFormData({...formData, name:e.target.value})} placeholder="Nume"/>
+                            <input className="login-input" value={formData.surname} onChange={e=>setFormData({...formData, surname:e.target.value})} placeholder="Prenume"/>
+                        </div>
+                    ) : (
+                        <h1>{user.name} {user.surname}</h1>
+                    )}
+                    <span className="badge" style={{background:'#e0f2fe', color:'#0284c7'}}>
+                        {isChild ? '👶 Copil' : `👔 ${user.role || 'Lider'}`}
+                    </span>
+                </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginTop:'20px' }}>
+
+                {/* COLOANA STANGA: DATE PERSONALE */}
                 <div className="card">
                     <h3>📋 Date Personale</h3>
-                    <div style={{marginTop:'15px', display:'flex', flexDirection:'column', gap:'10px'}}>
+                    <div style={{marginTop:'15px', display:'flex', flexDirection:'column', gap:'15px'}}>
                         {!isChild ? (
+                            // --- PENTRU LIDERI ---
                             <>
                                 <div><label>Telefon:</label>{isEditing ? <input className="login-input" value={formData.phoneNumber||''} onChange={e=>setFormData({...formData, phoneNumber:e.target.value})}/> : <p>📞 {user.phoneNumber||'Nespecificat'}</p>}</div>
                                 {isEditing && (<div style={{background:'#fff1f2', padding:'10px', borderRadius:'8px', border:'1px solid #ffccd5', marginTop:'10px'}}><label style={{fontWeight:'bold', color:'#e11d48'}}>🔒 Schimba Parola:</label><input type="password" className="login-input" style={{background:'white', margin:0}} value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></div>)}
                                 <div style={{marginTop:'20px', paddingTop:'15px', borderTop:'1px solid #eee'}}><label style={{fontWeight:'bold'}}>Departamentele Mele:</label>{isEditing ? (<div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>{allDepartments.map(dept => (<label key={dept.id} style={{display:'flex', alignItems:'center', gap:'8px'}}><input type="checkbox" checked={formData.departments.some(d => d.id === dept.id)} onChange={() => toggleDepartment(dept)} />{dept.name}</label>))}</div>) : (<div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>{user.departments && user.departments.map(d => (<span key={d.id} className="badge" style={{background:'#dcfce7', color:'#166534'}}>🏷️ {d.name}</span>))}</div>)}</div>
                             </>
-                        ) : (<><div><label>Data Nasterii:</label>{isEditing ? <input type="date" className="login-input" value={formData.birthDate||''} onChange={e=>setFormData({...formData, birthDate:e.target.value})}/> : <p>🎂 {user.birthDate||'-'}</p>}</div><div><label>Parinte:</label>{isEditing ? <input className="login-input" value={formData.parentName||''} onChange={e=>setFormData({...formData, parentName:e.target.value})}/> : <p>👤 {user.parentName||'-'}</p>}</div><div><label>Telefon:</label>{isEditing ? <input className="login-input" value={formData.parentPhone||''} onChange={e=>setFormData({...formData, parentPhone:e.target.value})}/> : <p>📞 {user.parentPhone||'-'}</p>}</div></>)}
+                        ) : (
+                            // --- PENTRU COPII ---
+                            <>
+                                <div>
+                                    <label>Data Nasterii:</label>
+                                    {isEditing ? <input type="date" className="login-input" value={formData.birthDate||''} onChange={e=>setFormData({...formData, birthDate:e.target.value})}/> : <p>🎂 {user.birthDate||'-'}</p>}
+                                </div>
+
+                                {/* AICI ESTE ADAUGATA VARSTA */}
+                                <div>
+                                    <label>Vârstă:</label>
+                                    <p style={{fontWeight:'bold', color:'#0369a1', fontSize:'1.1rem'}}>
+                                        {user.age ? `${user.age} ani` : '-'}
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label>Parinte:</label>
+                                    {isEditing ? <input className="login-input" value={formData.parentName||''} onChange={e=>setFormData({...formData, parentName:e.target.value})}/> : <p>👤 {user.parentName||'-'}</p>}
+                                </div>
+                                <div>
+                                    <label>Telefon Parinte:</label>
+                                    {isEditing ? <input className="login-input" value={formData.parentPhone||''} onChange={e=>setFormData({...formData, parentPhone:e.target.value})}/> : <p>📞 {user.parentPhone||'-'}</p>}
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
 
-                {!isAdmin && (
-                    <div className="card" style={{border:'2px solid #fee2e2'}}>
-                        <h3 style={{color:'#dc2626'}}>🚨 Zona de Pericol</h3>
-                        <p style={{fontSize:'0.9rem', marginBottom:'15px'}}>Dacă vrei să ștergi contul, trebuie să soliciți un cod de la Administrator.</p>
+                {/* COLOANA DREAPTA: INVENTAR SAU DELETE */}
+                <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
 
-                        {!showDeleteInput ? (
-                            <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
-                                <button onClick={requestDeletionCode} style={{padding:'10px', background:'orange', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>
-                                    📨 Pasul 1: Solicita Cod Ștergere
-                                </button>
-                                <button onClick={() => setShowDeleteInput(true)} style={{padding:'10px', background:'#fee2e2', color:'#dc2626', border:'1px solid #dc2626', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>
-                                    🗑️ Pasul 2: Am primit codul, vreau să șterg!
-                                </button>
-                            </div>
-                        ) : (
-                            <div style={{background:'#fef2f2', padding:'15px', borderRadius:'10px'}}>
-                                <label style={{fontWeight:'bold', color:'#dc2626'}}>Introdu Codul de Confirmare:</label>
-                                <input className="login-input" placeholder="Ex: A3F2..." value={deleteCode} onChange={e => setDeleteCode(e.target.value)} style={{borderColor:'#dc2626'}}/>
-                                <div style={{display:'flex', gap:'10px', marginTop:'10px'}}>
-                                    <button onClick={performDeletion} style={{flex:1, padding:'10px', background:'#dc2626', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>CONFIRMĂ ȘTERGEREA</button>
-                                    {/* MODIFICAT: Buton cu clasa CSS */}
-                                    <button onClick={() => {setShowDeleteInput(false); setDeleteCode('');}} className="btn-secondary">
-                                        Anulează
-                                    </button>
+                    {/* SECTIUNEA INVENTAR (DOAR PENTRU COPII) */}
+                    {isChild && (
+                        <div className="card">
+                            <h3>🎒 Inventar & Realizări</h3>
+                            <div style={{display:'flex', flexDirection:'column', gap:'10px', marginTop:'15px'}}>
+                                <StatusItem icon="📚" label="Manual Activ" value={user.hasManual} />
+                                <StatusItem icon="👕" label="Tricou" value={user.hasShirt} />
+                                <StatusItem icon="🧢" label="Căciulă" value={user.hasHat} />
+
+                                <div style={{marginTop:'15px', padding:'10px', background:'#f0f9ff', borderRadius:'8px', border:'1px solid #bae6fd'}}>
+                                    <h4 style={{margin:0, color:'#0369a1'}}>🏅 Insigne Câștigate: {user.badgesCount || 0}</h4>
+
+                                    {/* Aici arătăm istoricul manualelor dacă există */}
+                                    {user.manuals && user.manuals.length > 0 && (
+                                        <div style={{marginTop:'10px'}}>
+                                            <p style={{fontSize:'0.85rem', fontWeight:'bold', color:'#64748b'}}>Istoric Manuale:</p>
+                                            <div style={{display:'flex', flexWrap:'wrap', gap:'5px'}}>
+                                                {user.manuals.map((m, idx) => (
+                                                    <span key={idx} className="badge" style={{background:'#e2e8f0', color:'#475569', fontSize:'0.75rem'}}>
+                                                        📖 {m.name}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
-                        )}
-                    </div>
-                )}
+                        </div>
+                    )}
+
+                    {/* ZONA DE PERICOL (STERGERE CONT) */}
+                    {!isAdmin && (
+                        <div className="card" style={{border:'2px solid #fee2e2'}}>
+                            <h3 style={{color:'#dc2626'}}>🚨 Zona de Pericol</h3>
+                            <p style={{fontSize:'0.9rem', marginBottom:'15px', color:'#7f1d1d'}}>
+                                Ștergerea contului necesită aprobarea Directorului.
+                            </p>
+
+                            {!showDeleteInput ? (
+                                <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                                    <button onClick={requestDeletionCode} style={{padding:'10px', background:'orange', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>
+                                        📨 Pasul 1: Cere Cod Ștergere
+                                    </button>
+                                    <button onClick={() => setShowDeleteInput(true)} style={{padding:'10px', background:'#fee2e2', color:'#dc2626', border:'1px solid #dc2626', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>
+                                        🗑️ Pasul 2: Am primit codul!
+                                    </button>
+                                </div>
+                            ) : (
+                                <div style={{background:'#fef2f2', padding:'15px', borderRadius:'10px'}}>
+                                    <label style={{fontWeight:'bold', color:'#dc2626'}}>Introdu Codul Primit:</label>
+                                    <input className="login-input" placeholder="Ex: A3F2..." value={deleteCode} onChange={e => setDeleteCode(e.target.value)} style={{borderColor:'#dc2626'}}/>
+                                    <div style={{display:'flex', gap:'10px', marginTop:'10px'}}>
+                                        <button onClick={performDeletion} style={{flex:1, padding:'10px', background:'#dc2626', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>STERGE CONTUL</button>
+                                        <button onClick={() => {setShowDeleteInput(false); setDeleteCode('');}} style={{padding:'10px', background:'transparent', border:'1px solid #94a3b8', borderRadius:'8px', cursor:'pointer'}}>Anulează</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

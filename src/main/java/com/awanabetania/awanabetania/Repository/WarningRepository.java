@@ -2,6 +2,7 @@ package com.awanabetania.awanabetania.Repository;
 
 import com.awanabetania.awanabetania.Model.Warning;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -21,4 +22,12 @@ public interface WarningRepository extends JpaRepository<Warning, Integer> {
      */
     @Query("SELECT w FROM Warning w WHERE w.child.id = :childId ORDER BY w.id DESC")
     List<Warning> findByChildIdOrderByIdDesc(@Param("childId") Integer childId);
+
+
+    @Modifying
+    @Query("DELETE FROM Warning w WHERE w.child.id = ?1")
+    void deleteByChildId(Integer childId);
+
+
 }
+

@@ -1,17 +1,20 @@
 package com.awanabetania.awanabetania.Model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
 import java.time.LocalDate;
 import java.time.Period;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Clasa principala pentru un copil din club.
- * Aici tinem toate datele lui personale, punctele si progresul.
- * * UPDATE: Aceasta versiune suporta logica simplificata pentru echipe si puncte zilnice.
+ * Clasa principală pentru un copil din club.
+ * Conține date personale, statistici și legătura cu progresul (stickerele).
  */
 @Entity
 @Table(name = "children")
@@ -20,105 +23,111 @@ import java.time.Period;
 @NoArgsConstructor
 public class Child {
 
-    /** ID unic generat automat de baza de date */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    /** Numele de familie */
     private String name;
-
-    /** Prenumele copilului */
     private String surname;
 
-    /** Data nasterii, o folosim ca sa aflam varsta */
     @Column(name = "birth_date")
     private LocalDate birthDate;
 
-    /** Numele parintelui */
     @Column(name = "parent_name")
     private String parentName;
 
-    /** Telefonul parintelui */
     @Column(name = "parent_phone")
     private String parentPhone;
 
-    // --- STATISTICI SI PREZENTA ---
-
-    /** Cate dati a venit la rand fara pauza (streak) */
+    // --- STATISTICI ---
     @Column(name = "attendance_streak")
     private Integer attendanceStreak = 0;
 
-    /** De cate ori a venit la club in total */
     @Column(name = "total_attendance")
     private Integer totalAttendance = 0;
 
-    /** Numarul de lectii terminate */
     @Column(name = "lessons_completed")
     private Integer lessonsCompleted = 0;
 
-    // --- INVENTAR (Ce are la el) ---
+    @Column(name = "last_attendance_date")
+    private LocalDate lastAttendanceDate;
 
-    /** Daca are manualul cumparat */
+    // --- MANUALE ȘI PROGRES (SISTEM NOU) ---
+
+    /**
+     * ISTORIC MANUALE: Lista informativă a cărților primite (ex: HangGlider, WingRunner).
+     * Folosit doar pentru a vedea ce cărți a avut în trecut.
+     */
+    @OneToMany(mappedBy = "child", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    private List<ChildManual> manuals = new ArrayList<>();
+
+    /**
+     * CURSOR GLOBAL ("Save Game"):
+     * Aici ținem minte ID-ul ultimului sticker deblocat și câte manuale a avut în total.
+     * Relație 1-la-1: Un copil are un singur rând de progres activ.
+     */
+    @OneToOne(mappedBy = "child", cascade = CascadeType.ALL)
+    @ToString.Exclude
+    private ChildProgress progress;
+
+    // --- SISTEM VECHI (Legacy) ---
+    // Păstrat pentru compatibilitate, dar calculat dinamic mai jos.
     @Column(name = "has_manual")
     private Boolean hasManual = false;
 
-    /** Daca are tricoul (uniforma) */
     @Column(name = "has_shirt")
     private Boolean hasShirt = false;
 
-    /** Daca are palarie (optional) */
     @Column(name = "has_hat")
     private Boolean hasHat = false;
 
-    /** Numarul de insigne castigate */
     @Column(name = "badges_count")
     private Integer badgesCount = 0;
 
-    // --- SISTEMUL DE PUNCTE (SIMPLIFICAT) ---
-
-    /** * Punctele stranse in acest an (SEZON).
-     * Acestea sunt BANII copilului si NU se sterg la finalul serii.
-     */
+    // --- PUNCTE ---
     @Column(name = "season_points")
     private Integer seasonPoints = 0;
 
-    /** * Punctele facute strict AZI.
-     * Acestea se aduna la scorul echipei in timp real.
-     * ATENTIE: Se reseteaza la 0 cand directorul apasa "Incheie Seara".
-     */
     @Column(name = "daily_points")
     private Integer dailyPoints = 0;
 
-    /** * Echipa in care este repartizat AZI (ex: "red", "blue").
-     * ATENTIE: Se sterge (devine null) cand directorul apasa "Incheie Seara".
-     */
     @Column(name = "current_team")
     private String currentTeam;
 
     // --- ALTE DETALII ---
-
-    /** Parola pentru cand se logheaza copilul in aplicatie */
     private String password;
 
-    /** Progresul general (bara de progres vizuala) */
-    private Integer progress = 0;
+    // Progresul vizual general (bara de progres), poate fi calculat sau setat manual
+    private Integer progressPercent = 0;
 
-    /** Daca este suspendat nu poate intra la joc si nu apare in liste */
     @Column(name = "is_suspended")
     private Boolean isSuspended = false;
 
-    /** Codul solicitat sa poata sterge contul (GDPR) */
     @Column(name = "deletion_code")
     private String deletionCode;
 
-    /** Varsta calculata pe loc, nu se salveaza in baza de date */
     @Transient
     private Integer age;
 
-    /** Calculeaza varsta pe baza datei de nastere */
     public Integer getAge() {
         if (this.birthDate == null) return 0;
         return Period.between(this.birthDate, LocalDate.now()).getYears();
+    }
+
+    /**
+     * LOGICA HIBRIDĂ:
+     * Verificăm dacă are vreun manual activ în istoric pentru a răspunde cu TRUE la 'hasManual'.
+     * Astfel, frontend-ul vechi va funcționa fără modificări.
+     */
+    @JsonProperty("hasManual")
+    public Boolean getHasManual() {
+        if (manuals != null && !manuals.isEmpty()) {
+            // Dacă are un manual marcat ca ACTIVE în istoric, considerăm că are manual
+            boolean hasActiveManual = manuals.stream()
+                    .anyMatch(m -> "ACTIVE".equalsIgnoreCase(m.getStatus()));
+            if (hasActiveManual) return true;
+        }
+        return this.hasManual;
     }
 }
