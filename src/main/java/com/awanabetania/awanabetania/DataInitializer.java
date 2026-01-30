@@ -51,14 +51,27 @@ public class DataInitializer implements CommandLineRunner {
         createLeader("Raul", "Macovei", "DIRECTOR", "0774650819", null);
 
         // 3. STICKERE (GAMIFICATION)
-        if (stickerRepository.count() == 0) {
-            System.out.println("Generating Stickers...");
+        // MODIFICARE: Verificăm dacă primul sticker are calea setată.
+        // Dacă nu o are (e null), ștergem tot și regenerăm.
+        boolean needRegeneration = false;
+        if (stickerRepository.count() > 0) {
+            Sticker first = stickerRepository.findAll().get(0);
+            if (first.getImagePath() == null) {
+                needRegeneration = true;
+            }
+        } else {
+            needRegeneration = true;
+        }
+
+        if (needRegeneration) {
+            System.out.println("🔄 Regenerare Stickere cu imagini...");
+            stickerRepository.deleteAll(); // Ștergem vechiturile
+
             for (int i = 1; i <= 30; i++) {
                 Sticker s = new Sticker();
                 s.setName("Rank " + i);
 
-                // --- AICI E MODIFICAREA ---
-                // Setăm calea către imagine. Frontend-ul va căuta în folderul public.
+                // Aici setăm calea corectă
                 s.setImagePath("/stickers/" + i + ".png");
 
                 stickerRepository.save(s);

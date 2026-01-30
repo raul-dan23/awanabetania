@@ -105,7 +105,7 @@ const MeetingFeedback = ({ meeting, user, onComplete, onCancel }) => {
 
 
 // ==========================================
-// COMPONENTA LIPSA: STICKER MAP (Album cu Lacăte)
+// COMPONENTA LIPSA: STICKER MAP (Album cu Lacate)
 // ==========================================
 const StickerMap = ({ child, user, onUnlock }) => {
     const [stickers, setStickers] = useState([]);
