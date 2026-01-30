@@ -51,15 +51,16 @@ public class DataInitializer implements CommandLineRunner {
         createLeader("Raul", "Macovei", "DIRECTOR", "0774650819", null);
 
         // 3. STICKERE (GAMIFICATION)
-        // Generăm cele 30 de niveluri dacă tabelul este gol
         if (stickerRepository.count() == 0) {
-            System.out.println("Generating Stickers (Rank 1-30)...");
+            System.out.println("Generating Stickers...");
             for (int i = 1; i <= 30; i++) {
                 Sticker s = new Sticker();
                 s.setName("Rank " + i);
-                // Aici poți pune calea către imagini reale în viitor (ex: "/img/stickers/1.png")
-                // Momentan lăsăm null, iar Frontend-ul va afișa numărul.
-                s.setImagePath(null);
+
+                // --- AICI E MODIFICAREA ---
+                // Setăm calea către imagine. Frontend-ul va căuta în folderul public.
+                s.setImagePath("/stickers/" + i + ".png");
+
                 stickerRepository.save(s);
             }
         }

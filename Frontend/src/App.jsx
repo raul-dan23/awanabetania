@@ -103,6 +103,105 @@ const MeetingFeedback = ({ meeting, user, onComplete, onCancel }) => {
     );
 };
 
+
+// ==========================================
+// COMPONENTA LIPSA: STICKER MAP (Album cu Lacăte)
+// ==========================================
+const StickerMap = ({ child, user, onUnlock }) => {
+    const [stickers, setStickers] = useState([]);
+    // Verificam daca e lider (doar liderii au buton de actiune)
+    const isLeader = user && !user.hasOwnProperty('parentPhone');
+
+    useEffect(() => {
+        fetch(`${API_URL}/stickers`)
+            .then(r => r.ok ? r.json() : [])
+            .then(setStickers)
+            .catch(() => setStickers([]));
+    }, []);
+
+    const currentLevel = child.progress ? child.progress.lastStickerId : 0;
+
+    return (
+        <div className="card" style={{ background: '#f8fafc', border: '2px solid #e2e8f0', marginBottom:'20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ margin: 0, color: '#334155' }}>📚 Album Stickere</h3>
+                <span className="badge" style={{ background: '#3b82f6', color: 'white', fontSize: '0.9rem' }}>
+                    {currentLevel} / {stickers.length} Colectate
+                </span>
+            </div>
+
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
+                gap: '10px',
+                justifyItems: 'center'
+            }}>
+                {stickers.map((sticker) => {
+                    const isUnlocked = sticker.id <= currentLevel;
+                    const isNext = sticker.id === currentLevel + 1;
+
+                    // Stiluri pentru card
+                    let style = {
+                        width: '100%', height: '100px', borderRadius: '8px',
+                        display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
+                        fontSize: '0.8rem', fontWeight: 'bold', position: 'relative',
+                        transition: 'all 0.2s',
+                        background: '#94a3b8', color: 'white', border: '1px solid #64748b', opacity: 0.6,
+                        overflow: 'hidden' // Important pentru imagini
+                    };
+
+                    // Stiluri dinamice
+                    if (isUnlocked) {
+                        style = { ...style, background: 'white', border: '2px solid #22c55e', color: '#15803d', opacity: 1 };
+                    } else if (isNext) {
+                        style = {
+                            ...style, background: '#fef3c7', border: '2px dashed #d97706', color: '#b45309',
+                            opacity: 1, transform: 'scale(1.05)', boxShadow: '0 0 10px rgba(245, 158, 11, 0.4)',
+                            cursor: isLeader ? 'pointer' : 'default', zIndex: 10
+                        };
+                    }
+
+                    return (
+                        <div key={sticker.id} style={style} onClick={() => { if(isLeader && isNext) onUnlock(child.id); }}>
+                            {/* LOGICA AFISARE: Imagine sau Text */}
+                            {sticker.imagePath ? (
+                                // DACA AVEM IMAGINE (PNG)
+                                <>
+                                    <img
+                                        src={sticker.imagePath}
+                                        alt={sticker.name}
+                                        style={{
+                                            width: '100%', height: '100%', objectFit: 'contain',
+                                            filter: isUnlocked ? 'none' : 'grayscale(100%) blur(2px)', // Gri si incetosat daca e blocat
+                                            opacity: isUnlocked ? 1 : 0.5
+                                        }}
+                                    />
+                                    {/* Lacat peste imagine daca nu e deblocat */}
+                                    {!isUnlocked && (
+                                        <div style={{position:'absolute', top:0, left:0, width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem', zIndex:2}}>
+                                            {isNext ? '🔓' : '🔒'}
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                // DACA NU AVEM IMAGINE (Doar text/emoji)
+                                isUnlocked ? (
+                                    <> <span style={{fontSize:'1.5rem'}}>✅</span> <span>{sticker.name}</span> </>
+                                ) : (
+                                    <>
+                                        <span style={{fontSize:'1.5rem', marginBottom:'5px'}}>{isNext ? '🔓' : '🔒'}</span>
+                                        <span>{isNext ? 'APASĂ!' : 'Blocat'}</span>
+                                    </>
+                                )
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
 // ==========================================
 // COMPONENTA NOUA: STICKERS HUB (Albumul cu Stickere)
 // ==========================================
