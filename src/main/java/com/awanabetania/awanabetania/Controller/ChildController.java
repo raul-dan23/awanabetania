@@ -61,28 +61,39 @@ public class ChildController {
     public ResponseEntity<?> unlockNextSticker(@PathVariable Integer childId) {
         Child child = childRepository.findById(childId).orElse(null);
         if (child == null) return ResponseEntity.notFound().build();
+
+        // 1. Gestionam progresul (Stickerul)
         ChildProgress progress = child.getProgress();
-        if (progress == null) { progress = new ChildProgress(); progress.setChild(child); progress.setLastStickerId(0); progress.setManualsCount(0); }
+        if (progress == null) {
+            progress = new ChildProgress();
+            progress.setChild(child);
+            progress.setLastStickerId(0);
+            progress.setManualsCount(0);
+        }
 
         int nextId = progress.getLastStickerId() + 1;
         progress.setLastStickerId(nextId);
 
+        // 2. Incrementam numarul de lectii completate
         int currentLessons = child.getLessonsCompleted() != null ? child.getLessonsCompleted() : 0;
-        int newLessonCount = currentLessons + 1;
-        child.setLessonsCompleted(newLessonCount);
+        child.setLessonsCompleted(currentLessons + 1);
+
+        // 3. Dam puncte (20 pct per sticker)
         int pts = child.getSeasonPoints() != null ? child.getSeasonPoints() : 0;
         child.setSeasonPoints(pts + 20);
 
         String message = "Sticker " + nextId + " deblocat!";
-        if (newLessonCount % 3 == 0) {
-            int currentBadges = child.getBadgesCount() != null ? child.getBadgesCount() : 0;
-            child.setBadgesCount(currentBadges + 1);
-            message += " | 🏅 INSIGNĂ NOUĂ!";
-        }
+
+        // --- AM SCOS LOGICA DE INSIGNE AUTOMATE (BADGES) DE AICI ---
+        // Insignele se vor acorda probabil manual sau prin alta logica, conform cerintei tale.
+
+        // Logica de terminare manual (la fiecare 20 de stickere) ramane valabila?
+        // Daca da, o lasam. Daca nu, o poti sterge si pe asta.
         if (nextId % 20 == 0) {
             createNotification(child, "MANUAL_FINISHED", "🎉 DIRECTOR! " + child.getName() + " a terminat manualul!");
             message += " | 🏁 Manual Terminat!";
         }
+
         childRepository.save(child);
         childProgressRepository.save(progress);
         return ResponseEntity.ok(message);
@@ -134,34 +145,32 @@ public class ChildController {
     }
 
     /**
-     * --- METODA NOUA DE STERGERE (CASCADE DELETE) ---
-     * Sterge absolut tot ce tine de copil inainte sa stearga copilul.
+     * STERGERE COPIL CU COD DE SECURITATE
+     * Endpoint: DELETE /api/children/{id}?code=A1B2
      */
     @DeleteMapping("/{id}")
-    @Transactional // Obligatoriu pentru stergeri multiple!
-    public ResponseEntity<?> deleteChild(@PathVariable Integer id) {
-        if (!childRepository.existsById(id)) {
-            return ResponseEntity.notFound().build();
+    @Transactional
+    public ResponseEntity<?> deleteChild(@PathVariable Integer id, @RequestParam(required = false) String code) {
+
+        Child child = childRepository.findById(id).orElse(null);
+        if (child == null) return ResponseEntity.notFound().build();
+
+        // --- VERIFICARE COD ---
+        if (child.getDeletionCode() != null && !child.getDeletionCode().isEmpty()) {
+            if (code == null || !code.equalsIgnoreCase(child.getDeletionCode())) {
+                return ResponseEntity.badRequest().body("❌ Codul de ștergere este incorect!");
+            }
         }
 
-        // 1. Stergem Istoricul de Puncte
+        // --- LOGICA DE CURATENIE (Aceeasi ca inainte) ---
         scoreRepository.deleteByChildId(id);
-
-        // 2. Stergem Notificarile
         notificationRepository.deleteByChildId(id);
-
-        // 3. Stergem Manualele
         childManualRepository.deleteByChildId(id);
-
-        // 4. Stergem Progresul (Stickere)
         childProgressRepository.deleteByChildId(id);
-
-        // 5. Stergem Pedepsele
         warningRepository.deleteByChildId(id);
 
-        // 6. LA FINAL: Stergem copilul
         childRepository.deleteById(id);
 
-        return ResponseEntity.ok("✅ Copilul și toate datele aferente au fost șterse definitiv!");
+        return ResponseEntity.ok("✅ Copilul și toate datele au fost șterse!");
     }
 }

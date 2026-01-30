@@ -104,6 +104,99 @@ const MeetingFeedback = ({ meeting, user, onComplete, onCancel }) => {
 };
 
 // ==========================================
+// COMPONENTA NOUA: STICKERS HUB (Albumul cu Stickere)
+// ==========================================
+const StickersHub = ({ user }) => {
+    const [children, setChildren] = useState([]);
+    const [selectedChild, setSelectedChild] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    const isLeader = user && !user.hasOwnProperty('parentPhone');
+
+    useEffect(() => {
+        // Incarcam copiii
+        fetch(`${API_URL}/children`)
+            .then(r => r.ok ? r.json() : [])
+            .then(data => {
+                setChildren(data.sort((a,b) => a.name.localeCompare(b.name)));
+                setLoading(false);
+            })
+            .catch(() => setLoading(false));
+    }, []);
+
+    // Functia de refresh doar pentru un copil (dupa ce deblochezi)
+    const refreshChild = (childId) => {
+        fetch(`${API_URL}/children/${childId}`).then(r=>r.json()).then(setSelectedChild);
+    };
+
+    const handleUnlockSticker = (childId) => {
+        if(!window.confirm("Confirm: Copilul a spus lecția și deschidem lacătul?")) return;
+        fetch(`${API_URL}/children/${childId}/unlock-next`, { method: 'POST' }).then(async res => {
+            if(res.ok) {
+                alert("🎉 " + await res.text());
+                refreshChild(childId); // Reincarcam doar copilul curent
+            }
+            else alert("Eroare");
+        });
+    };
+
+    if (loading) return <div className="animate-in"><p>Se încarcă albumele...</p></div>;
+
+    // VEDEREA 2: ALBUMUL UNUI COPIL
+    if (selectedChild) {
+        return (
+            <div className="animate-in">
+                <button onClick={() => setSelectedChild(null)} className="btn-secondary" style={{ marginBottom: '20px' }}>
+                    ⬅ Înapoi la Toți Copiii
+                </button>
+
+                <div className="card" style={{borderTop:'5px solid var(--accent)'}}>
+                    <h2 style={{marginTop:0}}>Albumul lui {selectedChild.name} {selectedChild.surname}</h2>
+
+                    {/* Folosim componenta StickerMap (design-ul cu lacăt) */}
+                    <StickerMap
+                        child={selectedChild}
+                        user={user}
+                        onUnlock={handleUnlockSticker}
+                    />
+                </div>
+            </div>
+        );
+    }
+
+    // VEDEREA 1: LISTA CU TOȚI COPIII
+    return (
+        <div className="animate-in">
+            <h2>🏆 Albume Stickere</h2>
+            <p style={{color:'#666', marginBottom:'20px'}}>Selectează un copil pentru a-i vedea sau debloca stickerele.</p>
+
+            <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:'15px'}}>
+                {children.map(c => (
+                    <div
+                        key={c.id}
+                        onClick={() => setSelectedChild(c)}
+                        style={{
+                            background:'white', padding:'20px', borderRadius:'15px',
+                            border:'1px solid #eee', cursor:'pointer',
+                            boxShadow:'0 2px 5px rgba(0,0,0,0.05)',
+                            transition:'transform 0.2s', textAlign:'center'
+                        }}
+                        onMouseOver={e => e.currentTarget.style.transform = 'translateY(-3px)'}
+                        onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+                    >
+                        <div style={{fontSize:'2rem', marginBottom:'5px'}}>📒</div>
+                        <h3 style={{margin:0, fontSize:'1.1rem', color:'var(--text-primary)'}}>{c.name} {c.surname}</h3>
+                        <div style={{marginTop:'5px', fontSize:'0.9rem', color:'gray'}}>
+                            Nivel: <strong>{c.progress ? c.progress.lastStickerId : 0}</strong>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+// ==========================================
 // 3. DEPARTMENTS LIST
 // ==========================================
 const DepartmentsList = ({ user }) => {
@@ -808,50 +901,33 @@ const CalendarManager = ({ user }) => {
 
 
 // ==========================================
-// 9. REGISTRY & DOSARE (Versiunea Dinamică - Fără Hardcodare)
+// 9. REGISTRY (CURAT - FĂRĂ STICKERE)
 // ==========================================
 const Registry = ({ user }) => {
     const [children, setChildren] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedChild, setSelectedChild] = useState(null);
-
-    // State pentru Avertismente
     const [childWarnings, setChildWarnings] = useState([]);
     const [newWarning, setNewWarning] = useState({ description: '', suspension: false, remainingMeetings: 1 });
-
-    // State pentru ATRIBUIRE MANUAL
-    const [availableManuals, setAvailableManuals] = useState([]); // Lista dinamică
-    const [manualMode, setManualMode] = useState('SELECT'); // 'SELECT' sau 'NEW'
+    const [availableManuals, setAvailableManuals] = useState([]);
+    const [manualMode, setManualMode] = useState('SELECT');
     const [selectedManual, setSelectedManual] = useState('');
     const [customManualName, setCustomManualName] = useState('');
 
     const isDirector = user && (user.role === 'DIRECTOR' || user.role === 'COORDONATOR');
 
-    useEffect(() => {
-        loadChildren();
-    }, []);
+    useEffect(() => { loadChildren(); }, []);
 
     const loadChildren = () => {
         fetch(`${API_URL}/children`).then(r => r.ok ? r.json() : []).then(async (kids) => {
-            // 1. Extragem lista unică de manuale din ce au primit copiii deja
             const existingManualsSet = new Set();
             kids.forEach(child => {
-                if (child.manuals && Array.isArray(child.manuals)) {
-                    child.manuals.forEach(m => existingManualsSet.add(m.name));
-                }
+                if (child.manuals && Array.isArray(child.manuals)) child.manuals.forEach(m => existingManualsSet.add(m.name));
             });
-            const uniqueManuals = Array.from(existingManualsSet).sort(); // Le ordonăm alfabetic
+            const uniqueManuals = Array.from(existingManualsSet).sort();
             setAvailableManuals(uniqueManuals);
+            if (uniqueManuals.length > 0) { setSelectedManual(uniqueManuals[0]); setManualMode('SELECT'); } else { setManualMode('NEW'); }
 
-            // Setăm default-ul pentru selector
-            if (uniqueManuals.length > 0) {
-                setSelectedManual(uniqueManuals[0]);
-                setManualMode('SELECT');
-            } else {
-                setManualMode('NEW'); // Dacă nu e niciun manual în DB, trecem direct pe mod "Scriere"
-            }
-
-            // 2. Încărcăm statusul de suspendare
             const kidsWithStatus = await Promise.all(kids.map(async (k) => {
                 try {
                     const wRes = await fetch(`${API_URL}/warnings/child/${k.id}`);
@@ -865,300 +941,90 @@ const Registry = ({ user }) => {
     };
 
     const openChildFile = (child) => {
-        fetch(`${API_URL}/children/${child.id}`)
-            .then(r => r.json())
-            .then(freshData => {
-                setSelectedChild(freshData);
-                // Resetam form-ul
-                setCustomManualName('');
-
-                // Daca avem manuale in lista, il selectam pe primul, altfel ramanem pe NEW
-                if (availableManuals.length > 0) {
-                    setManualMode('SELECT');
-                    setSelectedManual(availableManuals[0]);
-                } else {
-                    setManualMode('NEW');
-                }
-
-                fetch(`${API_URL}/warnings/child/${child.id}`)
-                    .then(r => r.ok ? r.json() : [])
-                    .then(data => setChildWarnings(Array.isArray(data) ? data : []))
-                    .catch(() => setChildWarnings([]));
-            });
+        fetch(`${API_URL}/children/${child.id}`).then(r => r.json()).then(freshData => {
+            setSelectedChild(freshData);
+            setCustomManualName('');
+            fetch(`${API_URL}/warnings/child/${child.id}`).then(r => r.ok ? r.json() : []).then(setChildWarnings);
+        });
     };
 
-    // --- LOGICA ATRIBUIRE MANUAL ---
     const handleAssignManual = () => {
         const finalName = manualMode === 'NEW' ? customManualName : selectedManual;
-
-        if (!finalName || finalName.trim() === '') {
-            alert("⚠️ Te rog scrie un nume de manual!");
-            return;
-        }
-
-        if (!window.confirm(`Confirmi că vrei să atribui manualul "${finalName}" lui ${selectedChild.name}?`)) return;
-
-        fetch(`${API_URL}/children/${selectedChild.id}/assign-manual?manualName=${encodeURIComponent(finalName)}`, {
-            method: 'POST'
-        })
-            .then(res => {
-                if (res.ok) {
-                    alert("✅ Manual atribuit cu succes!");
-                    // Reincarcam TOATA lista de copii pentru ca tocmai am creat un manual nou
-                    // si vrem sa apara in lista disponibila pentru ceilalti copii
-                    loadChildren();
-
-                    // Reincarcam si copilul curent ca sa vedem update-ul
-                    fetch(`${API_URL}/children/${selectedChild.id}`).then(r=>r.json()).then(setSelectedChild);
-                } else {
-                    alert("❌ Eroare la server.");
-                }
-            });
-    };
-
-    const toggleInventoryItem = (itemField, currentValue) => {
-        const updatedChild = { ...selectedChild, [itemField]: !currentValue };
-        fetch(`${API_URL}/children/${selectedChild.id}`, {
-            method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedChild)
-        }).then(res => { if (res.ok) openChildFile(selectedChild); });
+        if (!finalName) return alert("Scrie nume manual!");
+        fetch(`${API_URL}/children/${selectedChild.id}/assign-manual?manualName=${encodeURIComponent(finalName)}`, { method: 'POST' })
+            .then(res => { if (res.ok) { alert("✅ Atribuit!"); loadChildren(); openChildFile(selectedChild); }});
     };
 
     const handleAddWarning = () => {
-        if (!newWarning.description) { alert("Scrie motivul!"); return; }
-        const payload = { childId: selectedChild.id, description: newWarning.description, suspension: newWarning.suspension, remainingMeetings: newWarning.suspension ? newWarning.remainingMeetings : 0 };
-        fetch(`${API_URL}/warnings/add`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-            .then(res => { if (res.ok) { alert("✅ Salvat!"); openChildFile(selectedChild); setNewWarning({ description: '', suspension: false, remainingMeetings: 1 }); } else alert("Eroare server."); });
+        if (!newWarning.description) return alert("Scrie motiv!");
+        const payload = { childId: selectedChild.id, ...newWarning, remainingMeetings: newWarning.suspension ? newWarning.remainingMeetings : 0 };
+        fetch(`${API_URL}/warnings/add`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+            .then(res => { if(res.ok) { alert("✅ Salvat!"); openChildFile(selectedChild); setNewWarning({description:'', suspension:false, remainingMeetings:1}); }});
     };
 
-    const getProgressMessages = (child) => {
-        const streak = child.attendanceStreak || 0;
-        const lessons = child.lessonsCompleted || 0;
-        const msgs = [];
-        if (!child.hasShirt) msgs.push(5 - streak <= 0 ? "🎁 Primeste TRICOU!" : `👕 Mai are ${5 - streak} prezente pana la Tricou.`);
-        else if (!child.hasHat) msgs.push(10 - streak <= 0 ? "🎁 Primeste CACIULA!" : `🧢 Mai are ${10 - streak} prezente pana la Caciula.`);
-        msgs.push(`🏅 Mai are ${3 - (lessons % 3)} lectii pana la Insigna.`);
-        return msgs;
-    };
-
-    const btnStyle = (active, color) => ({
-        flex: 1, padding: '10px', borderRadius: '6px', border: 'none',
-        background: active ? color : '#e2e8f0',
-        color: active ? 'white' : '#64748b',
-        fontWeight: 'bold', cursor: 'pointer',
-        boxShadow: active ? '0 2px 5px rgba(0,0,0,0.2)' : 'none',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px'
-    });
-
-    if (loading) return <p>Se incarca datele...</p>;
+    if (loading) return <p>Se incarca...</p>;
 
     if (selectedChild) {
         const isCurrentlySuspended = Array.isArray(childWarnings) && childWarnings.length > 0 && childWarnings[0].suspension && childWarnings[0].remainingMeetings > 0;
+
         return (
             <div className="animate-in">
-                <button onClick={() => { setSelectedChild(null); loadChildren(); }} className="btn-secondary" style={{ marginBottom: '20px' }}>
-                    ⬅ Inapoi la Lista
-                </button>
+                <button onClick={() => { setSelectedChild(null); loadChildren(); }} className="btn-secondary" style={{ marginBottom: '20px' }}>⬅ Inapoi la Lista</button>
 
                 <div className="card" style={{ borderLeft: isCurrentlySuspended ? '8px solid red' : '8px solid green' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <h1>📂 Dosar: {selectedChild.name} {selectedChild.surname}</h1>
-                        {isCurrentlySuspended && <span style={{ background: 'red', color: 'white', padding: '10px 20px', borderRadius: '20px', fontWeight: 'bold', fontSize: '1.2rem' }}>⛔ SUSPENDAT</span>}
+                        {isCurrentlySuspended && <span style={{ background: 'red', color: 'white', padding: '5px 15px', borderRadius: '15px' }}>⛔ SUSPENDAT</span>}
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginTop: '20px' }}>
-                        {/* --- COLOANA STANGA --- */}
+
+                        {/* === STANGA: INFO === */}
                         <div>
-                            <h3>📋 Date & Contact</h3>
-                            <p><strong>Parinte:</strong> {selectedChild.parentName} ({selectedChild.parentPhone})</p>
-                            <p><strong>Varsta:</strong> {selectedChild.age} ani</p>
-                            <p><strong>Prezente Totale:</strong> {selectedChild.totalAttendance || 0}</p>
-
-                            {/* --- INVENTAR ADMIN --- */}
-                            <div style={{marginTop:'20px', padding:'15px', background:'#f8fafc', borderRadius:'10px', border:'1px solid #cbd5e1'}}>
-                                <h3 style={{marginTop:0, borderBottom:'2px solid #cbd5e1', paddingBottom:'10px', color:'#334155'}}>🎒 Gestiune Inventar</h3>
-
-                                {/* 1. ACTIUNI RECOMPENSE (DOAR DIRECTORUL POATE DA CLICK) */}
-                                <div style={{display:'flex', gap:'15px', marginBottom:'20px'}}>
-
-                                    {/* --- BUTON TRICOU --- */}
-                                    <button
-                                        disabled={!isDirector || selectedChild.hasShirt} // Liderii nu pot apasa, sau daca are deja
-                                        onClick={() => {
-                                            if(window.confirm("Confirmi că i-ai înmânat TRICOUL? (Aceasta va șterge notificarea de eligibilitate)")) {
-                                                fetch(`${API_URL}/children/${selectedChild.id}/give-reward?type=SHIRT`, { method: 'POST' })
-                                                    .then(res => {
-                                                        if(res.ok) {
-                                                            alert("✅ Salvat!");
-                                                            openChildFile(selectedChild);
-                                                        }
-                                                    });
-                                            }
-                                        }}
-                                        style={{
-                                            flex:1, padding:'10px', borderRadius:'6px', border:'none',
-                                            // LOGICA CULORI:
-                                            // Are deja? -> VERDE
-                                            // Nu are si esti Director? -> ROSU (Actiune necesara)
-                                            // Nu are si esti Lider? -> GRI (Informativ)
-                                            background: selectedChild.hasShirt ? '#16a34a' : (isDirector ? '#ef4444' : '#e2e8f0'),
-                                            color: selectedChild.hasShirt ? 'white' : (isDirector ? 'white' : '#64748b'),
-                                            fontWeight:'bold',
-                                            cursor: (isDirector && !selectedChild.hasShirt) ? 'pointer' : 'default',
-                                            opacity: (!isDirector && !selectedChild.hasShirt) ? 0.7 : 1,
-                                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-                                            display:'flex', alignItems:'center', justifyContent:'center', gap:'5px'
-                                        }}
-                                    >
-                                        👕 {selectedChild.hasShirt ? 'ARE TRICOU ✅' : (isDirector ? '🎁 DĂ-I TRICOU' : 'Nu are tricou')}
-                                    </button>
-
-                                    {/* --- BUTON CACIULA --- */}
-                                    <button
-                                        disabled={!isDirector || selectedChild.hasHat}
-                                        onClick={() => {
-                                            if(window.confirm("Confirmi că i-ai înmânat CĂCIULA? (Aceasta va șterge notificarea de eligibilitate)")) {
-                                                fetch(`${API_URL}/children/${selectedChild.id}/give-reward?type=HAT`, { method: 'POST' })
-                                                    .then(res => {
-                                                        if(res.ok) {
-                                                            alert("✅ Salvat!");
-                                                            openChildFile(selectedChild);
-                                                        }
-                                                    });
-                                            }
-                                        }}
-                                        style={{
-                                            flex:1, padding:'10px', borderRadius:'6px', border:'none',
-                                            background: selectedChild.hasHat ? '#0284c7' : (isDirector ? '#ef4444' : '#e2e8f0'),
-                                            color: selectedChild.hasHat ? 'white' : (isDirector ? 'white' : '#64748b'),
-                                            fontWeight:'bold',
-                                            cursor: (isDirector && !selectedChild.hasHat) ? 'pointer' : 'default',
-                                            opacity: (!isDirector && !selectedChild.hasHat) ? 0.7 : 1,
-                                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-                                            display:'flex', alignItems:'center', justifyContent:'center', gap:'5px'
-                                        }}
-                                    >
-                                        🧢 {selectedChild.hasHat ? 'ARE CĂCIULĂ ✅' : (isDirector ? '🎁 DĂ-I CĂCIULĂ' : 'Nu are căciulă')}
-                                    </button>
-                                </div>
-
-                                {/* 2. ZONA MANUALE (DINAMICA) */}
-                                {isDirector && (
-                                    <div style={{ background: 'white', padding: '15px', borderRadius: '8px', border: '1px solid #94a3b8', marginBottom: '20px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
-                                        <label style={{ display: 'block', fontWeight: 'bold', color: '#334155', marginBottom: '8px' }}>📖 Atribuie Manual:</label>
-
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-
-                                            {/* Selector Mod: Lista existenta vs Nou */}
-                                            {availableManuals.length > 0 && (
-                                                <div style={{display:'flex', gap:'5px', marginBottom:'5px'}}>
-                                                    <label style={{cursor:'pointer', fontSize:'0.9rem'}}><input type="radio" checked={manualMode === 'SELECT'} onChange={() => setManualMode('SELECT')} /> Listă Existentă</label>
-                                                    <label style={{cursor:'pointer', fontSize:'0.9rem', marginLeft:'15px'}}><input type="radio" checked={manualMode === 'NEW'} onChange={() => setManualMode('NEW')} /> ➕ Manual Nou</label>
-                                                </div>
-                                            )}
-
-                                            {/* Input Dinamic */}
-                                            {manualMode === 'SELECT' && availableManuals.length > 0 ? (
-                                                <select
-                                                    value={selectedManual}
-                                                    onChange={(e) => setSelectedManual(e.target.value)}
-                                                    style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ccc', fontSize: '1rem' }}
-                                                >
-                                                    {availableManuals.map(m => <option key={m} value={m}>{m}</option>)}
-                                                </select>
-                                            ) : (
-                                                <input
-                                                    type="text"
-                                                    placeholder="Scrie numele noului manual (ex: HangGlider)"
-                                                    value={customManualName}
-                                                    onChange={(e) => setCustomManualName(e.target.value)}
-                                                    style={{ padding: '10px', borderRadius: '5px', border: '2px solid #0ea5e9', fontSize: '1rem' }}
-                                                />
-                                            )}
-
-                                            <button
-                                                onClick={handleAssignManual}
-                                                style={{ background: '#0ea5e9', color: 'white', border: 'none', padding: '10px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', marginTop: '5px' }}
-                                            >
-                                                💾 {manualMode === 'NEW' ? 'CREEAZĂ ȘI ATRIBUIE' : 'ATRIBUIE SELECȚIA'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* 3. ISTORIC MANUALE */}
-                                <h4 style={{ fontSize: '0.9rem', color: '#475569', marginBottom: '5px', borderTop: '1px solid #eee', paddingTop: '10px' }}>Istoric Manuale:</h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '150px', overflowY: 'auto' }}>
-                                    {selectedChild.hasManual && (!selectedChild.manuals || selectedChild.manuals.length === 0) && (
-                                        <div style={{ padding: '8px', background: '#fff7ed', border: '1px solid #fdba74', borderRadius: '4px', color: '#c2410c', fontSize: '0.85rem', fontStyle: 'italic' }}>
-                                            ⚠️ Copilul are bifa "Manual" din vechiul sistem, dar nu are istoric.
-                                        </div>
-                                    )}
-
-                                    {selectedChild.manuals && selectedChild.manuals.length > 0 ? (
-                                        selectedChild.manuals.map((m, idx) => (
-                                            <div key={idx} style={{
-                                                padding: '8px 10px', background: 'white', border: '1px solid #cbd5e1', borderRadius: '4px',
-                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem'
-                                            }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                    <strong>{m.name}</strong>
-                                                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{m.startDate}</span>
-                                                </div>
-                                                <span style={{ fontSize: '0.7rem', padding: '3px 8px', borderRadius: '10px', fontWeight: 'bold', background: m.status === 'ACTIVE' ? '#dcfce7' : '#f1f5f9', color: m.status === 'ACTIVE' ? '#166534' : '#64748b' }}>
-                                                    {m.status}
-                                                </span>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        !selectedChild.hasManual && <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.8rem' }}>Fără manuale.</span>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div style={{ marginTop: '15px', background: '#f0f9ff', padding: '15px', borderRadius: '10px' }}>
-                                <strong>🚀 Progres Calculat:</strong>
-                                {getProgressMessages(selectedChild).map((m, i) => <div key={i} style={{ fontSize: '0.9rem', marginTop: '5px' }}>• {m}</div>)}
+                            <div style={{ padding:'15px', background:'#f9f9f9', borderRadius:'10px' }}>
+                                <h3>📋 Statistici</h3>
+                                <p>Varsta: <strong>{selectedChild.age} ani</strong></p>
+                                <p>Parinte: {selectedChild.parentName} ({selectedChild.parentPhone})</p>
+                                <p>Prezente Totale: {selectedChild.totalAttendance || 0}</p>
+                                <p>Streak Curent: {selectedChild.attendanceStreak || 0}</p>
                             </div>
                         </div>
 
-                        {/* --- COLOANA DREAPTA --- */}
+                        {/* === DREAPTA: INVENTAR & DISCIPLINA === */}
                         <div>
-                            <h3 style={{ color: 'red' }}>⚠️ Disciplina & Istoric</h3>
-                            {isDirector && (
-                                <div style={{ background: '#fff5f5', padding: '15px', borderRadius: '10px', border: '1px solid #feb2b2' }}>
-                                    <label style={{ fontWeight: 'bold', color: '#991b1b', marginBottom: '5px', display: 'block' }}>Motiv sancțiune:</label>
-                                    <textarea
-                                        placeholder="Scrie aici motivul..."
-                                        value={newWarning.description}
-                                        onChange={e => setNewWarning({ ...newWarning, description: e.target.value })}
-                                    />
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginTop: '10px' }}>
-                                        <label style={{ color: 'red', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
-                                            <input type="checkbox" style={{ width: '20px', height: '20px' }} checked={newWarning.suspension} onChange={e => setNewWarning({ ...newWarning, suspension: e.target.checked })} />
-                                            ⛔ SUSPENDARE?
-                                        </label>
-
-                                        {newWarning.suspension && (
-                                            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 'bold', color: '#991b1b' }}>
-                                                Nr. Ture:
-                                                <input type="number" min="1" value={newWarning.remainingMeetings} onChange={e => setNewWarning({ ...newWarning, remainingMeetings: parseInt(e.target.value) })} style={{ width: '60px' }} />
-                                            </label>
-                                        )}
-                                    </div>
-                                    <button onClick={handleAddWarning} style={{ background: '#ef4444', color: 'white', padding: '12px', width: '100%', borderRadius: '8px', fontWeight: 'bold', marginTop: '15px', border: 'none', cursor: 'pointer', boxShadow: '0 4px 10px rgba(239, 68, 68, 0.2)' }}>
-                                        SALVEAZĂ SANCȚIUNEA
-                                    </button>
+                            {/* 1. INVENTAR */}
+                            <div style={{padding:'15px', background:'#f0f9ff', borderRadius:'10px', border:'1px solid #bae6fd', marginBottom:'20px'}}>
+                                <h3 style={{marginTop:0, color:'#0369a1'}}>🎒 Inventar</h3>
+                                <div style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
+                                    <button onClick={()=>{if(window.confirm("Are?")) fetch(`${API_URL}/children/${selectedChild.id}/give-reward?type=SHIRT`,{method:'POST'}).then(r=>{if(r.ok)openChildFile(selectedChild)})}} disabled={!isDirector || selectedChild.hasShirt} style={{flex:1, padding:'8px', background: selectedChild.hasShirt?'#16a34a':'#e2e8f0', color:selectedChild.hasShirt?'white':'black', border:'none', borderRadius:'5px'}}>👕 {selectedChild.hasShirt?'DAT':'TRICOU'}</button>
+                                    <button onClick={()=>{if(window.confirm("Are?")) fetch(`${API_URL}/children/${selectedChild.id}/give-reward?type=HAT`,{method:'POST'}).then(r=>{if(r.ok)openChildFile(selectedChild)})}} disabled={!isDirector || selectedChild.hasHat} style={{flex:1, padding:'8px', background: selectedChild.hasHat?'#0284c7':'#e2e8f0', color:selectedChild.hasHat?'white':'black', border:'none', borderRadius:'5px'}}>🧢 {selectedChild.hasHat?'DATA':'CACIULA'}</button>
                                 </div>
-                            )}
 
-                            <h4 style={{ marginTop: '20px' }}>📜 Istoric Avertismente</h4>
-                            <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
-                                {Array.isArray(childWarnings) && childWarnings.map(w => (
-                                    <div key={w.id} style={{ borderBottom: '1px solid #eee', padding: '8px 0', fontSize: '0.9rem' }}>
-                                        <div style={{ fontWeight: 'bold' }}>{w.date} {w.suspension ? <span style={{ color: 'red' }}>(Suspendat {w.remainingMeetings} ture)</span> : '(Avertisment)'}</div>
-                                        <div style={{ color: '#555' }}>{w.description}</div>
+                                {isDirector && (
+                                    <div style={{background:'white', padding:'10px', borderRadius:'5px'}}>
+                                        <div style={{display:'flex', gap:'5px', marginBottom:'5px'}}>
+                                            {availableManuals.length>0 && <select onChange={e=>setSelectedManual(e.target.value)} style={{flex:1}}>{availableManuals.map(m=><option key={m} value={m}>{m}</option>)}</select>}
+                                            <input placeholder="Manual Nou" value={customManualName} onChange={e=>setCustomManualName(e.target.value)} style={{flex:1}} />
+                                        </div>
+                                        <button onClick={handleAssignManual} style={{width:'100%', background:'#0ea5e9', color:'white', border:'none', padding:'5px'}}>💾 ATRIBUIE MANUAL</button>
                                     </div>
-                                ))}
+                                )}
+                                <div style={{marginTop:'10px'}}>{(selectedChild.manuals||[]).map((m,i)=><div key={i} style={{fontSize:'0.9rem'}}>📖 {m.name} ({m.status})</div>)}</div>
+                            </div>
+
+                            {/* 2. DISCIPLINA */}
+                            <div style={{padding:'15px', background:'#fff1f2', borderRadius:'10px', border:'1px solid #fda4af'}}>
+                                <h3 style={{marginTop:0, color:'#be123c'}}>⚠️ Disciplină</h3>
+                                {isDirector && (
+                                    <div>
+                                        <input placeholder="Motiv sanctiune..." value={newWarning.description} onChange={e=>setNewWarning({...newWarning, description:e.target.value})} style={{width:'100%', marginBottom:'5px', padding:'5px'}} />
+                                        <label style={{display:'block', marginBottom:'5px', color:'red', fontWeight:'bold'}}><input type="checkbox" checked={newWarning.suspension} onChange={e=>setNewWarning({...newWarning, suspension:e.target.checked})}/> SUSPENDARE (Nr Ture: <input type="number" value={newWarning.remainingMeetings} onChange={e=>setNewWarning({...newWarning, remainingMeetings:parseInt(e.target.value)})} style={{width:'40px'}}/>)</label>
+                                        <button onClick={handleAddWarning} style={{background:'#be123c', color:'white', width:'100%', border:'none', padding:'5px'}}>SALVEAZĂ</button>
+                                    </div>
+                                )}
+                                <div style={{marginTop:'10px', maxHeight:'100px', overflowY:'auto'}}>
+                                    {childWarnings.map(w=><div key={w.id} style={{fontSize:'0.85rem', borderBottom:'1px solid #ccc'}}>📅 {w.date}: {w.description}</div>)}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1170,8 +1036,8 @@ const Registry = ({ user }) => {
     return (
         <div className="animate-in">
             <h2>📋 Registru</h2>
-            <div className="table-container" style={{ overflowX: 'auto' }}>
-                <table style={{ minWidth: '900px' }}><thead><tr><th>Nume</th><th>Status</th><th>Prezente</th><th>Puncte</th><th>Actiuni</th></tr></thead><tbody>{children.map(c => (<tr key={c.id} style={{ background: c.isSuspended ? '#fee2e2' : 'transparent' }}><td style={{ fontWeight: 'bold' }}>{c.name} {c.surname}</td><td>{c.isSuspended ? <span style={{ background: 'red', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>⛔ SUSPENDAT</span> : <span style={{ color: 'green', fontSize: '0.8rem' }}>OK</span>}</td><td>{c.totalAttendance || 0}</td><td style={{ fontWeight: 'bold', color: 'var(--accent)' }}>{c.seasonPoints || 0}</td><td><button onClick={() => openChildFile(c)} style={{ background: 'var(--accent)', color: 'white', padding: '5px 15px', borderRadius: '5px' }}>Dosar</button></td></tr>))}</tbody></table>
+            <div className="table-container" style={{overflowX:'auto'}}>
+                <table style={{minWidth:'800px'}}><thead><tr><th>Nume</th><th>Status</th><th>Prezente</th><th>Puncte</th><th>Actiuni</th></tr></thead><tbody>{children.map(c=><tr key={c.id}><td style={{fontWeight:'bold'}}>{c.name} {c.surname}</td><td>{c.isSuspended?<span style={{color:'red', fontWeight:'bold'}}>SUSPENDAT</span>:<span style={{color:'green'}}>OK</span>}</td><td>{c.totalAttendance}</td><td>{c.seasonPoints}</td><td><button onClick={()=>openChildFile(c)} style={{background:'var(--accent)', color:'white', padding:'5px 15px', borderRadius:'5px'}}>Dosar</button></td></tr>)}</tbody></table>
             </div>
         </div>
     );
@@ -1783,8 +1649,9 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
     );
 };
 
+
 // ==========================================
-// 14. APP MAIN (FINAL & STABILIZAT)
+// 15. APP MAIN (FINAL)
 // ==========================================
 function App() {
     const [loading, setLoading] = useState(true);
@@ -1808,14 +1675,21 @@ function App() {
         <div className="app-container">
             <div className="sidebar">
                 <div style={{marginBottom:'30px', paddingLeft:'10px'}}><AwanaLogo width="160px" /></div>
+
+                {/* Meniul General */}
                 <button className={`nav-btn ${page==='dashboard'?'active':''}`} onClick={()=>setPage('dashboard')}>📊 Dashboard</button>
                 <button className={`nav-btn ${page==='profile'?'active':''}`} onClick={()=>setPage('profile')}>👤 Contul Meu</button>
 
+                {/* MENIUL DE MANAGEMENT (DOAR LIDERI) */}
                 {!isChild && (
                     <>
                         <div style={{margin:'20px 0 5px 15px', fontSize:'0.8rem', color:'var(--text-secondary)', fontWeight:'bold'}}>MANAGEMENT</div>
                         <button className={`nav-btn ${page==='calendar'?'active':''}`} onClick={()=>setPage('calendar')}>📅 Calendar & Sesiuni</button>
                         <button className={`nav-btn ${page==='departments'?'active':''}`} onClick={()=>setPage('departments')}>🏢 Departamente</button>
+
+                        {/* --- BUTONUL NOU --- */}
+                        <button className={`nav-btn ${page==='stickers'?'active':''}`} onClick={()=>setPage('stickers')}>🏆 Albume Stickere</button>
+
                         <button className={`nav-btn ${page==='registry'?'active':''}`} onClick={()=>setPage('registry')}>🗂️ Registru Copii</button>
 
                         {isDirector && (
@@ -1826,24 +1700,17 @@ function App() {
 
                 <div style={{marginTop: 'auto'}}>
                     <button className="theme-toggle" onClick={toggleTheme} style={{width:'100%', marginBottom:'10px'}}>{theme==='light' ? '🌙' : '☀️'}</button>
-
-                    {/* AICI ESTE MODIFICAREA CRITICĂ: Butonul de Ieșire cu RELOAD */}
-                    <button
-                        className="nav-btn"
-                        onClick={() => {
-                            setUser(null);
-                            window.location.reload(); // <--- ASTA REZOLVĂ CRASH-URILE
-                        }}
-                        style={{color:'var(--danger)'}}
-                    >
-                        🚪 Iesire
-                    </button>
+                    <button className="nav-btn" onClick={() => { setUser(null); window.location.reload(); }} style={{color:'var(--danger)'}}>🚪 Iesire</button>
                 </div>
             </div>
 
             <div className="main-content">
                 {page === 'dashboard' && <Dashboard user={user} />}
                 {page === 'profile' && <MyProfile user={user} onUpdateUser={setUser} />}
+
+                {/* --- PAGINA NOUA --- */}
+                {!isChild && page === 'stickers' && <StickersHub user={user} />}
+
                 {!isChild && page === 'calendar' && <CalendarManager user={user} />}
                 {!isChild && page === 'departments' && <DepartmentsList user={user} />}
                 {!isChild && page === 'registry' && <Registry user={user} />}

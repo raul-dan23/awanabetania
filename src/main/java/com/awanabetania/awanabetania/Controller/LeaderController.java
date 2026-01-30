@@ -50,31 +50,36 @@ public class LeaderController {
     }
 
     /**
-     * STERGERE LIDER (CORIJATĂ PENTRU HEADLEADER)
+     * STERGERE LIDER CU COD DE SECURITATE
+     * Endpoint: DELETE /api/leaders/{id}?code=A1B2
      */
     @DeleteMapping("/{id}")
     @Transactional
-    public ResponseEntity<?> deleteLeader(@PathVariable Integer id) {
+    public ResponseEntity<?> deleteLeader(@PathVariable Integer id, @RequestParam(required = false) String code) { // <--- PARAMETRU NOU
 
         Leader leader = leaderRepository.findById(id).orElse(null);
         if (leader == null) return ResponseEntity.notFound().build();
 
-        // 1. Îl scoatem din lista de membri (Many-to-Many)
+        // --- VERIFICARE COD (Daca e cerut) ---
+        // Poti scoate 'required=false' daca vrei sa fie obligatoriu mereu.
+        // Aici verificam: daca are un cod setat in baza, trebuie sa coincida cu ce primim.
+        if (leader.getDeletionCode() != null && !leader.getDeletionCode().isEmpty()) {
+            if (code == null || !code.equalsIgnoreCase(leader.getDeletionCode())) {
+                return ResponseEntity.badRequest().body("❌ Codul de ștergere este incorect!");
+            }
+        }
+
+        // --- LOGICA DE CURATENIE (Aceeasi ca inainte) ---
         leader.getDepartments().clear();
         leaderRepository.save(leader);
 
-        // 2. Îl demitem dacă este ȘEF (HeadLeader) de departament
-        // CORECT: Folosim findByHeadLeaderId si setHeadLeader
         List<Department> managedDepartments = departmentRepository.findByHeadLeaderId(id);
         for (Department dept : managedDepartments) {
-            dept.setHeadLeader(null); // Aici era eroarea inainte
+            dept.setHeadLeader(null);
             departmentRepository.save(dept);
         }
 
-        // 3. Stergem notificarile personale
         notificationRepository.deleteByVisibleTo(String.valueOf(id));
-
-        // 4. Stergem liderul
         leaderRepository.deleteById(id);
 
         return ResponseEntity.ok("✅ Liderul a fost șters cu succes!");
