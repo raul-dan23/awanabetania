@@ -1,360 +1,197 @@
-/* ========================================= */
-/* --- 1. VARIABILE & TEME --- */
-/* ========================================= */
+/* ==========================================================================
+   1. VARIABILE & CULORI (GLOBAL)
+   ========================================================================== */
 :root {
-  /* TEMA LIGHT (Implicita - Zi) */
-  --bg-primary: #f4f7fe;   /* Fundal gri foarte deschis */
-  --bg-secondary: #ffffff; /* Fundal alb curat (carduri) */
-  --text-primary: #2b3674; /* Text albastru inchis (elegant) */
-
-  /* MODIFICAT: Culoare mai inchisa pentru a fi mai vizibila pe alb */
-  --text-secondary: #5a6a85; /* Era #707eae (prea deschis) */
-
-  --accent: #4318ff;       /* Albastru electric (culoarea brandului) */
-  --accent-hover: #2e0db8; /* Albastru mai inchis cand pui mouse-ul */
-  --card-shadow: 0 10px 30px rgba(0,0,0,0.03); /* Umbra fina sub carduri */
-  --border-color: #e0e5f2; /* Linii subtiri gri */
-  --success: #05cd99;      /* Verde (succes) */
-  --danger: #ef4444;       /* Rosu (eroare) */
+  --bg-primary: #f4f7fe;
+  --bg-secondary: #ffffff;
+  --text-primary: #2b3674;
+  --text-secondary: #5a6a85;
+  --accent: #4318ff;
+  --accent-hover: #2e0db8;
+  --success: #05cd99;
+  --danger: #ef4444;
+  --border-color: #e0e5f2;
+  --card-shadow: 0 10px 30px rgba(0,0,0,0.03);
 }
 
-/* Cand utilizatorul schimba tema pe INTUNERIC (Dark Mode) */
 [data-theme='dark'] {
-  --bg-primary: #0b1437;   /* Albastru foarte inchis (aproape negru) */
-  --bg-secondary: #111c44; /* Albastru inchis (carduri) */
-  --text-primary: #ffffff; /* Text alb */
-  --text-secondary: #a3aed0; /* Text gri deschis pe fundal inchis */
-  --accent: #7551ff;       /* Albastru neon */
-  --accent-hover: #5a3ac7;
-  --card-shadow: 0 10px 30px rgba(0,0,0,0.2); /* Umbra mai puternica */
-  --border-color: #2b3674;
+  --bg-primary: #1b254b;
+  --bg-secondary: #ffffff;
+  --text-primary: #1b2559;
+  --text-secondary: #4a5568;
+  --accent: #4318ff;
+  --border-color: #cbd5e0;
 }
 
-/* ========================================= */
-/* --- 2. SETARI GLOBALE --- */
-/* ========================================= */
-* {
-  box-sizing: border-box; /* Marimea include padding-ul */
-  margin: 0;
-  padding: 0;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Font modern */
-}
+/* ==========================================================================
+   2. SETARI GLOBALE & INPUT-URI
+   ========================================================================== */
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+body { background-color: var(--bg-primary); color: var(--text-primary); font-size: 15px; overflow-x: hidden; }
 
-body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  transition: background-color 0.3s, color 0.3s; /* Animatie fina la schimbarea temei */
-}
-
-button {
-  cursor: pointer;
-  border: none;
-  font-family: inherit;
-  transition: all 0.2s ease; /* Butoanele se anima cand treci peste ele */
-}
-
-h1, h2, h3 { color: var(--text-primary); }
-p { color: var(--text-secondary); }
-
-/* ========================================= */
-/* --- 3. LAYOUT PRINCIPAL --- */
-/* ========================================= */
-.app-container {
-  display: flex;
-  height: 100vh; /* Ocupa tot ecranul pe inaltime */
-  width: 100vw;  /* Ocupa tot ecranul pe latime */
-  overflow: hidden; /* Fara scroll pe containerul mare */
-}
-
-/* ========================================= */
-/* --- 4. SIDEBAR (Meniul din stanga) --- */
-/* ========================================= */
-.sidebar {
-  width: 280px;
-  background: var(--bg-secondary);
-  display: flex;
-  flex-direction: column;
-  padding: 30px;
-  border-right: 1px solid var(--border-color);
-  transition: background 0.3s;
-  overflow-y: auto; /* Scroll daca meniul e prea lung */
-}
-
-.nav-btn {
-  background: transparent;
-  padding: 15px;
-  text-align: left;
-  font-size: 1rem;
-  /* MODIFICAT: Folosim culoarea principala dar cu transparenta pentru vizibilitate mai buna */
-  color: var(--text-primary);
-  opacity: 0.7;
-
+/* INPUT-URI ALBE */
+input, select, textarea, .login-input {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid #a3aed0 !important;
   border-radius: 10px;
+  padding: 12px;
+  width: 100%;
   margin-bottom: 10px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.nav-btn:hover {
-  background-color: var(--bg-primary);
-  opacity: 1;
-}
-
-/* Butonul activ (pagina curenta) */
-.nav-btn.active {
-  background-color: var(--accent);
-  color: white;
-  opacity: 1;
-  box-shadow: 0 5px 15px rgba(67, 24, 255, 0.4);
-}
-
-.theme-toggle {
-  padding: 10px;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border-radius: 10px;
-  font-weight: bold;
-}
-
-/* ========================================= */
-/* --- 5. MAIN CONTENT --- */
-/* ========================================= */
-.main-content {
-  flex: 1; /* Ocupa restul spatiului ramas */
-  padding: 40px;
-  overflow-y: auto; /* Scroll doar aici pe desktop */
-}
-
-/* ========================================= */
-/* --- 6. SPLASH SCREEN --- */
-/* ========================================= */
-.splash-screen {
-  position: fixed;
-  top: 0; left: 0; width: 100%; height: 100%;
-  background: var(--accent);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-direction: column;
-  z-index: 9999;
-  /* Fortam culorile sa fie albe pe fundalul albastru */
-  --accent: #ffffff;
-  --text-secondary: #e0e0e0;
-}
-
-.logo-anim {
-  animation: fadeInLogo 1.5s ease-out;
-}
-
-@keyframes fadeInLogo {
-  from { opacity: 0; transform: scale(0.8); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-/* ========================================= */
-/* --- 7. INPUTURI & LOGIN --- */
-/* ========================================= */
-.login-container {
-  width: 100vw; height: 100vh;
-  display: flex; justify-content: center; align-items: center;
-  background: var(--bg-primary);
-  padding: 20px;
-}
-
-.login-box {
-  background: var(--bg-secondary);
-  padding: 40px;
-  border-radius: 20px;
-  box-shadow: var(--card-shadow);
-  text-align: center;
-  width: 100%;
-  max-width: 400px;
-}
-
-/* Stil general pentru input-uri si select-uri */
-.login-input, select {
-  width: 100%;
-  padding: 15px;
-  margin: 8px 0;
-  border-radius: 10px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 1rem;
   outline: none;
 }
+input:focus, select:focus { border-color: var(--accent) !important; }
+input[type="number"] { font-weight: bold; text-align: center; }
 
-.login-input:focus, select:focus {
-  border-color: var(--accent);
+/* BUTOANE */
+button { cursor: pointer; border: none; font-family: inherit; border-radius: 10px; font-weight: 600; padding: 10px 20px; transition: all 0.2s; }
+button:hover { transform: translateY(-2px); filter: brightness(110%); }
+.btn-primary { background-color: var(--accent) !important; color: white !important; }
+.btn-secondary { background-color: white !important; color: var(--accent) !important; border: 2px solid var(--accent) !important; }
+
+/* LAYOUT FIX PENTRU LAPTOP */
+.app-container { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
+.sidebar { width: 280px; background: var(--bg-secondary); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 30px; overflow-y: auto; flex-shrink: 0; position: relative; z-index: 10; }
+.main-content { flex: 1; padding: 30px; overflow-y: auto; background-color: var(--bg-primary); }
+
+/* ELEMENTS */
+.sidebar-logo-container { display: block; margin-bottom: 30px; padding-left: 10px; }
+.nav-btn { background: transparent; padding: 12px 15px; text-align: left; font-size: 1rem; color: var(--text-secondary); border-radius: 10px; margin-bottom: 5px; width: 100%; }
+.nav-btn:hover { background-color: #f4f7fe; color: var(--accent); }
+.nav-btn.active { background-color: var(--accent); color: white; }
+.card { background: var(--bg-secondary); padding: 25px; border-radius: 20px; box-shadow: var(--card-shadow); margin-bottom: 20px; border: 1px solid rgba(0,0,0,0.05); }
+.badge { padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; }
+.animate-in { animation: fadeIn 0.5s ease-in; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* PROFIL GRID (Desktop) */
+.profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+.profile-name { font-size: 2rem; font-weight: 800; }
+
+/* DASHBOARD GRID (Desktop) */
+.dashboard-wrapper { display: flex; flex-direction: column; height: 100%; overflow: hidden; padding-bottom: 10px; }
+.dashboard-scroll-area { flex: 1; overflow-y: auto; min-height: 0; margin-bottom: 10px; }
+.directors-scroll { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px; }
+.stats-widgets { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; flex-shrink: 0; }
+
+/* DOSAR DETALIAT GRID (Desktop) */
+.registry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px; }
+.registry-header { display: flex; justify-content: space-between; align-items: center; }
+.registry-title h1 { font-size: 2rem; margin: 0; }
+
+/* ==========================================================================
+   *** STILURI REGISTRU COPII - CARDURI (GLOBAL) ***
+   ========================================================================== */
+.table-container { background: transparent !important; box-shadow: none !important; padding: 0 !important; border: none !important; overflow: visible !important; }
+.registry-table thead { display: none; }
+
+.registry-table tbody tr {
+  display: flex; justify-content: space-between; align-items: center;
+  background: white; margin-bottom: 15px; padding: 20px; border-radius: 15px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.03); border: 1px solid #e2e8f0; transition: transform 0.2s;
 }
+.registry-table tbody tr:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.06); border-color: var(--accent); }
 
-/* --- TEXTAREA (NOU ADĂUGAT PENTRU MOTIVE) --- */
-textarea {
-  width: 100%;
-  padding: 15px;
-  margin: 8px 0;
-  border-radius: 10px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-primary); /* Se adaptează la temă */
-  color: var(--text-primary);    /* Scrisul va fi vizibil */
-  font-size: 1rem;
-  outline: none;
-  resize: vertical;
-  font-family: inherit;
+.registry-table td { border: none !important; padding: 0 10px !important; display: block; }
+.registry-table td:nth-child(1) { font-size: 1.2rem; font-weight: 800 !important; color: var(--text-primary); flex: 2; }
+.registry-table td:nth-child(2) { flex: 1; }
+.registry-table td:nth-child(3), .registry-table td:nth-child(4) { flex: 1; color: var(--text-secondary); font-weight: 600; }
+.registry-table td:last-child { flex: 0 0 auto; text-align: right; }
+.registry-table td:nth-child(3)::before { content: "Prezențe: "; opacity: 0.6; font-weight: normal; }
+.registry-table td:nth-child(4)::before { content: "Puncte: "; opacity: 0.6; font-weight: normal; }
+
+/* ==========================================================================
+   *** STILURI REGISTRU LIDERI - CARDURI (GLOBAL) ***
+   ========================================================================== */
+.leaders-table thead { display: none; }
+
+.leaders-table tbody tr {
+  display: flex; justify-content: space-between; align-items: center;
+  background: white; margin-bottom: 15px; padding: 20px; border-radius: 15px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.03); border: 1px solid #e2e8f0; transition: transform 0.2s;
 }
+.leaders-table tbody tr:hover { transform: translateY(-2px); border-color: var(--accent); }
 
-textarea:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(67, 24, 255, 0.1);
-}
+.leaders-table td { border: none !important; padding: 0 10px !important; display: block; }
+.leaders-table td:nth-child(1) { font-size: 1.2rem; font-weight: 800 !important; color: var(--text-primary); flex: 2; }
+.leaders-table td:nth-child(2) { flex: 1; }
+.leaders-table td:nth-child(3) { flex: 1.5; color: var(--text-secondary); font-family: monospace; }
+.leaders-table td:nth-child(3)::before { content: "📞 "; opacity: 0.7; }
+.leaders-table td:nth-child(4) { flex: 1; font-weight: bold; color: orange; }
+.leaders-table td:nth-child(4)::before { content: "Rating: "; color: #999; font-weight: normal; }
+.leaders-table td:last-child { flex: 0 0 auto; text-align: right; }
 
-/* --- INPUT NUMERIC (NOU) --- */
-input[type="number"] {
-  padding: 8px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-weight: bold;
-  text-align: center;
-}
+/* Elemente Ascunse pe Desktop */
+.mobile-header, .mobile-overlay, .close-menu-btn { display: none !important; }
 
-/* ========================================= */
-/* --- 8. COMPONENTE VIZUALE --- */
-/* ========================================= */
-.card, .table-container, .ai-box {
-  background: var(--bg-secondary);
-  padding: 25px;
-  border-radius: 20px;
-  box-shadow: var(--card-shadow);
-  transition: transform 0.2s;
-  margin-bottom: 20px;
-}
 
-/* --- BUTON SECUNDAR (NOU - Albastru Deschis) --- */
-.btn-secondary {
-  background-color: #e0e7ff !important;
-  color: #4318ff !important;
-  border: 1px solid #c7d2fe !important;
-  padding: 10px 20px;
-  border-radius: 10px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 0.9rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-}
-
-.btn-secondary:hover {
-  background-color: #c7d2fe !important;
-  transform: translateY(-1px);
-}
-
-/* Grid-uri */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 25px;
-  margin-bottom: 30px;
-}
-
-.grid-2-cols {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 30px;
-}
-
-.big-number {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-table { width: 100%; border-collapse: collapse; }
-th { text-align: left; padding: 20px; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); }
-td { padding: 20px; border-bottom: 1px solid var(--border-color); font-weight: 600; }
-
-.badge {
-  padding: 5px 10px;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  display: inline-block;
-}
-
-.animate-in {
-  animation: fadeIn 0.5s ease-in;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ========================================= */
-/* --- 📱 MOBILE RESPONSIVE --- */
-/* ========================================= */
+/* ==========================================================================
+   3. MOBILE RESPONSIVE (MODIFICARI SPECIFICE TELEFON)
+   ========================================================================== */
 @media (max-width: 768px) {
-  .app-container {
-    flex-direction: column;
-    height: auto;
-    overflow-y: auto;
-  }
 
-  .sidebar {
-    width: 100%;
-    height: auto;
-    flex-direction: row;
-    overflow-x: auto;
-    padding: 15px;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
-    align-items: center;
-    gap: 10px;
-  }
+  /* Layout General */
+  .app-container { flex-direction: column; height: auto; min-height: 100vh; overflow: visible; }
+  .main-content { padding: 15px; overflow: visible; }
 
-  .sidebar > div:first-child {
-    display: none;
-  }
+  /* Header & Meniu */
+  .mobile-header { display: flex !important; align-items: center; justify-content: space-between; background: var(--bg-secondary); padding: 15px 20px; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; z-index: 900; height: 60px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+  .hamburger-btn { background: transparent; border: none; font-size: 1.8rem; color: var(--text-primary); padding: 0; display: flex; }
 
-  .nav-btn {
-    margin-bottom: 0;
-    white-space: nowrap;
-    padding: 10px 15px;
-    font-size: 0.9rem;
-    background: var(--bg-primary);
-  }
+  .sidebar { position: fixed; top: 0; left: 0; height: 100vh; width: 280px; z-index: 1000; transform: translateX(-100%); transition: transform 0.3s; box-shadow: 5px 0 25px rgba(0,0,0,0.2); border-right: none; padding-top: 60px; display: flex; flex-direction: column; }
+  .sidebar.open { transform: translateX(0); }
+  .close-menu-btn { display: block !important; position: absolute; top: 15px; right: 15px; background: transparent; font-size: 2rem; color: var(--text-secondary); }
+  .sidebar > div:first-child { display: flex !important; justify-content: center; margin-bottom: 20px; }
+  .mobile-overlay { display: block !important; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 999; opacity: 0; visibility: hidden; transition: 0.3s; backdrop-filter: blur(2px); }
+  .mobile-overlay.visible { opacity: 1; visibility: visible; }
+  .nav-btn { width: 100%; margin-bottom: 8px; white-space: normal; padding: 15px; font-size: 1rem; background: var(--bg-primary); }
 
-  .main-content {
-    padding: 15px;
-    overflow: visible;
-  }
+  /* Profil & Dashboard Mobil */
+  .profile-grid { grid-template-columns: 1fr !important; gap: 20px !important; }
+  .profile-name { font-size: 1.4rem !important; }
+  .stats-widgets { grid-template-columns: 1fr !important; }
+  .dashboard-wrapper, .dashboard-scroll-area { height: auto !important; overflow: visible !important; display: block !important; flex: none !important; }
 
-  .stats-grid, .grid-2-cols {
-    grid-template-columns: 1fr !important;
-    gap: 15px;
-  }
+  /* --- REGISTRU / DOSAR MOBIL (MODIFICARI) --- */
+  .registry-grid { grid-template-columns: 1fr !important; gap: 20px !important; }
+  .registry-header { flex-direction: column; align-items: flex-start !important; gap: 10px; }
+  .registry-title h1 { font-size: 1.6rem !important; margin: 0; }
+  .registry-status { margin-top: 5px; }
 
-  .table-container {
-    padding: 15px;
-    overflow-x: auto;
-  }
+  /* LISTA REGISTRU COPII PE MOBIL (VERTICAL) */
+  .registry-table tbody tr { flex-direction: column; align-items: flex-start; position: relative; padding: 15px; }
+  .registry-table td:nth-child(1) { font-size: 1.1rem; margin-bottom: 5px; width: 100%; }
+  .registry-table td:nth-child(2) { font-size: 0.85rem; margin-bottom: 5px; }
+  .registry-table td:nth-child(3), .registry-table td:nth-child(4) { display: inline-block; font-size: 0.85rem; margin-right: 15px; }
+  .registry-table td:last-child { position: absolute; top: 50%; right: 15px; transform: translateY(-50%); }
+  .registry-table td:last-child button { background: var(--bg-primary) !important; color: var(--accent) !important; border: 1px solid var(--accent) !important; padding: 8px 15px !important; font-size: 0.9rem !important; }
 
-  th, td {
-    padding: 10px;
-    font-size: 0.9rem;
-  }
+  /* LISTA REGISTRU LIDERI PE MOBIL (VERTICAL) */
+  .leaders-table tbody tr { flex-direction: column; align-items: flex-start; position: relative; padding: 15px; }
+  .leaders-table td:nth-child(1) { font-size: 1.1rem; margin-bottom: 5px; width: 100%; }
+  .leaders-table td:nth-child(2) { margin-bottom: 5px; }
+  .leaders-table td:nth-child(3) { margin-bottom: 2px; }
+  .leaders-table td:last-child { position: absolute; top: 15px; right: 15px; } /* Buton Dosar Sus-Dreapta */
+  .leaders-table td:last-child button { padding: 6px 12px !important; font-size: 0.9rem !important; }
 
-  .login-box {
-    width: 100%;
-    max-width: 100%;
-    box-shadow: none;
-  }
+  /* --- PLANIFICARE / CALENDAR --- */
+  .meeting-item { flex-direction: column; align-items: flex-start !important; gap: 10px; }
+  .meeting-actions { width: 100%; display: flex; justify-content: space-between; gap: 10px; }
+  .meeting-actions button { flex: 1; justify-content: center; }
 
-  h1 { font-size: 1.8rem; }
-  h2 { font-size: 1.5rem; }
+  .session-header { flex-direction: column-reverse; align-items: flex-start !important; gap: 15px; }
+  .session-buttons { width: 100%; display: flex; justify-content: space-between; gap: 10px; }
+  .session-btn-small { padding: 8px 12px !important; font-size: 0.85rem !important; white-space: nowrap; width: auto !important; }
+  .session-title { font-size: 1.5rem !important; margin-top: 5px; }
+
+  /* Departamente */
+  .departments-grid { grid-template-columns: 1fr !important; gap: 15px !important; }
+  .dept-card { min-height: auto !important; }
+
+  /* --- ECHIPE --- */
+  .teams-container { display: flex !important; flex-direction: column; }
+  .my-team-section { order: 1; margin-bottom: 15px; }
+  .available-kids-section { order: 2; display: flex; flex-direction: column; height: 500px !important; }
+  .available-kids-scroll { display: flex !important; flex-direction: column !important; overflow-y: auto !important; gap: 10px; padding-right: 5px; height: 100% !important; }
+  .kid-card-horizontal { display: flex; justify-content: space-between; align-items: center; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: white; min-height: 50px; }
 }

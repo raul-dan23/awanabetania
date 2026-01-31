@@ -8,7 +8,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
+import java.time.LocalDate; // <--- Aici era problema (lipsea acest import)
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -22,55 +24,57 @@ import java.util.stream.Collectors;
 @CrossOrigin(origins = "*")
 public class DepartmentController {
 
-    // Avem nevoie de acces la aproape toate tabelele ca sa facem legaturile
     @Autowired private DepartmentRepository deptRepo;
     @Autowired private MeetingRepository meetingRepo;
     @Autowired private LeaderRepository leaderRepo;
     @Autowired private MeetingAssignmentRepository assignmentRepo;
     @Autowired private NotificationRepository notificationRepository;
 
-    /** Listeaza toate departamentele (Jocuri, Secretariat, etc.) */
+    /** Listeaza toate departamentele */
     @GetMapping
     public List<Department> getAll() { return deptRepo.findAll(); }
 
     /** Arata cine sunt membrii permanenti ai unui departament */
     @GetMapping("/{id}/members")
     public List<Leader> getMembers(@PathVariable Integer id) {
-        // Cautam liderii care fac parte din acest departament (Join automat prin JPA)
         return leaderRepo.findByDepartmentsId(id);
     }
 
     /**
      * Metoda principala pentru PLANIFICARE.
-     * Returneaza toate datele necesare pentru a desena tabelul cu orarul unei seri.
-     * Grupeaza liderii pe departamente ca sa arate frumos in pagina.
+     * Returneaza asignarile + eligibleLeaders (Map cu membrii fiecarui departament).
      */
     @GetMapping("/plan/{meetingId}")
     public Map<String, Object> getPlan(@PathVariable Integer meetingId) {
         Meeting meeting = meetingRepo.findById(meetingId).orElse(null);
         if (meeting == null) return null;
 
-        // Luam lista bruta de asignari din baza de date pentru aceasta sedinta
+        // 1. Luam asignarile existente
         List<MeetingAssignment> assignments = assignmentRepo.findByMeetingId(meetingId);
-
-        // O grupam pe categorii (Cheia este ID-ul departamentului)
-        // Rezultat: { 1: [AsignareLiderA, AsignareLiderB], 2: [AsignareLiderC] }
-        Map<Integer, List<MeetingAssignment>> grouped = assignments.stream()
+        Map<Integer, List<MeetingAssignment>> groupedAssignments = assignments.stream()
                 .collect(Collectors.groupingBy(a -> a.getDepartment().getId()));
 
-        // Trimitem pachetul complet catre site
+        // 2. CONSTRUIM MAP-UL CU LIDERI ELIGIBILI (Membrii)
+        // Cheie: ID Departament -> Valoare: Lista Lideri
+        Map<Integer, List<Leader>> eligibleLeaders = new HashMap<>();
+
+        List<Leader> allLeaders = leaderRepo.findAll();
+        for (Leader leader : allLeaders) {
+            for (Department dept : leader.getDepartments()) {
+                eligibleLeaders.computeIfAbsent(dept.getId(), k -> new ArrayList<>()).add(leader);
+            }
+        }
+
+        // 3. Trimitem totul la Frontend
         return Map.of(
                 "meeting", meeting,
-                "assignments", grouped,
-                "directorDay", meeting.getDirectorDay() != null ? meeting.getDirectorDay() : "Neselectat"
+                "assignments", groupedAssignments,
+                "directorDay", meeting.getDirectorDay() != null ? meeting.getDirectorDay() : "Neselectat",
+                "eligibleLeaders", eligibleLeaders
         );
     }
 
-    /**
-     * Metoda 1: ASIGNARE FORTATA (Directa).
-     * Directorul pune un lider pe post direct, fara sa il mai intrebe.
-     * Statusul devine automat "ACCEPTED".
-     */
+    /** Metoda 1: ASIGNARE FORTATA (Directa) */
     @PostMapping("/assign")
     public ResponseEntity<?> assignDirect(@RequestBody Map<String, Integer> payload) {
         Integer meetingId = payload.get("meetingId");
@@ -82,7 +86,6 @@ public class DepartmentController {
         Leader l = leaderRepo.findById(leaderId).orElse(null);
 
         if (m != null && d != null && l != null) {
-            // Verificam sa nu fie deja pus, ca sa nu avem duplicate
             boolean exists = assignmentRepo.findByMeetingId(meetingId).stream()
                     .anyMatch(a -> a.getLeader().getId().equals(leaderId) && a.getDepartment().getId().equals(deptId));
 
@@ -91,7 +94,7 @@ public class DepartmentController {
                 ma.setMeeting(m);
                 ma.setDepartment(d);
                 ma.setLeader(l);
-                ma.setStatus("ACCEPTED"); // Direct acceptat
+                ma.setStatus("ACCEPTED");
                 assignmentRepo.save(ma);
                 return ResponseEntity.ok("Asignat direct!");
             } else {
@@ -101,11 +104,7 @@ public class DepartmentController {
         return ResponseEntity.badRequest().body("Date invalide");
     }
 
-    /**
-     * Metoda 2: NOMINALIZARE (Invitatie).
-     * Directorul propune un lider, dar liderul trebuie sa accepte.
-     * Trimitem o notificare liderului si punem statusul "PENDING" (in asteptare).
-     */
+    /** Metoda 2: NOMINALIZARE (Invitatie) */
     @PostMapping("/nominate")
     public ResponseEntity<?> nominate(@RequestBody Map<String, Integer> payload) {
         Integer meetingId = payload.get("meetingId");
@@ -117,7 +116,6 @@ public class DepartmentController {
         Leader l = leaderRepo.findById(leaderId).orElse(null);
 
         if (m != null && d != null && l != null) {
-            // Cream cererea in asteptare
             MeetingAssignment ma = new MeetingAssignment();
             ma.setMeeting(m);
             ma.setDepartment(d);
@@ -125,7 +123,7 @@ public class DepartmentController {
             ma.setStatus("PENDING");
             assignmentRepo.save(ma);
 
-            // Trimitem Alerta pe telefonul liderului
+            // Folosim LocalDate.now() aici - acum va merge
             String msg = String.format("📅 Ai fost propus la %s pentru data de %s.", d.getName(), m.getDate());
             Notification notif = new Notification(msg, "ALERT", String.valueOf(l.getId()), LocalDate.now());
             notificationRepository.save(notif);
@@ -135,11 +133,7 @@ public class DepartmentController {
         return ResponseEntity.badRequest().build();
     }
 
-    /**
-     * Metoda 3: RASPUNS LIDER.
-     * Liderul apasa pe butonul Accept sau Refuz din notificare.
-     * Daca refuza, stergem asignarea si anuntam seful de departament.
-     */
+    /** Metoda 3: RASPUNS LIDER */
     @PostMapping("/respond")
     public ResponseEntity<?> respond(@RequestBody Map<String, Object> payload) {
         Integer assignmentId = (Integer) payload.get("assignmentId");
@@ -148,17 +142,16 @@ public class DepartmentController {
         MeetingAssignment ma = assignmentRepo.findById(assignmentId).orElse(null);
         if (ma != null) {
             if ("DECLINED".equals(response)) {
-                assignmentRepo.delete(ma); // Il stergem din orar
-
-                // Anuntam seful departamentului ca a ramas fara om
+                assignmentRepo.delete(ma);
                 if(ma.getDepartment().getHeadLeader() != null) {
+                    // Folosim LocalDate.now() si aici
                     String msg = String.format("❌ %s %s a refuzat postul la %s.",
                             ma.getLeader().getName(), ma.getLeader().getSurname(), ma.getDepartment().getName());
                     Notification n = new Notification(msg, "INFO", String.valueOf(ma.getDepartment().getHeadLeader().getId()), LocalDate.now());
                     notificationRepository.save(n);
                 }
             } else {
-                ma.setStatus("ACCEPTED"); // A acceptat, ramane in tabel
+                ma.setStatus("ACCEPTED");
                 assignmentRepo.save(ma);
             }
             return ResponseEntity.ok("Răspuns înregistrat!");
@@ -166,10 +159,7 @@ public class DepartmentController {
         return ResponseEntity.badRequest().build();
     }
 
-    /**
-     * Sterge o persoana din orar (butonul de gunoi).
-     * Transactional este necesar cand facem stergeri custom.
-     */
+    /** Sterge o persoana din orar */
     @DeleteMapping("/remove")
     @Transactional
     public ResponseEntity<?> removeAssignment(
@@ -181,7 +171,7 @@ public class DepartmentController {
         return ResponseEntity.ok("Șters cu succes!");
     }
 
-    /** Seteaza cine este Directorul de Zi (cel care conduce seara) */
+    /** Seteaza Directorul de Zi */
     @PostMapping("/director/{meetingId}")
     public ResponseEntity<?> setMeetingDirector(@PathVariable Integer meetingId, @RequestBody Integer leaderId) {
         Meeting m = meetingRepo.findById(meetingId).orElse(null);
@@ -195,7 +185,7 @@ public class DepartmentController {
         return ResponseEntity.badRequest().body("Eroare");
     }
 
-    /** Seteaza cine este Seful unui Departament (pe tot anul) */
+    /** Seteaza Seful de Departament */
     @PostMapping("/{id}/set-head")
     public ResponseEntity<?> setDepartmentHead(@PathVariable Integer id, @RequestBody Integer leaderId) {
         Department dept = deptRepo.findById(id).orElse(null);
