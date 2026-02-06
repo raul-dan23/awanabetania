@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 import AwanaLogo from './AwanaLogo';
 
-const API_URL =
-    process.env.NODE_ENV === 'development' ? 'http://localhost:8080/api' : '/api';
-
+// const API_URL = 'http://awana.betania-tm.ro/api';
+//const API_URL = 'http://86.106.170.96:8080/api';
+const API_URL = 'http://awana.betania-tm.ro/api';
 
 
 // ==========================================
