@@ -3,31 +3,11 @@ import './App.css';
 import AwanaLogo from './AwanaLogo';
 import AdminDashboard from './AdminDashboard';
 
-// ==========================================
-// CONFIGURARE AUTOMATA API (Smart Detect)
-// ==========================================
-const getApiUrl = () => {
-    const hostname = window.location.hostname; // Aflam adresa curenta (ex: localhost, 192.168..., awana...)
-
-    // CAZUL 1: Esti pe laptopul tau (Dezvoltare)
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return 'http://localhost:8080/api';
-    }
-
-    // CAZUL 2: Esti pe telefon, conectat la Wi-Fi (Retea Locala)
-    // Daca adresa incepe cu 192.168, inseamna ca esti pe Wi-Fi
-    if (hostname.startsWith('192.168.')) {
-        // Folosim portul 8080 pe acelasi IP pe care esti conectat
-        return `http://${hostname}:8080/api`;
-    }
-
-    // CAZUL 3: Esti pe Serverul Public (Production)
-    // Daca nu e nici localhost, nici IP local, inseamna ca e domeniul public
-    return 'http://awana.betania-tm.ro/api';
-};
-
-const API_URL = getApiUrl();
-// ==========================================
+// const API_URL = 'http://awana.betania-tm.ro/api';
+//const API_URL = 'http://86.106.170.96:8080/api';
+const API_URL = 'http://awana.betania-tm.ro/api'; // asta e pentru server
+//const API_URL = 'http://localhost:8080/api';
+//const API_URL = 'http://192.168.1.153:8080/api';
 
 // ==========================================
 // 1. SPLASH SCREEN

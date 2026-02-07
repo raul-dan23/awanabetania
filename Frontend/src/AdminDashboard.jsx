@@ -1,26 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-// Functie desteapta care detecteaza automat mediul
-const getApiUrl = () => {
-    const hostname = window.location.hostname;
-
-    // Cazul 1: Esti pe laptopul tau (localhost)
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return 'http://localhost:8080/api';
-    }
-
-    // Cazul 2: Esti pe telefon, conectat la Wi-Fi-ul local
-    if (hostname === '192.168.1.153') {
-        return 'http://192.168.1.153:8080/api';
-    }
-
-    // Cazul 3: Esti pe Serverul Public (awana.betania-tm.ro)
-    // Aici folosim '/api' simplu, ca sa mearga prin acelasi domeniu (e cel mai sigur)
-    // Sau poti pune domeniul complet: 'http://awana.betania-tm.ro/api'
-    return 'http://awana.betania-tm.ro/api';
-};
-
-const API_URL = getApiUrl();;
+const API_URL = 'http://awana.betania-tm.ro/api';
 
 
 const AdminDashboard = ({ currentUser }) => {
