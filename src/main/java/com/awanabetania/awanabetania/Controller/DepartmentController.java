@@ -8,7 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate; // <--- Aici era problema (lipsea acest import)
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -74,7 +74,7 @@ public class DepartmentController {
         );
     }
 
-    /** Metoda 1: ASIGNARE FORTATA (Directa) */
+    /** Metoda 1: ASIGNARE FORTATA (Directa) - CORECTAT */
     @PostMapping("/assign")
     public ResponseEntity<?> assignDirect(@RequestBody Map<String, Integer> payload) {
         Integer meetingId = payload.get("meetingId");
@@ -96,6 +96,24 @@ public class DepartmentController {
                 ma.setLeader(l);
                 ma.setStatus("ACCEPTED");
                 assignmentRepo.save(ma);
+
+                // --- LOGICA GENERARE PIN ---
+                if (d.getName().toLowerCase().contains("secretar")) {
+                    // Generam PIN matematic
+                    int pinCode = 1000 + (m.getId() * 17) % 9000;
+
+                    Notification n = new Notification();
+                    n.setTitle("COD ACCES SECRETARIAT"); // Acum merge datorita @Transient
+                    n.setMessage("Ai fost planificat la Secretariat.\n\nCodul PIN pentru punctaje este: " + pinCode + "\n\nNu îl comunica copiilor!");
+
+                    // --- AICI AM CORECTAT EROAREA ---
+                    n.setDate(LocalDate.now()); // FARA .toString() !!!
+
+                    n.setType("INFO");
+                    n.setVisibleTo(String.valueOf(l.getId()));
+                    notificationRepository.save(n);
+                }
+
                 return ResponseEntity.ok("Asignat direct!");
             } else {
                 return ResponseEntity.badRequest().body("Liderul este deja asignat aici.");

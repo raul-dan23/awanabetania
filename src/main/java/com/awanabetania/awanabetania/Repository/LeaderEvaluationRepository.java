@@ -18,4 +18,7 @@ public interface LeaderEvaluationRepository extends JpaRepository<LeaderEvaluati
      * Gaseste istoricul vizibil al unui lider.
      */
     List<LeaderEvaluation> findByLeaderIdAndIsVisibleTrueOrderByDateDesc(Integer leaderId);
+
+    void deleteByLeaderId(Integer leaderId);
+    void deleteByEvaluatedBy(Integer evaluatedBy);
 }

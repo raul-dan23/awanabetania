@@ -9,8 +9,8 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Aceasta clasa reprezinta un lider sau voluntar din aplicatie.
- * Aici stocam datele de contact, parola si departamentele unde e implicat.
+ * Entitatea Leader (Lider).
+ * Reprezintă un utilizator cu drepturi de administrare sau voluntar.
  */
 @Entity
 @Table(name = "leaders")
@@ -19,29 +19,28 @@ import java.util.Set;
 @NoArgsConstructor
 public class Leader {
 
-    /** ID unic generat automat */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    /** Numele de familie */
     @Column(nullable = false)
     private String name;
 
-    /** Prenumele liderului */
     @Column(nullable = false)
     private String surname;
 
-    /** Numarul de telefon */
     @Column(name = "phone_number")
     private String phoneNumber;
 
-    /** Rolul in organizatie (Lider, Director sau Coordonator) */
+    /**
+     * Roluri posibile: "Lider", "Director", "Coordonator", "Secretar".
+     * Folosit pentru a determina permisiunile în frontend.
+     */
     private String role;
 
     /**
-     * Lista cu departamentele unde activeaza acest lider.
-     * EAGER inseamna ca le incarcam imediat cand citim liderul din baza de date.
+     * Departamentele asignate (ex: Jocuri, Manual, Secretariat).
+     * EAGER = Se încarcă imediat (necesar la login pentru a ști unde are acces).
      */
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
@@ -51,21 +50,23 @@ public class Leader {
     )
     private Set<Department> departments = new HashSet<>();
 
-    /** Nota medie primita de la directori */
+    /** Nota medie (dacă se folosește sistemul de evaluare). */
     private Float rating = 0.0f;
 
-    /** Alte observatii sau notite despre el */
     @Column(columnDefinition = "TEXT")
     private String notes;
 
-    /** Parola folosita la logare */
+    /** Parola stocată (în viitor o vom cripta). */
     private String password;
 
-    /** Codul solicitat sa poata sterge contul */
+    /**
+     * Codul opțional de securitate pentru ștergerea contului.
+     * Dacă este setat, liderul nu poate fi șters fără acest cod.
+     */
     @Column(name = "deletion_code")
     private String deletionCode;
 
-    /** Constructor pentru a crea un lider nou mai rapid */
+    // --- Constructor ajutător pentru înregistrare ---
     public Leader(String name, String surname, String role, String password, String phoneNumber) {
         this.name = name;
         this.surname = surname;

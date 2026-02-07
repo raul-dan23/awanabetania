@@ -18,6 +18,11 @@ public class Notification {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
+    // --- TRUC: Adaugam campul title dar il marcam @Transient ---
+    // Asta inseamna ca Java il vede, dar NU il cauta in baza de date SQL.
+    @Transient
+    private String title;
+
     @Column(columnDefinition = "TEXT")
     private String message;
 
@@ -31,16 +36,29 @@ public class Notification {
     @Column(name = "is_visible")
     private Boolean isVisible = true;
 
-    // --- CÂMP NOU PENTRU LEGĂTURA CU COPILUL ---
     @Column(name = "child_id")
-    private Integer childId; // Nullable, doar pentru notificari legate de premii
+    private Integer childId;
 
-    // Constructor vechi (pentru compatibilitate)
+    // Constructorul vechi
     public Notification(String message, String type, String visibleTo, LocalDate date) {
         this.message = message;
         this.type = type;
         this.visibleTo = visibleTo;
         this.date = date;
         this.isVisible = true;
+    }
+
+    // --- METODA CARE REZOLVA TITLUL ---
+    // Cand setam titlul, il lipim automat la inceputul mesajului.
+    // Astfel, se salveaza in coloana 'message' din baza de date.
+    public void setTitle(String title) {
+        this.title = title;
+        if (title != null && !title.isEmpty()) {
+            if (this.message != null) {
+                this.message = "📌 " + title.toUpperCase() + "\n\n" + this.message;
+            } else {
+                this.message = "📌 " + title.toUpperCase();
+            }
+        }
     }
 }

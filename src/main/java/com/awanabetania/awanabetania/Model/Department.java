@@ -1,6 +1,7 @@
 package com.awanabetania.awanabetania.Model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties; // <--- IMPORT NOU
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -11,7 +12,6 @@ import java.util.Set;
 
 /**
  * Aceasta clasa reprezinta un departament (ex: Secretari, Jocuri).
- * Aici setam regulile despre cati oameni sunt necesari.
  */
 @Entity
 @Table(name = "departments")
@@ -20,37 +20,34 @@ import java.util.Set;
 @NoArgsConstructor
 public class Department {
 
-    /** ID unic al departamentului */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    /** Numele departamentului */
     @Column(nullable = false)
     private String name;
 
-    /** Numarul minim de lideri de care avem nevoie aici */
     @Column(name = "min_leaders")
     private Integer minLeaders;
 
-    /** Numarul maxim de lideri acceptati aici */
     @Column(name = "max_leaders")
     private Integer maxLeaders;
 
-    /** Cine este seful acestui departament */
+    /**
+     * Cine este seful acestui departament.
+     * @JsonIgnoreProperties("departments") este CRITIC aici.
+     * Ii spune serverului: "Arata-mi seful, dar nu intra in lista lui de departamente".
+     * Asta rupe bucla infinita: Leader -> Department -> HeadLeader -> Departments...
+     */
     @OneToOne
     @JoinColumn(name = "head_leader_id")
+    @JsonIgnoreProperties({"departments", "password", "deletionCode", "phoneNumber", "notes"})
     private Leader headLeader;
 
-    /**
-     * Lista cu liderii care fac parte din acest departament.
-     * JsonIgnore opreste o eroare tehnica (bucla infinita).
-     */
     @ManyToMany(mappedBy = "departments")
     @JsonIgnore
     private Set<Leader> leaders = new HashSet<>();
 
-    /** Constructor pentru a face un departament nou mai usor */
     public Department(String name, Integer minLeaders, Integer maxLeaders) {
         this.name = name;
         this.minLeaders = minLeaders;

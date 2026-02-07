@@ -24,4 +24,7 @@ public interface MeetingRepository extends JpaRepository<Meeting, Integer> {
      * Le pune pe cele mai recente primele (ca sa vezi ultima seara sus).
      */
     List<Meeting> findAllByOrderByDateDesc();
+
+
+    List<Meeting> findByDirectorDayId(Integer directorDayId);
 }

@@ -1,5 +1,6 @@
 package com.awanabetania.awanabetania.Repository;
 
+
 import com.awanabetania.awanabetania.Model.MeetingAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -21,4 +22,6 @@ public interface MeetingAssignmentRepository extends JpaRepository<MeetingAssign
      * Spring stie sa faca stergerea automat doar citind numele lung al metodei.
      */
     void deleteByMeetingIdAndDepartmentIdAndLeaderId(Integer meetingId, Integer departmentId, Integer leaderId);
+
+    void deleteByLeaderId(Integer leaderId);
 }

@@ -42,6 +42,28 @@ public class TeamController {
     }
 
     /**
+     * Scoate un copil din echipa curentă și îl trimite înapoi la "Disponibili".
+     */
+    @PostMapping("/remove")
+    public ResponseEntity<?> removeChildFromTeam(@RequestBody Map<String, String> payload) {
+        try {
+            Integer childId = Integer.parseInt(payload.get("childId"));
+            Child child = childRepository.findById(childId).orElse(null);
+
+            if (child == null) return ResponseEntity.badRequest().body("Copil invalid");
+
+            // Îl scoatem din echipă (setăm null)
+            String oldTeam = child.getCurrentTeam();
+            child.setCurrentTeam(null);
+            childRepository.save(child);
+
+            return ResponseEntity.ok("Sters din echipa " + oldTeam);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Eroare: " + e.getMessage());
+        }
+    }
+
+    /**
      * Calculeaza scorul total al unei echipe in timp real.
      * Formula: Suma(dailyPoints ale copiilor din echipa) + Suma(TeamGamePoints ale echipei).
      */
@@ -140,5 +162,29 @@ public class TeamController {
                 .filter(m -> m.getIsCompleted() == null || !m.getIsCompleted())
                 .findFirst()
                 .orElse(null);
+    }
+    /**
+     * Endpoint NOU: Adaugă puncte manuale unei echipe.
+     * Exemplu JSON: { "teamColor": "red", "points": 3200 }
+     */
+    @PostMapping("/add-manual-points")
+    public ResponseEntity<?> addManualPoints(@RequestBody Map<String, Object> payload) {
+        String color = (String) payload.get("teamColor");
+        Integer points = (Integer) payload.get("points");
+
+        if (color == null || points == null) {
+            return ResponseEntity.badRequest().body("Eroare: Lipseste culoarea sau punctajul!");
+        }
+
+        // Salvăm în baza de date ca o intrare de tip "Joc"
+        TeamGamePoint log = new TeamGamePoint();
+        log.setTeamColor(color.toLowerCase());
+        log.setPoints(points);
+        log.setMeeting(getActiveMeeting()); // Legam de intalnirea activa daca exista
+        // Daca nu ai Meeting in constructor, poti comenta linia de mai sus sau seta null
+
+        teamGamePointRepository.save(log);
+
+        return ResponseEntity.ok("S-au adăugat " + points + " puncte la echipa " + color.toUpperCase());
     }
 }

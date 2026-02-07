@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map; // Am adaugat Map pentru payload
 import java.util.stream.Collectors;
 
 @RestController
@@ -36,6 +37,35 @@ public class MeetingController {
     @PostMapping("/add")
     public Meeting addMeeting(@RequestBody Meeting meeting) {
         return meetingRepository.save(meeting);
+    }
+
+    /**
+     * Endpoint NOU: Verifica daca PIN-ul introdus este corect pentru intalnirea activa.
+     */
+    @PostMapping("/check-pin")
+    public ResponseEntity<?> checkPin(@RequestBody Map<String, String> payload) {
+        String inputPin = payload.get("pin");
+
+        // 1. Gasim intalnirea activa (cea nefinalizata)
+        Meeting activeMeeting = meetingRepository.findAll().stream()
+                .filter(m -> m.getIsCompleted() == null || !m.getIsCompleted())
+                .findFirst()
+                .orElse(null);
+
+        if (activeMeeting == null) {
+            return ResponseEntity.badRequest().body("Nu exista o seara activa!");
+        }
+
+        // 2. Recalculam PIN-ul folosind aceeasi formula matematica ca la assign
+        int correctPin = 1000 + (activeMeeting.getId() * 17) % 9000;
+        String correctPinStr = String.valueOf(correctPin);
+
+        // 3. Verificam
+        if (correctPinStr.equals(inputPin)) {
+            return ResponseEntity.ok("Corect");
+        } else {
+            return ResponseEntity.status(401).body("Cod Incorect");
+        }
     }
 
     /**

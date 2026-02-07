@@ -4,6 +4,7 @@ import com.awanabetania.awanabetania.Model.*;
 import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.DepartmentRepository;
 import com.awanabetania.awanabetania.Repository.LeaderRepository;
+import com.awanabetania.awanabetania.Model.AESUtil; // <--- IMPORT NOU
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -33,37 +34,65 @@ public class AuthController {
     @Autowired
     private DepartmentRepository departmentRepository;
 
-    /**
-     * Metoda de LOGIN.
-     * Verifica daca utilizatorul este Copil sau Lider si returneaza datele lui.
-     */
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
         String role = request.getRole();
         String username = request.getUsername();
-        String password = request.getPassword();
+        String rawPassword = request.getPassword(); // Parola scrisa de user (ex: "popescu123")
 
-        // CAZUL 1: Daca cel care vrea sa intre este COPIL
+        // 1. Calculam varianta criptata
+        String encryptedPassword = AESUtil.encrypt(rawPassword);
+
+        // CAZUL 1: COPIL
         if ("CHILD".equalsIgnoreCase(role)) {
             List<Child> children = childRepository.findAll();
             for (Child child : children) {
-                if (child.getName().equalsIgnoreCase(username) &&
-                        (child.getPassword() != null && child.getPassword().equals(password))) {
-                    return ResponseEntity.ok(child);
+                if (child.getName().equalsIgnoreCase(username)) {
+                    // VERIFICARE 1: E deja criptata in baza?
+                    if (child.getPassword() != null && child.getPassword().equals(encryptedPassword)) {
+                        return ResponseEntity.ok(child);
+                    }
+                    // VERIFICARE 2 (MIGRARE): E parola veche (necriptata)?
+                    else if (child.getPassword() != null && child.getPassword().equals(rawPassword)) {
+                        // O gasit-o pe cea veche! O actualizam pe loc sa fie criptata de acum incolo.
+                        child.setPassword(encryptedPassword);
+                        childRepository.save(child);
+                        System.out.println("♻️ Parola migrata automat pentru copilul: " + child.getName());
+                        return ResponseEntity.ok(child);
+                    }
                 }
             }
         }
-        // CAZUL 2: Daca este LIDER sau DIRECTOR
+        // CAZUL 2: LIDER / DIRECTOR
         else {
             List<Leader> leaders = leaderRepository.findAll();
             for (Leader leader : leaders) {
-                if (leader.getName().equalsIgnoreCase(username) && leader.getPassword().equals(password)) {
-                    if ("DIRECTOR".equalsIgnoreCase(role)) {
-                        if (leader.getRole() != null && (leader.getRole().equalsIgnoreCase("Coordonator") || leader.getRole().equalsIgnoreCase("Director"))) {
+                if (leader.getName().equalsIgnoreCase(username)) {
+
+                    // VERIFICARE 1: E deja criptata?
+                    if (leader.getPassword().equals(encryptedPassword)) {
+                        if ("DIRECTOR".equalsIgnoreCase(role)) {
+                            if (leader.getRole() != null && (leader.getRole().equalsIgnoreCase("Coordonator") || leader.getRole().equalsIgnoreCase("Director"))) {
+                                return ResponseEntity.ok(leader);
+                            }
+                        } else {
                             return ResponseEntity.ok(leader);
                         }
-                    } else {
-                        return ResponseEntity.ok(leader);
+                    }
+                    // VERIFICARE 2 (MIGRARE): E parola veche?
+                    else if (leader.getPassword().equals(rawPassword)) {
+                        // BINGO! O criptam acum.
+                        leader.setPassword(encryptedPassword);
+                        leaderRepository.save(leader);
+                        System.out.println("♻️ Parola migrata automat pentru liderul: " + leader.getName());
+
+                        if ("DIRECTOR".equalsIgnoreCase(role)) {
+                            if (leader.getRole() != null && (leader.getRole().equalsIgnoreCase("Coordonator") || leader.getRole().equalsIgnoreCase("Director"))) {
+                                return ResponseEntity.ok(leader);
+                            }
+                        } else {
+                            return ResponseEntity.ok(leader);
+                        }
                     }
                 }
             }
@@ -85,7 +114,10 @@ public class AuthController {
             // Date personale
             newChild.setName(request.getName());
             newChild.setSurname(request.getSurname());
-            newChild.setPassword(request.getPassword());
+
+            // --- CRIPTARE LA INREGISTRARE ---
+            newChild.setPassword(AESUtil.encrypt(request.getPassword()));
+
             newChild.setBirthDate(request.getBirthDate());
             newChild.setParentName(request.getParentName());
             newChild.setParentPhone(request.getParentPhone());
@@ -129,7 +161,10 @@ public class AuthController {
             Leader newLeader = new Leader();
             newLeader.setName(request.getName());
             newLeader.setSurname(request.getSurname());
-            newLeader.setPassword(request.getPassword());
+
+            // --- CRIPTARE LA INREGISTRARE ---
+            newLeader.setPassword(AESUtil.encrypt(request.getPassword()));
+
             newLeader.setRole(request.getRole());
             newLeader.setPhoneNumber(request.getPhoneNumber());
             newLeader.setRating(0.0f);

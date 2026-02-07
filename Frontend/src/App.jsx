@@ -4,8 +4,9 @@ import AwanaLogo from './AwanaLogo';
 
 // const API_URL = 'http://awana.betania-tm.ro/api';
 //const API_URL = 'http://86.106.170.96:8080/api';
-const API_URL = 'http://awana.betania-tm.ro/api';
-
+//const API_URL = 'http://awana.betania-tm.ro/api';
+//const API_URL = 'http://localhost:8080/api';
+const API_URL = 'http://192.168.1.153:8080/api';
 
 // ==========================================
 // 1. SPLASH SCREEN
@@ -623,14 +624,35 @@ const LeadersRegistry = () => {
 };
 
 // ==========================================
-// 5. SCORING WIDGET (Final)
+// 5. SCORING WIDGET (Final - Stil "Outline" Albastru)
 // ==========================================
 const ScoringWidget = () => {
     const [children, setChildren] = useState([]);
-    const [selectedChildId, setSelectedChildId] = useState('');
-    const [pointsData, setPointsData] = useState({ attended: false, hasBible: false, hasHandbook: false, lesson: false, friend: false, hasUniform: false });
+    const [selectedChild, setSelectedChild] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isSearching, setIsSearching] = useState(false);
 
-    useEffect(() => { fetch(`${API_URL}/children`).then(r => r.ok ? r.json() : []).then(data => { if(Array.isArray(data)) setChildren(data.sort((a,b) => a.name.localeCompare(b.name))); }).catch(()=>{}); }, []);
+    const [pointsData, setPointsData] = useState({
+        attended: false, hasBible: false, hasHandbook: false,
+        lesson: false, friend: false, hasUniform: false
+    });
+
+    useEffect(() => {
+        fetch(`${API_URL}/children`)
+            .then(r => r.ok ? r.json() : [])
+            .then(data => { if(Array.isArray(data)) setChildren(data.sort((a,b) => a.name.localeCompare(b.name))); })
+            .catch(()=>{});
+    }, []);
+
+    const getFilteredChildren = () => {
+        if (!searchTerm) return [];
+        const term = searchTerm.toLowerCase().trim();
+        return children.filter(c => {
+            const nameNormal = `${c.name} ${c.surname}`.toLowerCase();
+            const nameReverse = `${c.surname} ${c.name}`.toLowerCase();
+            return nameNormal.includes(term) || nameReverse.includes(term);
+        });
+    };
 
     const calculateTotal = () => {
         let total = 0;
@@ -643,53 +665,132 @@ const ScoringWidget = () => {
         return total;
     };
 
-    const handleCheckbox = (e) => setPointsData({ ...pointsData, [e.target.name]: e.target.checked });
+    const togglePoint = (key) => {
+        setPointsData(prev => ({ ...prev, [key]: !prev[key] }));
+    };
 
     const handleSaveScore = () => {
-        if (!selectedChildId) { alert("Selecteaza un copil!"); return; }
-        const payload = { childId: parseInt(selectedChildId), ...pointsData, extraPoints: 0 };
-        fetch(`${API_URL}/scores/add`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) })
+        if (!selectedChild) return;
+        const payload = { childId: selectedChild.id, ...pointsData, extraPoints: 0 };
+        fetch(`${API_URL}/scores/add`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+        })
             .then(async res => {
-                const text = await res.text();
-                if(res.ok) { alert("✅ " + text); setPointsData({ attended: false, hasBible: false, hasHandbook: false, lesson: false, friend: false, hasUniform: false }); setSelectedChildId(''); }
-                else alert("❌ EROARE: " + text);
+                if(res.ok) {
+                    alert(`✅ Puncte salvate pentru ${selectedChild.name}!`);
+                    setPointsData({ attended: false, hasBible: false, hasHandbook: false, lesson: false, friend: false, hasUniform: false });
+                    setSelectedChild(null);
+                    setSearchTerm('');
+                    setIsSearching(false);
+                } else alert("❌ EROARE: " + await res.text());
             }).catch(err => alert("❌ Eroare server!"));
     };
 
+    // --- STIL ACTUALIZAT (OUTLINE ALBASTRU) ---
+    const getButtonStyle = (isActive) => ({
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: '15px',
+        borderRadius: '10px',
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+        fontWeight: 'bold',
+        fontSize: '1rem',
+
+        // AICI E SCHIMBAREA:
+        // Conturul este MEREU albastru ('var(--accent)')
+        border: '2px solid var(--accent)',
+
+        // Background-ul se schimba (Alb vs Albastru)
+        background: isActive ? 'var(--accent)' : 'white',
+
+        // Scrisul se schimba (Alb vs Albastru) ca sa fie lizibil
+        color: isActive ? 'white' : 'var(--accent)',
+
+        boxShadow: isActive ? '0 4px 10px rgba(0,0,0,0.2)' : 'none'
+    });
+
     return (
         <div className="animate-in" style={{padding:'20px', background:'white', borderRadius:'15px', boxShadow:'0 4px 15px rgba(0,0,0,0.05)'}}>
-            <h3 style={{borderBottom:'2px solid var(--accent)', paddingBottom:'10px', marginBottom:'20px'}}>⭐ Acordare Puncte Individuale</h3>
-            <label style={{fontWeight:'bold', display:'block', marginBottom:'5px'}}>Selectează Copilul:</label>
-            <select className="login-input" value={selectedChildId} onChange={e => setSelectedChildId(e.target.value)}>
-                <option value="">-- Cauta copil --</option>
-                {children.map(c => <option key={c.id} value={c.id}>{c.name} {c.surname}</option>)}
-            </select>
-            <div style={{marginTop:'20px', display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px'}}>
-                <div style={{gridColumn:'span 2', display:'flex', alignItems:'center', gap:'10px', padding:'15px', border:'2px solid #22c55e', background:'#f0fdf4', borderRadius:'8px'}}>
-                    <input type="checkbox" style={{width:'25px', height:'25px', cursor:'pointer'}} name="attended" checked={pointsData.attended} onChange={handleCheckbox} />
-                    <span style={{fontWeight:'bold', fontSize:'1.1rem', color:'#15803d'}}>✅ PREZENT (+1000)</span>
+            <h3 style={{borderBottom:'2px solid var(--accent)', paddingBottom:'10px', marginBottom:'20px', marginTop:0}}>⭐ Acordare Puncte</h3>
+
+            {/* ECRAN 1: STANDBY */}
+            {!selectedChild && !isSearching && (
+                <div style={{textAlign:'center', padding:'20px 0'}}>
+                    <p style={{color:'#64748b', marginBottom:'20px'}}>Apasă mai jos pentru a căuta un copil.</p>
+                    <button onClick={() => setIsSearching(true)} style={{background:'var(--accent)', color:'white', border:'none', padding:'15px 30px', borderRadius:'30px', fontSize:'1.1rem', fontWeight:'bold', boxShadow:'0 4px 10px rgba(67, 24, 255, 0.3)', width:'100%', maxWidth:'300px', cursor:'pointer'}}>
+                        🔍 CAUTĂ UN COPIL
+                    </button>
                 </div>
-                <label style={{display:'flex', alignItems:'center', gap:'10px', padding:'10px', background:'#f9f9f9', borderRadius:'8px', cursor:'pointer'}}><input type="checkbox" style={{width:'20px', height:'20px'}} name="hasBible" checked={pointsData.hasBible} onChange={handleCheckbox}/><span>📖 Caiet</span></label>
-                <label style={{display:'flex', alignItems:'center', gap:'10px', padding:'10px', background:'#f9f9f9', borderRadius:'8px', cursor:'pointer'}}><input type="checkbox" style={{width:'20px', height:'20px'}} name="hasHandbook" checked={pointsData.hasHandbook} onChange={handleCheckbox}/><span>📘 Manual</span></label>
-                <label style={{display:'flex', alignItems:'center', gap:'10px', padding:'10px', background:'#f9f9f9', borderRadius:'8px', cursor:'pointer'}}><input type="checkbox" style={{width:'20px', height:'20px'}} name="lesson" checked={pointsData.lesson} onChange={handleCheckbox}/><span>📝 Tema</span></label>
-                <label style={{display:'flex', alignItems:'center', gap:'10px', padding:'10px', background:'#f9f9f9', borderRadius:'8px', cursor:'pointer'}}><input type="checkbox" style={{width:'20px', height:'20px'}} name="friend" checked={pointsData.friend} onChange={handleCheckbox}/><span>👋 Prieten</span></label>
-                <label style={{gridColumn:'span 2', display:'flex', alignItems:'center', gap:'10px', padding:'15px', background:'#fff7ed', border:'2px solid #fdba74', borderRadius:'8px', color:'#c2410c', fontWeight:'bold', cursor:'pointer'}}><input type="checkbox" style={{width:'20px', height:'20px'}} name="hasUniform" checked={pointsData.hasUniform} onChange={handleCheckbox} />👕 ARE UNIFORMĂ (+10.000)</label>
-            </div>
-            <div style={{marginTop:'25px', textAlign:'center', borderTop:'1px solid #eee', paddingTop:'15px'}}>
-                <h4 style={{margin:'10px 0', fontSize:'1.2rem'}}>Total puncte: <span style={{color:'var(--accent)', fontSize:'1.8rem', fontWeight:'bold'}}>{calculateTotal()}</span></h4>
-                {/* BUTON ACTUALIZAT: VERDE INCHIS */}
-                <button onClick={handleSaveScore} style={{background:'#15803d', color:'white', padding:'15px', width:'100%', borderRadius:'10px', fontWeight:'bold', fontSize:'1.1rem', border:'none', cursor:'pointer', boxShadow:'0 4px 10px rgba(21, 128, 61, 0.3)'}}>
-                    💾 SALVEAZĂ PUNCTELE
-                </button>
-            </div>
+            )}
+
+            {/* ECRAN 2: CĂUTARE */}
+            {!selectedChild && isSearching && (
+                <div className="animate-in">
+                    <div style={{display:'flex', gap:'10px', marginBottom:'15px'}}>
+                        <input className="login-input" placeholder="Scrie nume..." value={searchTerm} autoFocus onChange={e => setSearchTerm(e.target.value)} style={{margin:0, flex:1}} />
+                        <button onClick={() => { setIsSearching(false); setSearchTerm(''); }} style={{background:'var(--accent)', color:'white', border:'none', borderRadius:'10px', fontWeight:'bold', padding:'0 20px', cursor:'pointer'}}>Anulează</button>
+                    </div>
+                    <div style={{maxHeight:'250px', overflowY:'auto', border:'1px solid #f1f5f9', borderRadius:'10px'}}>
+                        {searchTerm.length > 0 && getFilteredChildren().length === 0 ? <div style={{padding:'15px', color:'#94a3b8', textAlign:'center'}}>Niciun rezultat.</div> : getFilteredChildren().map(c => (
+                            <div key={c.id} onClick={() => setSelectedChild(c)} style={{padding:'15px', borderBottom:'1px solid #f1f5f9', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', fontWeight:'bold', color:'var(--text-primary)'}}>
+                                <span>{c.name} {c.surname}</span><span style={{color:'var(--accent)', fontSize:'0.9rem'}}>ALEGE ➜</span>
+                            </div>
+                        ))}
+                        {searchTerm.length === 0 && <div style={{padding:'15px', color:'#94a3b8', textAlign:'center', fontStyle:'italic'}}>Începe să scrii numele...</div>}
+                    </div>
+                </div>
+            )}
+
+            {/* ECRAN 3: PUNCTAJ (DESIGN CARDURI ALBASTRE) */}
+            {selectedChild && (
+                <div className="animate-in">
+                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px'}}>
+                        <h2 style={{margin:0, color:'var(--text-primary)', fontSize:'1.3rem'}}>{selectedChild.name} {selectedChild.surname}</h2>
+                        <button onClick={() => setSelectedChild(null)} style={{background:'var(--accent)', color:'white', padding:'8px 15px', borderRadius:'8px', cursor:'pointer', fontWeight:'bold', fontSize:'0.9rem', border:'none'}}>✕ Închide</button>
+                    </div>
+
+                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
+
+                        {/* 1. PREZENT */}
+                        <div style={{gridColumn:'span 2', ...getButtonStyle(pointsData.attended)}} onClick={() => togglePoint('attended')}>
+                            ✅ PREZENT
+                        </div>
+
+                        {/* 2. Butoane Mici */}
+                        {[
+                            {k:'hasBible', l:'📖 Biblie'}, {k:'friend', l:'👋 Prieten'},
+                            {k:'hasHandbook', l:'📘 Manual'}, {k:'lesson', l:'📝 Lecție gata'}
+                        ].map(item => (
+                            <div key={item.k} style={getButtonStyle(pointsData[item.k])} onClick={() => togglePoint(item.k)}>
+                                {item.l}
+                            </div>
+                        ))}
+
+                        {/* 3. UNIFORMA */}
+                        <div style={{gridColumn:'span 2', ...getButtonStyle(pointsData.hasUniform)}} onClick={() => togglePoint('hasUniform')}>
+                            👕 Costum Awana special (+10.000)
+                        </div>
+                    </div>
+
+                    <div style={{marginTop:'25px', textAlign:'center', paddingTop:'15px', borderTop:'1px solid #eee'}}>
+                        <h4 style={{margin:'0 0 15px 0', fontSize:'1.2rem', color:'#64748b'}}>Total: <span style={{color:'var(--accent)', fontSize:'1.8rem', fontWeight:'bold'}}>{calculateTotal()}</span></h4>
+                        <button onClick={handleSaveScore} style={{background:'#15803d', color:'white', padding:'15px', width:'100%', borderRadius:'12px', fontWeight:'bold', fontSize:'1.1rem', border:'none', cursor:'pointer', boxShadow:'0 4px 10px rgba(21, 128, 61, 0.3)'}}>
+                            💾 SALVEAZĂ PUNCTELE
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
 // ==========================================
-// 6. TEAMS MANAGER (LISTA VERTICALA + BUTON NORMAL CURAT)
+// 6. TEAMS MANAGER (MODIFICARE VERIFICARE SERVER)
 // ==========================================
 const TeamsManager = () => {
+    // ... (restul state-urilor raman la fel: mode, myColor etc.) ...
     const [mode, setMode] = useState('selection');
     const [myColor, setMyColor] = useState('red');
     const [availableKids, setAvailableKids] = useState([]);
@@ -697,100 +798,128 @@ const TeamsManager = () => {
     const [scores, setScores] = useState({ individual: 0, game: 0, total: 0 });
     const [ranking, setRanking] = useState([]);
     const [isDouble, setIsDouble] = useState(false);
+    const [manualPoints, setManualPoints] = useState('');
+    const [manualTeam, setManualTeam] = useState('red');
+    const [searchAvailable, setSearchAvailable] = useState('');
 
+    // --- STATE PENTRU SECURITATE ---
+    const [showPinModal, setShowPinModal] = useState(false);
+    const [pinInput, setPinInput] = useState('');
+    const [loadingPin, setLoadingPin] = useState(false); // State nou pentru incarcare
+
+    // ... (restul constantelor teams, teamStyles, refreshData, useEffect raman la fel) ...
     const teams = ['red', 'blue', 'green', 'yellow'];
-    const teamStyles = {
-        red: { bg: '#fee2e2', border: '#ef4444', text: '#b91c1c' },
-        blue: { bg: '#dbeafe', border: '#3b82f6', text: '#1d4ed8' },
-        green: { bg: '#dcfce7', border: '#22c55e', text: '#15803d' },
-        yellow: { bg: '#fef9c3', border: '#eab308', text: '#a16207' }
-    };
+    const teamStyles = { red: { bg: '#fee2e2', border: '#ef4444', text: '#b91c1c' }, blue: { bg: '#dbeafe', border: '#3b82f6', text: '#1d4ed8' }, green: { bg: '#dcfce7', border: '#22c55e', text: '#15803d' }, yellow: { bg: '#fef9c3', border: '#eab308', text: '#a16207' } };
     const currentTheme = teamStyles[myColor];
 
-    const refreshData = () => {
-        fetch(`${API_URL}/teams/available`).then(r => r.ok?r.json():[]).then(setAvailableKids).catch(()=>{});
-        fetch(`${API_URL}/teams/status/${myColor}`).then(r => r.ok?r.json():null).then(data => {
-            if(data) {
-                setMyTeamMembers(data.members || []);
-                setScores({ individual: data.individualScore || 0, game: data.gameScore || 0, total: data.totalScore || 0 });
-            }
-        }).catch(()=>{});
-    };
-
+    const refreshData = () => { fetch(`${API_URL}/teams/available`).then(r => r.ok?r.json():[]).then(setAvailableKids).catch(()=>{}); fetch(`${API_URL}/teams/status/${myColor}`).then(r => r.ok?r.json():null).then(data => { if(data) { setMyTeamMembers(data.members || []); setScores({ individual: data.individualScore || 0, game: data.gameScore || 0, total: data.totalScore || 0 }); } }).catch(()=>{}); };
     useEffect(() => { refreshData(); const interval = setInterval(refreshData, 2000); return () => clearInterval(interval); }, [myColor]);
 
-    const pickChild = (childId) => {
-        fetch(`${API_URL}/teams/pick`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ childId: childId, teamColor: myColor }) })
-            .then(async res => { if(res.ok) refreshData(); else alert(await res.text()); });
+    const handleAccessGames = () => {
+        if (mode === 'games') return;
+        setShowPinModal(true);
+        setPinInput('');
     };
 
+    // --- MODIFICARE AICI: VERIFICARE CU SERVERUL ---
+    const verifyPin = () => {
+        if (!pinInput) return alert("Scrie codul!");
+
+        setLoadingPin(true);
+
+        fetch(`${API_URL}/meetings/check-pin`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ pin: pinInput })
+        })
+            .then(async res => {
+                setLoadingPin(false);
+                if (res.ok) {
+                    // COD CORECT
+                    setShowPinModal(false);
+                    setMode('games');
+                } else {
+                    // COD GRESIT
+                    alert("❌ Cod Incorect! Cere codul de la Director/Mesaje.");
+                    setPinInput('');
+                }
+            })
+            .catch(() => {
+                setLoadingPin(false);
+                alert("Eroare conexiune server.");
+            });
+    };
+
+    // ... (restul funcțiilor pickChild, removeChild, sendPoints raman IDENTICE) ...
+    const pickChild = (childId) => { fetch(`${API_URL}/teams/pick`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ childId: childId, teamColor: myColor }) }).then(async res => { if(res.ok) refreshData(); else alert(await res.text()); }); };
+    const removeChildFromTeam = (child) => { if(!window.confirm(`Îl scoți pe ${child.name} din echipa ${myColor.toUpperCase()}?`)) return; fetch(`${API_URL}/teams/remove`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ childId: child.id }) }).then(async res => { if(res.ok) { refreshData(); } else { alert("Eroare: " + await res.text()); }}); };
     const handleTeamPress = (c) => { if(!ranking.includes(c)) setRanking([...ranking, c]); };
-
-    const sendGamePoints = () => {
-        if(ranking.length===0) return alert("Selecteaza!");
-        fetch(`${API_URL}/teams/game-round`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ ranking, isDouble }) })
-            .then(res => { if(res.ok) { alert("✅ Trimis!"); setRanking([]); setIsDouble(false); refreshData(); } });
-    };
-
+    const sendGamePoints = () => { if(ranking.length===0) return alert("Selecteaza ordinea!"); fetch(`${API_URL}/teams/game-round`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ ranking, isDouble }) }).then(res => { if(res.ok) { alert("✅ Clasament salvat!"); setRanking([]); setIsDouble(false); refreshData(); } }); };
+    const sendManualPoints = () => { if(!manualPoints || isNaN(manualPoints)) return alert("Introdu un număr valid!"); fetch(`${API_URL}/teams/add-manual-points`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ teamColor: manualTeam, points: parseInt(manualPoints) }) }).then(async res => { if(res.ok) { alert(`✅ ${await res.text()}`); setManualPoints(''); refreshData(); } else { alert("Eroare server: " + await res.text()); } }); };
     const getPoints = (i) => { const pts=[1000,500,300,100]; return i<4 ? (isDouble?pts[i]*2:pts[i]) : 0; };
+    const getFilteredAvailable = () => { if(!searchAvailable) return availableKids; const term = searchAvailable.toLowerCase(); return availableKids.filter(c => c.name.toLowerCase().includes(term) || c.surname.toLowerCase().includes(term)); };
 
     return (
-        <div className="animate-in" style={{padding:'20px', background:'white', borderRadius:'15px'}}>
+        <div className="animate-in" style={{padding:'20px', background:'white', borderRadius:'15px', position:'relative'}}>
+
+            {/* --- MODAL PIN --- */}
+            {showPinModal && (
+                <div style={{position:'fixed', top:0, left:0, width:'100%', height:'100%', background:'rgba(0,0,0,0.8)', zIndex:1000, display:'flex', justifyContent:'center', alignItems:'center'}}>
+                    <div className="animate-in" style={{background:'white', padding:'30px', borderRadius:'15px', width:'90%', maxWidth:'320px', textAlign:'center', boxShadow:'0 10px 25px rgba(0,0,0,0.5)'}}>
+                        <div style={{fontSize:'3rem', marginBottom:'10px'}}>🔒</div>
+                        <h3 style={{margin:0, color:'#333'}}>Acces Restricționat</h3>
+                        <p style={{color:'#666', marginBottom:'20px'}}>Verifică-ți mesajele pentru codul serii.</p>
+
+                        <input
+                            type="password" inputMode="numeric" pattern="[0-9]*" maxLength="4" autoFocus placeholder="Cod PIN"
+                            value={pinInput} onChange={(e) => setPinInput(e.target.value)}
+                            style={{width:'100%', padding:'15px', fontSize:'1.5rem', textAlign:'center', letterSpacing:'5px', borderRadius:'10px', border:'2px solid #ddd', marginBottom:'20px'}}
+                        />
+
+                        <div style={{display:'flex', gap:'10px'}}>
+                            <button onClick={() => setShowPinModal(false)} style={{flex:1, padding:'12px', background:'#f1f5f9', color:'#64748b', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>Anulează</button>
+                            <button onClick={verifyPin} disabled={loadingPin} style={{flex:1, padding:'12px', background:'var(--accent)', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>
+                                {loadingPin ? '...' : 'Confirmă'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ... (RESTUL HTML-ULUI PENTRU SELECTIE SI JOCURI RAMANE EXACT LA FEL CA INAINTE) ... */}
             <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
                 <button onClick={()=>setMode('selection')} style={{flex:1, padding:'15px', borderRadius:'10px', border:'none', background:mode==='selection'?'var(--accent)':'#eee', color:mode==='selection'?'white':'#666', fontWeight:'bold'}}>1. Selectie Echipa</button>
-                <button onClick={()=>setMode('games')} style={{flex:1, padding:'15px', borderRadius:'10px', border:'none', background:mode==='games'?'var(--accent)':'#eee', color:mode==='games'?'white':'#666', fontWeight:'bold'}}>2. Punctaje Jocuri</button>
+                <button onClick={handleAccessGames} style={{flex:1, padding:'15px', borderRadius:'10px', border:'none', background:mode==='games'?'var(--accent)':'#eee', color:mode==='games'?'white':'#666', fontWeight:'bold', display:'flex', alignItems:'center', justifyContent:'center', gap:'5px'}}>{mode !== 'games' && <span>🔒</span>} 2. Punctaje Jocuri</button>
             </div>
 
             {mode === 'selection' && (
                 <div className="teams-container" style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px'}}>
-                    {/* BUTOANE ECHIPE */}
                     <div style={{gridColumn:'span 2', display:'flex', gap:'5px', overflowX:'auto', paddingBottom:'10px'}}>
                         {teams.map(c => <button key={c} onClick={()=>setMyColor(c)} style={{flex:1, padding:'10px', borderRadius:'8px', fontWeight:'bold', textTransform:'uppercase', border:'none', background:myColor===c?teamStyles[c].border:'#f3f4f6', color:myColor===c?'white':'#666'}}>{c}</button>)}
                     </div>
-
-                    {/* COPII DISPONIBILI */}
-                    <div className="card available-kids-section" style={{
-                        height:'500px',
-                        display:'flex', flexDirection:'column',
-                        border:'2px solid #cbd5e1',
-                        boxShadow:'0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                        background:'#f8fafc'
-                    }}>
-                        <h3 style={{marginTop:0, color:'#334155', borderBottom:'1px solid #e2e8f0', paddingBottom:'10px'}}>
-                            👶 Disponibili ({availableKids.length})
-                        </h3>
+                    <div className="card available-kids-section" style={{height:'500px', display:'flex', flexDirection:'column', border:'2px solid #cbd5e1', boxShadow:'0 4px 6px -1px rgba(0, 0, 0, 0.1)', background:'#f8fafc'}}>
+                        <div style={{borderBottom:'1px solid #e2e8f0', paddingBottom:'10px', marginBottom:'5px'}}>
+                            <h3 style={{marginTop:0, color:'#334155', marginBottom:'5px'}}>👶 Disponibili ({availableKids.length})</h3>
+                            <input className="login-input" placeholder="🔍 Caută nume..." value={searchAvailable} onChange={e => setSearchAvailable(e.target.value)} style={{margin:0, padding:'8px', fontSize:'0.9rem'}} />
+                        </div>
                         <div className="available-kids-scroll" style={{overflowY:'auto', flex:1, paddingRight:'5px'}}>
-                            {availableKids.map(c => (
-                                <div key={c.id} onClick={()=>pickChild(c.id)} className="kid-card-horizontal" style={{
-                                    padding:'12px', marginBottom:'8px', cursor:'pointer',
-                                    display:'flex', justifyContent:'space-between', alignItems:'center',
-                                    background:'white', borderRadius:'8px', border:'1px solid #e2e8f0',
-                                    transition:'transform 0.1s', boxShadow:'0 1px 2px rgba(0,0,0,0.05)'
-                                }}>
-                                    <strong style={{fontSize:'1rem'}}>{c.name} {c.surname}</strong>
-                                    <span style={{background:'#dcfce7', color:'#166534', borderRadius:'50%', width:'24px', height:'24px', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold'}}>+</span>
+                            {getFilteredAvailable().map(c => (
+                                <div key={c.id} onClick={()=>pickChild(c.id)} className="kid-card-horizontal" style={{padding:'12px', marginBottom:'8px', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center', background:'white', borderRadius:'8px', border:'1px solid #e2e8f0', transition:'transform 0.1s', boxShadow:'0 1px 2px rgba(0,0,0,0.05)'}}>
+                                    <strong style={{fontSize:'1rem'}}>{c.name} {c.surname}</strong><span style={{background:'#dcfce7', color:'#166534', borderRadius:'50%', width:'24px', height:'24px', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold'}}>+</span>
                                 </div>
                             ))}
+                            {searchAvailable && getFilteredAvailable().length === 0 && <div style={{textAlign:'center', color:'#94a3b8', padding:'10px'}}>Nu am găsit.</div>}
                         </div>
                     </div>
-
-                    {/* ECHIPA MEA */}
-                    <div className="card my-team-section" style={{
-                        height:'300px',
-                        display:'flex', flexDirection:'column',
-                        background:currentTheme.bg, border:`2px solid ${currentTheme.border}`
-                    }}>
+                    <div className="card my-team-section" style={{height:'300px', display:'flex', flexDirection:'column', background:currentTheme.bg, border:`2px solid ${currentTheme.border}`}}>
                         <h3 style={{marginTop:0, color:currentTheme.text, textTransform:'uppercase', fontSize:'1rem'}}>Echipa Mea</h3>
-                        <div style={{fontSize:'2rem', fontWeight:'bold', color:currentTheme.text, lineHeight:1}}>
-                            {scores.total} <span style={{fontSize:'0.9rem'}}>pct</span>
-                        </div>
-                        <div style={{fontSize:'0.75rem', marginBottom:'10px', color:currentTheme.text, opacity:0.8}}>
-                            (Indiv: {scores.individual} + Joc: {scores.game})
-                        </div>
+                        <div style={{fontSize:'2rem', fontWeight:'bold', color:currentTheme.text, lineHeight:1}}>{scores.total} <span style={{fontSize:'0.9rem'}}>pct</span></div>
+                        <div style={{fontSize:'0.75rem', marginBottom:'10px', color:currentTheme.text, opacity:0.8}}>(Indiv: {scores.individual} + Joc: {scores.game})</div>
                         <div style={{overflowY:'auto', flex:1, background:'rgba(255,255,255,0.5)', borderRadius:'8px', padding:'5px'}}>
+                            {myTeamMembers.length === 0 && <div style={{padding:'10px', fontSize:'0.8rem', fontStyle:'italic', color:currentTheme.text}}>Niciun membru încă.</div>}
                             {myTeamMembers.map(c => (
-                                <div key={c.id} style={{padding:'4px 8px', borderBottom:`1px solid ${currentTheme.text}20`, color:currentTheme.text, fontSize:'0.9rem'}}>
-                                    ✅ {c.name} {c.surname}
+                                <div key={c.id} onClick={() => removeChildFromTeam(c)} style={{padding:'6px 8px', borderBottom:`1px solid ${currentTheme.text}20`, color:currentTheme.text, fontSize:'0.9rem', cursor:'pointer', display:'flex', justifyContent:'space-between'}} title="Apasă pentru a scoate din echipă">
+                                    <span>✅ {c.name} {c.surname}</span><span style={{fontWeight:'bold', opacity:0.6}}>✕</span>
                                 </div>
                             ))}
                         </div>
@@ -799,43 +928,39 @@ const TeamsManager = () => {
             )}
 
             {mode === 'games' && (
-                <div className="card">
-                    <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
-                        <h2 style={{margin:0}}>🎮 Panou Jocuri</h2>
-
-                        {/* BUTONUL MODIFICAT (ALBASTRU SIMPLU) */}
-                        <button onClick={()=>setIsDouble(!isDouble)} style={{
-                            padding:'10px 20px',
-                            background: isDouble ? '#f59e0b' : '#000000',
-                            color: 'white',
-                            border:'none', borderRadius:'10px', fontWeight:'bold',
-                            boxShadow:'0 2px 5px rgba(0,0,0,0.2)'
-                        }}>
-                            {isDouble ? 'DUBLU' : 'NORMAL'}
-                        </button>
-                    </div>
-                    <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px', marginBottom:'30px'}}>
-                        {teams.map(c => {
-                            const idx = ranking.indexOf(c);
-                            return <button key={c} onClick={()=>handleTeamPress(c)} disabled={idx!==-1} style={{
-                                padding:'30px', borderRadius:'15px', border:'none', fontSize:'1.5rem', fontWeight:'bold', textTransform:'uppercase',
-                                background: idx!==-1 ? '#333' : teamStyles[c].border,
-                                color:'white', opacity: idx!==-1 ? 0.6 : 1,
-                                boxShadow:'0 4px 0 rgba(0,0,0,0.2)'
-                            }}>
-                                {c} {idx!==-1 && <div style={{fontSize:'1rem', color:'#fbbf24', marginTop:'5px'}}>LOCUL {idx+1} (+{getPoints(idx)})</div>}
-                            </button>
-                        })}
-                    </div>
-                    <div style={{display:'flex', gap:'10px'}}>
-                        <button onClick={()=>setRanking([])} style={{flex:1, padding:'15px', background:'#ef4444', color:'white', border:'none', borderRadius:'10px', fontWeight:'bold'}}>🗑️ RESET</button>
-                        <button onClick={sendGamePoints} style={{flex:2, padding:'15px', background:'#22c55e', color:'white', border:'none', borderRadius:'10px', fontWeight:'bold'}}>✅ TRIMITE</button>
+                <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
+                    <div className="card">
+                        <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
+                            <h2 style={{margin:0}}>🎮 Punctaje Jocuri</h2>
+                            <button onClick={()=>setIsDouble(!isDouble)} style={{padding:'10px 20px', background: isDouble ? '#f59e0b' : '#000000', color: 'white', border:'none', borderRadius:'10px', fontWeight:'bold', boxShadow:'0 2px 5px rgba(0,0,0,0.2)'}}>{isDouble ? 'DUBLU' : 'NORMAL'}</button>
+                        </div>
+                        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'15px', marginBottom:'30px'}}>
+                            {teams.map(c => {
+                                const idx = ranking.indexOf(c);
+                                return <button key={c} onClick={()=>handleTeamPress(c)} disabled={idx!==-1} style={{padding:'30px', borderRadius:'15px', border:'none', fontSize:'1.5rem', fontWeight:'bold', textTransform:'uppercase', background: idx!==-1 ? '#333' : teamStyles[c].border, color:'white', opacity: idx!==-1 ? 0.6 : 1, boxShadow:'0 4px 0 rgba(0,0,0,0.2)'}}>
+                                    {c} {idx!==-1 && <div style={{fontSize:'1rem', color:'#fbbf24', marginTop:'5px'}}>LOCUL {idx+1} (+{getPoints(idx)})</div>}
+                                </button>
+                            })}
+                        </div>
+                        <div style={{display:'flex', gap:'10px'}}>
+                            <button onClick={()=>setRanking([])} style={{flex:1, padding:'15px', background:'#ef4444', color:'white', border:'none', borderRadius:'10px', fontWeight:'bold'}}>🗑️ RESET</button>
+                            <button onClick={sendGamePoints} style={{flex:2, padding:'15px', background:'#22c55e', color:'white', border:'none', borderRadius:'10px', fontWeight:'bold'}}>✅ TRIMITE</button>
+                        </div>
+                        <div style={{marginTop:'30px', paddingTop:'20px', borderTop:'2px dashed #eee'}}>
+                            <h3 style={{margin:'0 0 15px 0', fontSize:'1.1rem', color:'#64748b'}}>✍️ Puncte Bonus</h3>
+                            <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
+                                <select className="login-input" style={{margin:0, flex:1, minWidth:'100px'}} value={manualTeam} onChange={e => setManualTeam(e.target.value)}>{teams.map(t => <option key={t} value={t}>{t.toUpperCase()}</option>)}</select>
+                                <input type="number" className="login-input" placeholder="Pct (ex: 3200)" style={{margin:0, flex:1, minWidth:'120px'}} value={manualPoints} onChange={e => setManualPoints(e.target.value)} />
+                                <button onClick={sendManualPoints} style={{background:'#22c55e', color:'white', border:'none', borderRadius:'10px', padding:'12px 20px', fontWeight:'bold', cursor:'pointer', boxShadow:'0 2px 5px rgba(34, 197, 94, 0.4)'}}>✅ TRIMITE</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
         </div>
     );
 };
+
 
 // ==========================================
 // 7. DEPARTMENTS PLAN (FINAL)
@@ -1334,7 +1459,7 @@ const Dashboard = ({ user }) => {
 };
 
 // ==========================================
-// 11. MY PROFILE (MODIFICAT PT MOBILE LAYOUT)
+// 11. MY PROFILE (MODIFICAT - CHECKBOX ALINIAT)
 // ==========================================
 const MyProfile = ({ user, onUpdateUser }) => {
     const isChild = user.hasOwnProperty('parentPhone');
@@ -1378,22 +1503,30 @@ const MyProfile = ({ user, onUpdateUser }) => {
 
     const requestDeletionCode = () => {
         if(!window.confirm("⚠️ Esti sigur ca vrei sa initiezi stergerea contului?")) return;
-        fetch(`${API_URL}/account/request-deletion`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ id: user.id, role: isChild ? 'CHILD' : 'LEADER' }) })
-            .then(res => res.text()).then(msg => alert(msg));
+        fetch(`${API_URL}/account/request-deletion`, {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ id: user.id, role: isChild ? 'CHILD' : 'LEADER' })
+        })
+            .then(res => res.text()).then(msg => alert(msg))
+            .catch(err => alert("Eroare la solicitare cod. Verifica conexiunea."));
     };
 
     const performDeletion = () => {
-        if(!deleteCode) return alert("Introdu codul!");
-        if(!window.confirm("🚨 ATENTIE! Actiune IREVERSIBILA.")) return;
-        const deleteUrl = isChild ? `${API_URL}/children/${user.id}` : `${API_URL}/leaders/${user.id}`;
-        fetch(deleteUrl, { method: 'DELETE', headers: { 'Content-Type':'application/json' } })
+        if(!deleteCode) return alert("Te rog introdu codul primit de la Director!");
+        if(!window.confirm("🚨 ATENTIE! Aceasta actiune este IREVERSIBILA. Continui?")) return;
+        const baseUrl = isChild ? `${API_URL}/children/${user.id}` : `${API_URL}/leaders/${user.id}`;
+        const fullUrl = `${baseUrl}?code=${encodeURIComponent(deleteCode)}`;
+
+        fetch(fullUrl, { method: 'DELETE', headers: { 'Content-Type':'application/json' } })
             .then(async res => {
-                if(res.ok) { alert("✅ Cont sters."); localStorage.clear(); window.location.reload(); }
-                else alert("❌ Eroare: " + await res.text());
-            }).catch(err => alert("Eroare conexiune."));
+                if(res.ok) { alert("✅ Cont sters cu succes. La revedere!"); localStorage.clear(); window.location.reload(); }
+                else { const errorMsg = await res.text(); alert("❌ Eroare: " + errorMsg); }
+            }).catch(err => alert("Eroare de conexiune la server."));
     };
 
     const isAdmin = !isChild && user.id === 1;
+
     const StatusItem = ({ icon, label, value }) => (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px', background: value ? '#dcfce7' : '#fee2e2', borderRadius: '8px', border: value ? '1px solid #16a34a' : '1px solid #dc2626', color: value ? '#166534' : '#991b1b', fontWeight: 'bold' }}>
             <span style={{display:'flex', alignItems:'center', gap:'8px'}}>{icon} {label}</span>
@@ -1423,7 +1556,6 @@ const MyProfile = ({ user, onUpdateUser }) => {
                             <input className="login-input" value={formData.surname} onChange={e=>setFormData({...formData, surname:e.target.value})} placeholder="Prenume"/>
                         </div>
                     ) : (
-                        // MODIFICARE 1: CLASA CSS PENTRU NUME
                         <h1 className="profile-name" style={{margin:0}}>{user.name} {user.surname}</h1>
                     )}
                     <span className="badge" style={{background:'#e0f2fe', color:'#0284c7', marginTop:'5px'}}>
@@ -1432,7 +1564,7 @@ const MyProfile = ({ user, onUpdateUser }) => {
                 </div>
             </div>
 
-            {/* MODIFICARE 2: GRID CONTROLAT DIN CSS (NU INLINE) */}
+            {/* GRID PRINCIPAL */}
             <div className="profile-grid" style={{ marginTop:'20px' }}>
 
                 {/* COLOANA 1: DATE PERSONALE */}
@@ -1443,7 +1575,49 @@ const MyProfile = ({ user, onUpdateUser }) => {
                             <>
                                 <div><label>Telefon:</label>{isEditing ? <input className="login-input" value={formData.phoneNumber||''} onChange={e=>setFormData({...formData, phoneNumber:e.target.value})}/> : <p>📞 {user.phoneNumber||'Nespecificat'}</p>}</div>
                                 {isEditing && (<div style={{background:'#fff1f2', padding:'10px', borderRadius:'8px', border:'1px solid #ffccd5', marginTop:'10px'}}><label style={{fontWeight:'bold', color:'#e11d48'}}>🔒 Schimba Parola:</label><input type="password" className="login-input" style={{background:'white', margin:0}} value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></div>)}
-                                <div style={{marginTop:'20px', paddingTop:'15px', borderTop:'1px solid #eee'}}><label style={{fontWeight:'bold'}}>Departamentele Mele:</label>{isEditing ? (<div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>{allDepartments.map(dept => (<label key={dept.id} style={{display:'flex', alignItems:'center', gap:'8px'}}><input type="checkbox" checked={formData.departments.some(d => d.id === dept.id)} onChange={() => toggleDepartment(dept)} />{dept.name}</label>))}</div>) : (<div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>{user.departments && user.departments.map(d => (<span key={d.id} className="badge" style={{background:'#dcfce7', color:'#166534'}}>🏷️ {d.name}</span>))}</div>)}</div>
+
+                                {/* AICI ESTE MODIFICAREA PENTRU DEPARTAMENTE */}
+                                <div style={{marginTop:'20px', paddingTop:'15px', borderTop:'1px solid #eee'}}>
+                                    <label style={{fontWeight:'bold', display:'block', marginBottom:'10px'}}>Departamentele Mele:</label>
+                                    {isEditing ? (
+                                        <div style={{
+                                            display:'grid',
+                                            gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', // Se adapteaza automat (mobile/laptop)
+                                            gap:'10px'
+                                        }}>
+                                            {allDepartments.map(dept => (
+                                                <label key={dept.id} style={{
+                                                    display:'flex',
+                                                    alignItems:'center', // Centreaza vertical textul cu casuta
+                                                    gap:'10px',
+                                                    cursor:'pointer',
+                                                    padding:'8px',
+                                                    border:'1px solid #e2e8f0', // Chenar gri deschis
+                                                    borderRadius:'8px',
+                                                    background:'white'
+                                                }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={formData.departments.some(d => d.id === dept.id)}
+                                                        onChange={() => toggleDepartment(dept)}
+                                                        style={{
+                                                            width:'20px',
+                                                            height:'20px',
+                                                            cursor:'pointer',
+                                                            margin:0, // Scoate marginile implicite care stricau alinierea
+                                                            accentColor: 'var(--accent)' // Foloseste culoarea temei cand e bifat
+                                                        }}
+                                                    />
+                                                    <span style={{fontSize:'0.9rem', fontWeight:'500'}}>{dept.name}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>
+                                            {user.departments && user.departments.map(d => (<span key={d.id} className="badge" style={{background:'#dcfce7', color:'#166534'}}>🏷️ {d.name}</span>))}
+                                        </div>
+                                    )}
+                                </div>
                             </>
                         ) : (
                             <>
@@ -1456,7 +1630,7 @@ const MyProfile = ({ user, onUpdateUser }) => {
                     </div>
                 </div>
 
-                {/* COLOANA 2: INVENTAR / DANGER */}
+                {/* COLOANA 2: INVENTAR & ZONA PERICULOASA */}
                 <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
                     {isChild && (
                         <div className="card">
@@ -1479,13 +1653,19 @@ const MyProfile = ({ user, onUpdateUser }) => {
                             <p style={{fontSize:'0.9rem', marginBottom:'15px', color:'#7f1d1d'}}>Ștergerea contului necesită aprobarea Directorului.</p>
                             {!showDeleteInput ? (
                                 <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
-                                    <button onClick={requestDeletionCode} style={{padding:'10px', background:'orange', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>📨 Pasul 1: Cere Cod Ștergere</button>
-                                    <button onClick={() => setShowDeleteInput(true)} style={{padding:'10px', background:'#fee2e2', color:'#dc2626', border:'1px solid #dc2626', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>🗑️ Pasul 2: Am primit codul!</button>
+                                    <button onClick={requestDeletionCode} style={{padding:'10px', background:'orange', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>📨 Cere Cod Ștergere</button>
+                                    <button onClick={() => setShowDeleteInput(true)} style={{padding:'10px', background:'#fee2e2', color:'#dc2626', border:'1px solid #dc2626', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>🗑️ Am primit codul!</button>
                                 </div>
                             ) : (
                                 <div style={{background:'#fef2f2', padding:'15px', borderRadius:'10px'}}>
                                     <label style={{fontWeight:'bold', color:'#dc2626'}}>Introdu Codul Primit:</label>
-                                    <input className="login-input" placeholder="Ex: A3F2..." value={deleteCode} onChange={e => setDeleteCode(e.target.value)} style={{borderColor:'#dc2626'}}/>
+                                    <input
+                                        className="login-input"
+                                        placeholder="Ex: 1EA0FA"
+                                        value={deleteCode}
+                                        onChange={e => setDeleteCode(e.target.value)}
+                                        style={{borderColor:'#dc2626'}}
+                                    />
                                     <div style={{display:'flex', gap:'10px', marginTop:'10px'}}>
                                         <button onClick={performDeletion} style={{flex:1, padding:'10px', background:'#dc2626', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>STERGE CONTUL</button>
                                         <button onClick={() => {setShowDeleteInput(false); setDeleteCode('');}} style={{padding:'10px', background:'transparent', border:'1px solid #94a3b8', borderRadius:'8px', cursor:'pointer'}}>Anulează</button>
@@ -1499,6 +1679,7 @@ const MyProfile = ({ user, onUpdateUser }) => {
         </div>
     );
 };
+
 
 // ==========================================
 // 12. REGISTER (CENTRAT, STILIZAT, SCRIS MARE)
@@ -1631,6 +1812,7 @@ const Register = ({ onSwitchToLogin }) => {
         </div>
     );
 };
+
 
 // ==========================================
 // 13. LOGIN (CENTRAT, SCRIS MARE, BUTOANE NEGRE)
