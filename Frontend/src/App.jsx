@@ -1,12 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 import AwanaLogo from './AwanaLogo';
+import AdminDashboard from './AdminDashboard';
 
-// const API_URL = 'http://awana.betania-tm.ro/api';
-//const API_URL = 'http://86.106.170.96:8080/api';
-const API_URL = 'http://awana.betania-tm.ro/api'; // asta e pentru server
-//const API_URL = 'http://localhost:8080/api';
-//const API_URL = 'http://192.168.1.153:8080/api';
+// ==========================================
+// CONFIGURARE AUTOMATA API (Smart Detect)
+// ==========================================
+const getApiUrl = () => {
+    const hostname = window.location.hostname; // Aflam adresa curenta (ex: localhost, 192.168..., awana...)
+
+    // CAZUL 1: Esti pe laptopul tau (Dezvoltare)
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'http://localhost:8080/api';
+    }
+
+    // CAZUL 2: Esti pe telefon, conectat la Wi-Fi (Retea Locala)
+    // Daca adresa incepe cu 192.168, inseamna ca esti pe Wi-Fi
+    if (hostname.startsWith('192.168.')) {
+        // Folosim portul 8080 pe acelasi IP pe care esti conectat
+        return `http://${hostname}:8080/api`;
+    }
+
+    // CAZUL 3: Esti pe Serverul Public (Production)
+    // Daca nu e nici localhost, nici IP local, inseamna ca e domeniul public
+    return 'http://awana.betania-tm.ro/api';
+};
+
+const API_URL = getApiUrl();
+// ==========================================
 
 // ==========================================
 // 1. SPLASH SCREEN
@@ -1889,7 +1910,7 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
 
                 <form onSubmit={doLogin} style={{display:'flex', flexDirection:'column', gap:'15px'}}>
                     <input
-                        placeholder={form.role === 'CHILD' ? "Numele tău" : "Telefon sau Nume"}
+                        placeholder={form.role === 'CHILD' ? "Numele tău" : "Prenume"}
                         className="login-input"
                         style={{fontSize:'1.1rem', padding:'15px', color:'#000'}}
                         value={form.user}
@@ -2005,6 +2026,16 @@ function App() {
                         {isDirector && (
                             <button className={`nav-btn ${page==='leaders'?'active':''}`} onClick={()=>navigateTo('leaders')}>👔 Registru Lideri</button>
                         )}
+                        {/* BUTON GOD MODE - Doar pentru Admin (ID 1) */}
+                        {user.id === 1 && !isChild && (
+                            <button
+                                className={`nav-btn ${page==='admin'?'active':''}`} // Am pus stilul corect de meniu
+                                style={{ color: '#e11d48', fontWeight: '900', borderLeft: '4px solid #e11d48' }}
+                                onClick={() => setPage('admin')} // <--- CORECT: setPage('admin')
+                            >
+                                🛡️ Control Center
+                            </button>
+                        )}
                     </>
                 )}
 
@@ -2024,6 +2055,9 @@ function App() {
                 {!isChild && page === 'departments' && <DepartmentsList user={user} />}
                 {!isChild && page === 'registry' && <Registry user={user} />}
                 {!isChild && page === 'leaders' && isDirector && <LeadersRegistry />}
+
+                {/* 👇 LINIA NOUA PENTRU ADMIN 👇 */}
+                {!isChild && page === 'admin' && <AdminDashboard currentUser={user} />}
             </div>
         </div>
     );
