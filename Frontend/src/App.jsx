@@ -5,9 +5,9 @@ import AdminDashboard from './AdminDashboard';
 
 // const API_URL = 'http://awana.betania-tm.ro/api';
 //const API_URL = 'http://86.106.170.96:8080/api';
-const API_URL = 'http://awana.betania-tm.ro/api'; // asta e pentru server
-//const API_URL = 'http://localhost:8080/api';
-//const API_URL = 'http://192.168.1.153:8080/api';
+// const API_URL = 'http://awana.betania-tm.ro/api'; // asta e pentru server
+//const API_URL = 'http://localhost:8080/api'; //pentru localhost
+const API_URL = 'http://192.168.1.156:8080/api';
 
 // ==========================================
 // 1. SPLASH SCREEN
@@ -625,7 +625,7 @@ const LeadersRegistry = () => {
 };
 
 // ==========================================
-// 5. SCORING WIDGET (Final - Stil "Outline" Albastru)
+// 5. SCORING WIDGET (Actualizat cu Puncte Manuale / Extra)
 // ==========================================
 const ScoringWidget = () => {
     const [children, setChildren] = useState([]);
@@ -633,10 +633,14 @@ const ScoringWidget = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isSearching, setIsSearching] = useState(false);
 
+    // Stari pentru butoanele standard
     const [pointsData, setPointsData] = useState({
         attended: false, hasBible: false, hasHandbook: false,
         lesson: false, friend: false, hasUniform: false
     });
+
+    // NOU: Stare pentru punctele manuale (extra)
+    const [extraPoints, setExtraPoints] = useState('');
 
     useEffect(() => {
         fetch(`${API_URL}/children`)
@@ -655,6 +659,7 @@ const ScoringWidget = () => {
         });
     };
 
+    // ACTUALIZAT: Adunam si punctele manuale la total
     const calculateTotal = () => {
         let total = 0;
         if (pointsData.attended) total += 1000;
@@ -663,6 +668,13 @@ const ScoringWidget = () => {
         if (pointsData.lesson) total += 1000;
         if (pointsData.friend) total += 1000;
         if (pointsData.hasUniform) total += 10000;
+
+        // Adaugam punctele extra (daca a scris ceva valid)
+        const extra = parseInt(extraPoints);
+        if (!isNaN(extra)) {
+            total += extra;
+        }
+
         return total;
     };
 
@@ -670,16 +682,25 @@ const ScoringWidget = () => {
         setPointsData(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
+    // ACTUALIZAT: Trimitem punctele extra catre server
     const handleSaveScore = () => {
         if (!selectedChild) return;
-        const payload = { childId: selectedChild.id, ...pointsData, extraPoints: 0 };
+
+        const payload = {
+            childId: selectedChild.id,
+            ...pointsData,
+            extraPoints: parseInt(extraPoints) || 0 // Trimitem cat a scris sau 0
+        };
+
         fetch(`${API_URL}/scores/add`, {
             method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
         })
             .then(async res => {
                 if(res.ok) {
                     alert(`✅ Puncte salvate pentru ${selectedChild.name}!`);
+                    // Resetam tot dupa salvare
                     setPointsData({ attended: false, hasBible: false, hasHandbook: false, lesson: false, friend: false, hasUniform: false });
+                    setExtraPoints('');
                     setSelectedChild(null);
                     setSearchTerm('');
                     setIsSearching(false);
@@ -687,28 +708,12 @@ const ScoringWidget = () => {
             }).catch(err => alert("❌ Eroare server!"));
     };
 
-    // --- STIL ACTUALIZAT (OUTLINE ALBASTRU) ---
     const getButtonStyle = (isActive) => ({
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: '15px',
-        borderRadius: '10px',
-        cursor: 'pointer',
-        transition: 'all 0.2s',
-        fontWeight: 'bold',
-        fontSize: '1rem',
-
-        // AICI E SCHIMBAREA:
-        // Conturul este MEREU albastru ('var(--accent)')
+        display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '15px', borderRadius: '10px',
+        cursor: 'pointer', transition: 'all 0.2s', fontWeight: 'bold', fontSize: '1rem',
         border: '2px solid var(--accent)',
-
-        // Background-ul se schimba (Alb vs Albastru)
         background: isActive ? 'var(--accent)' : 'white',
-
-        // Scrisul se schimba (Alb vs Albastru) ca sa fie lizibil
         color: isActive ? 'white' : 'var(--accent)',
-
         boxShadow: isActive ? '0 4px 10px rgba(0,0,0,0.2)' : 'none'
     });
 
@@ -744,7 +749,7 @@ const ScoringWidget = () => {
                 </div>
             )}
 
-            {/* ECRAN 3: PUNCTAJ (DESIGN CARDURI ALBASTRE) */}
+            {/* ECRAN 3: PUNCTAJ */}
             {selectedChild && (
                 <div className="animate-in">
                     <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'15px'}}>
@@ -753,13 +758,10 @@ const ScoringWidget = () => {
                     </div>
 
                     <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
-
-                        {/* 1. PREZENT */}
                         <div style={{gridColumn:'span 2', ...getButtonStyle(pointsData.attended)}} onClick={() => togglePoint('attended')}>
                             ✅ PREZENT
                         </div>
 
-                        {/* 2. Butoane Mici */}
                         {[
                             {k:'hasBible', l:'📖 Biblie'}, {k:'friend', l:'👋 Prieten'},
                             {k:'hasHandbook', l:'📘 Manual'}, {k:'lesson', l:'📝 Lecție gata'}
@@ -769,14 +771,29 @@ const ScoringWidget = () => {
                             </div>
                         ))}
 
-                        {/* 3. UNIFORMA */}
                         <div style={{gridColumn:'span 2', ...getButtonStyle(pointsData.hasUniform)}} onClick={() => togglePoint('hasUniform')}>
                             👕 Costum Awana special (+10.000)
                         </div>
                     </div>
 
+                    {/* NOU: INPUT PENTRU PUNCTE MANUALE / EXTRA */}
+                    <div style={{marginTop: '15px', background: '#f8fafc', padding: '15px', borderRadius: '10px', border: '2px dashed #cbd5e1', display: 'flex', alignItems: 'center', gap: '15px'}}>
+                        <div style={{fontSize: '2rem'}}>✨</div>
+                        <div style={{flex: 1}}>
+                            <label style={{display: 'block', fontWeight: 'bold', color: '#334155', marginBottom: '5px'}}>Puncte Extra (Manuale)</label>
+                            <input
+                                type="number"
+                                value={extraPoints}
+                                onChange={(e) => setExtraPoints(e.target.value)}
+                                placeholder="Ex: 1000 (pt a 2-a lecție)"
+                                style={{width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #94a3b8', fontSize: '1rem', margin: 0}}
+                            />
+                        </div>
+                    </div>
+
+                    {/* TOTAL SI SALVARE */}
                     <div style={{marginTop:'25px', textAlign:'center', paddingTop:'15px', borderTop:'1px solid #eee'}}>
-                        <h4 style={{margin:'0 0 15px 0', fontSize:'1.2rem', color:'#64748b'}}>Total: <span style={{color:'var(--accent)', fontSize:'1.8rem', fontWeight:'bold'}}>{calculateTotal()}</span></h4>
+                        <h4 style={{margin:'0 0 15px 0', fontSize:'1.2rem', color:'#64748b'}}>Total de adăugat: <span style={{color:'var(--accent)', fontSize:'1.8rem', fontWeight:'bold'}}>{calculateTotal()}</span></h4>
                         <button onClick={handleSaveScore} style={{background:'#15803d', color:'white', padding:'15px', width:'100%', borderRadius:'12px', fontWeight:'bold', fontSize:'1.1rem', border:'none', cursor:'pointer', boxShadow:'0 4px 10px rgba(21, 128, 61, 0.3)'}}>
                             💾 SALVEAZĂ PUNCTELE
                         </button>
@@ -1460,7 +1477,7 @@ const Dashboard = ({ user }) => {
 };
 
 // ==========================================
-// 11. MY PROFILE (MODIFICAT - CHECKBOX ALINIAT)
+// 11. MY PROFILE (MODIFICAT - CHECKBOX ALINIAT SI STATISTICI COPIL)
 // ==========================================
 const MyProfile = ({ user, onUpdateUser }) => {
     const isChild = user.hasOwnProperty('parentPhone');
@@ -1552,9 +1569,9 @@ const MyProfile = ({ user, onUpdateUser }) => {
                 </div>
                 <div style={{flex:1}}>
                     {isEditing ? (
-                        <div style={{display:'flex', gap:'10px'}}>
-                            <input className="login-input" value={formData.name} onChange={e=>setFormData({...formData, name:e.target.value})} placeholder="Nume"/>
-                            <input className="login-input" value={formData.surname} onChange={e=>setFormData({...formData, surname:e.target.value})} placeholder="Prenume"/>
+                        <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
+                            <input className="login-input" style={{flex: '1 1 120px'}} value={formData.name} onChange={e=>setFormData({...formData, name:e.target.value})} placeholder="Nume"/>
+                            <input className="login-input" style={{flex: '1 1 120px'}} value={formData.surname} onChange={e=>setFormData({...formData, surname:e.target.value})} placeholder="Prenume"/>
                         </div>
                     ) : (
                         <h1 className="profile-name" style={{margin:0}}>{user.name} {user.surname}</h1>
@@ -1626,6 +1643,18 @@ const MyProfile = ({ user, onUpdateUser }) => {
                                 <div><label>Vârstă:</label><p style={{fontWeight:'bold', color:'#0369a1', fontSize:'1.1rem'}}>{user.age ? `${user.age} ani` : '-'}</p></div>
                                 <div><label>Parinte:</label>{isEditing ? <input className="login-input" value={formData.parentName||''} onChange={e=>setFormData({...formData, parentName:e.target.value})}/> : <p>👤 {user.parentName||'-'}</p>}</div>
                                 <div><label>Telefon Parinte:</label>{isEditing ? <input className="login-input" value={formData.parentPhone||''} onChange={e=>setFormData({...formData, parentPhone:e.target.value})}/> : <p>📞 {user.parentPhone||'-'}</p>}</div>
+
+                                {/* NOU: CARDURI PENTRU PUNCTE SI PREZENTE (MOBILE FRIENDLY) */}
+                                <div style={{display: 'flex', gap: '10px', marginTop: '15px', flexWrap: 'wrap'}}>
+                                    <div style={{flex: '1 1 120px', background: '#f0f9ff', padding: '15px', borderRadius: '10px', border: '1px solid #bae6fd', textAlign: 'center'}}>
+                                        <div style={{fontSize: '0.85rem', color: '#0369a1', fontWeight: 'bold', textTransform: 'uppercase'}}>⭐ Puncte Sezon</div>
+                                        <div style={{fontSize: '2rem', fontWeight: '900', color: 'var(--accent)', lineHeight: '1.2'}}>{user.seasonPoints || 0}</div>
+                                    </div>
+                                    <div style={{flex: '1 1 120px', background: '#f0fdf4', padding: '15px', borderRadius: '10px', border: '1px solid #bbf7d0', textAlign: 'center'}}>
+                                        <div style={{fontSize: '0.85rem', color: '#166534', fontWeight: 'bold', textTransform: 'uppercase'}}>✅ Prezențe</div>
+                                        <div style={{fontSize: '2rem', fontWeight: '900', color: '#16a34a', lineHeight: '1.2'}}>{user.totalAttendance || 0}</div>
+                                    </div>
+                                </div>
                             </>
                         )}
                     </div>
@@ -1890,7 +1919,7 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
 
                 <form onSubmit={doLogin} style={{display:'flex', flexDirection:'column', gap:'15px'}}>
                     <input
-                        placeholder={form.role === 'CHILD' ? "Numele tău" : "Prenume"}
+                        placeholder={form.role === 'CHILD' ? "Prenume" : "Prenume"}
                         className="login-input"
                         style={{fontSize:'1.1rem', padding:'15px', color:'#000'}}
                         value={form.user}
@@ -1933,17 +1962,63 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
 // 15. APP MAIN (FINAL SI CORECTAT)
 // ==========================================
 function App() {
-    const [loading, setLoading] = useState(true);
-    const [user, setUser] = useState(null);
+    // 1. Logoul (tinut minte pe sesiune ca sa nu fie enervant)
+    const [loading, setLoading] = useState(() => {
+        return !sessionStorage.getItem('hasSeenLogo');
+    });
+
+    // 2. USER-UL: Il incarcam din memoria permanenta ca sa nu mai ceara login la refresh
+    const [user, setUser] = useState(() => {
+        const savedUser = localStorage.getItem('awanaLoggedUser');
+        return savedUser ? JSON.parse(savedUser) : null;
+    });
+
     const [register, setRegister] = useState(false);
-    const [page, setPage] = useState('dashboard');
+
+    // 3. PAGINA: Tine minte unde erai inainte de refresh (Registru, Dashboard, etc.)
+    const [page, setPage] = useState(() => {
+        return localStorage.getItem('awanaCurrentPage') || 'dashboard';
+    });
+
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    useEffect(() => { setTimeout(() => setLoading(false), 2000); }, []);
+    // ==========================================
+    // EFECTE MAGICE: Salvare automata in fundal
+    // ==========================================
 
-    const navigateTo = (newPage) => {
-        setPage(newPage);
-        setMobileMenuOpen(false); // Inchide meniul pe mobil cand dai click
+    // Cand userul se schimba (ex: se logheaza sau delogheaza) -> actualizam memoria
+    useEffect(() => {
+        if (user) {
+            localStorage.setItem('awanaLoggedUser', JSON.stringify(user));
+        } else {
+            // Daca a dat logout (user e null), stergem datele
+            localStorage.removeItem('awanaLoggedUser');
+            localStorage.removeItem('awanaCurrentPage');
+        }
+    }, [user]);
+
+    // Cand schimba pagina -> o tinem minte imediat
+    useEffect(() => {
+        if (user) {
+            localStorage.setItem('awanaCurrentPage', page);
+        }
+    }, [page, user]);
+
+    // Animatia cu Logo Awana
+    useEffect(() => {
+        if (loading) {
+            const timer = setTimeout(() => {
+                setLoading(false);
+                sessionStorage.setItem('hasSeenLogo', 'true');
+            }, 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [loading]);
+
+    // O functie mica pentru schimbarea paginii (probabil o ai deja mai jos, dar asigura-te ca arata cam asa)
+    const navigateTo = (pageName) => {
+        setPage(pageName);
+        setMobileMenuOpen(false);
     };
 
     if (loading) return <SplashScreen />;

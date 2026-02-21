@@ -2,12 +2,12 @@ package com.awanabetania.awanabetania.Controller;
 
 import com.awanabetania.awanabetania.Model.Child;
 import com.awanabetania.awanabetania.Model.Meeting;
-import com.awanabetania.awanabetania.Model.Notification; // Import
+import com.awanabetania.awanabetania.Model.Notification;
 import com.awanabetania.awanabetania.Model.Score;
 import com.awanabetania.awanabetania.Model.ScoreRequest;
 import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.MeetingRepository;
-import com.awanabetania.awanabetania.Repository.NotificationRepository; // Import
+import com.awanabetania.awanabetania.Repository.NotificationRepository;
 import com.awanabetania.awanabetania.Repository.ScoreRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,7 +25,7 @@ public class ScoreController {
     @Autowired private ScoreRepository scoreRepository;
     @Autowired private ChildRepository childRepository;
     @Autowired private MeetingRepository meetingRepository;
-    @Autowired private NotificationRepository notificationRepository; // Pentru premii
+    @Autowired private NotificationRepository notificationRepository;
 
     @PostMapping("/add")
     public ResponseEntity<?> addScore(@RequestBody ScoreRequest request) {
@@ -68,12 +68,11 @@ public class ScoreController {
         child.setDailyPoints((child.getDailyPoints() == null ? 0 : child.getDailyPoints()) + points);
 
         // =================================================================================
-        // 3. LOGICA SIMPLIFICATĂ DE PREZENȚĂ (User Request)
+        // 3. LOGICA DE PREZENȚĂ ȘI PREMII
         // =================================================================================
         if (Boolean.TRUE.equals(request.getAttended())) {
 
-            // A. Incrementăm Streak-ul (Nu ne pasă de data trecută, presupunem că e consecutiv)
-            // Dacă a lipsit data trecută, Streak-ul a fost deja resetat la 0 la închiderea sesiunii trecute.
+            // A. Incrementăm Streak-ul
             int currentStreak = (child.getAttendanceStreak() == null) ? 0 : child.getAttendanceStreak();
             int newStreak = currentStreak + 1;
             child.setAttendanceStreak(newStreak);
@@ -86,8 +85,8 @@ public class ScoreController {
             if(Boolean.TRUE.equals(request.getLesson())) {
                 child.setLessonsCompleted((child.getLessonsCompleted() == null ? 0 : child.getLessonsCompleted()) + 1);
             }
-            if(Boolean.TRUE.equals(request.getHasUniform())) child.setHasShirt(true);
-            if(Boolean.TRUE.equals(request.getHasBible())) child.setHasManual(true);
+
+            // Liniile care dădeau automat tricoul și manualul au fost șterse de aici.
 
             // D. Verificare Premii (Notificări)
             checkRewards(child, newStreak);
