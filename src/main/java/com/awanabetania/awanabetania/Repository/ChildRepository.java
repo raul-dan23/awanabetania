@@ -23,5 +23,6 @@ public interface ChildRepository extends JpaRepository<Child, Integer> {
      */
     List<Child> findByNameContaining(String name);
 
+    /** Cauta un copil dupa username-ul unic de login */
     Optional<Child> findByUsername(String username);
 }

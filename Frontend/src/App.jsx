@@ -5,8 +5,8 @@ import AdminDashboard from './AdminDashboard';
 
 // const API_URL = 'http://awana.betania-tm.ro/api';
 //const API_URL = 'http://86.106.170.96:8080/api';
-const API_URL = 'http://awana.betania-tm.ro/api'; // asta e pentru server
-//const API_URL = 'http://localhost:8080/api'; //pentru localhost
+//const API_URL = 'http://awana.betania-tm.ro/api'; // asta e pentru server
+const API_URL = 'http://localhost:8080/api'; //pentru localhost
 // const API_URL = 'http://192.168.1.156:8080/api'; // pentru localhost dar pe tel, dar nu uita sa verifici sa fie pe port ok
 
 // ==========================================
@@ -1477,7 +1477,7 @@ const Dashboard = ({ user }) => {
 };
 
 // ==========================================
-// 11. MY PROFILE (ACTUALIZAT - EDITARE USERNAME INCLUSĂ)
+// 11. MY PROFILE (REPARAT - ȘTERGERE ȘI EDITARE USERNAME)
 // ==========================================
 const MyProfile = ({ user, onUpdateUser }) => {
     const isChild = user.hasOwnProperty('parentPhone');
@@ -1504,26 +1504,14 @@ const MyProfile = ({ user, onUpdateUser }) => {
     const handleSave = () => {
         setLoading(true);
         const endpoint = isChild ? `${API_URL}/children/${user.id}` : `${API_URL}/leaders/${user.id}`;
-
-        // Trimitem formData care acum conține și username-ul modificat
         const payload = { ...formData };
         if (!payload.password) delete payload.password;
 
         fetch(endpoint, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-            .then(res => {
-                if(!res.ok) throw new Error("Eroare la salvare");
-                return res.json();
-            })
+            .then(res => res.ok ? res.json() : res.text().then(t => {throw t}))
             .then(u => {
-                setLoading(false);
-                setIsEditing(false);
-                onUpdateUser(u);
-                alert("✅ Profil actualizat cu succes!");
-            })
-            .catch((err) => {
-                setLoading(false);
-                alert("❌ Eroare server: Username-ul s-ar putea să fie deja luat sau conexiunea a eșuat.");
-            });
+                setLoading(false); setIsEditing(false); onUpdateUser(u); alert("✅ Actualizat!");
+            }).catch((err) => { setLoading(false); alert(err || "Eroare server."); });
     };
 
     const toggleDepartment = (dept) => {
@@ -1540,20 +1528,22 @@ const MyProfile = ({ user, onUpdateUser }) => {
             body: JSON.stringify({ id: user.id, role: isChild ? 'CHILD' : 'LEADER' })
         })
             .then(res => res.text()).then(msg => alert(msg))
-            .catch(err => alert("Eroare la solicitare cod. Verifica conexiunea."));
+            .catch(err => alert("Eroare la solicitare cod."));
     };
 
     const performDeletion = () => {
-        if(!deleteCode) return alert("Te rog introdu codul primit de la Director!");
-        if(!window.confirm("🚨 ATENTIE! Aceasta actiune este IREVERSIBILA. Continui?")) return;
+        if(!deleteCode) return alert("Te rog introdu codul primit!");
+        if(!window.confirm("🚨 ATENTIE! Actiunea este IREVERSIBILA. Continui?")) return;
+
         const baseUrl = isChild ? `${API_URL}/children/${user.id}` : `${API_URL}/leaders/${user.id}`;
+        // REPARAȚIE: Trimitem codul corect prin Query Parameter
         const fullUrl = `${baseUrl}?code=${encodeURIComponent(deleteCode)}`;
 
-        fetch(fullUrl, { method: 'DELETE', headers: { 'Content-Type':'application/json' } })
+        fetch(fullUrl, { method: 'DELETE' })
             .then(async res => {
-                if(res.ok) { alert("✅ Cont sters cu succes. La revedere!"); localStorage.clear(); window.location.reload(); }
+                if(res.ok) { alert("✅ Cont sters."); localStorage.clear(); window.location.reload(); }
                 else { const errorMsg = await res.text(); alert("❌ Eroare: " + errorMsg); }
-            }).catch(err => alert("Eroare de conexiune la server."));
+            }).catch(err => alert("Eroare de conexiune."));
     };
 
     const isAdmin = !isChild && user.id === 1;
@@ -1575,39 +1565,25 @@ const MyProfile = ({ user, onUpdateUser }) => {
             </div>
 
             <div className="card" style={{marginTop:'20px', display:'flex', gap:'20px', alignItems:'center'}}>
-                <div style={{width:'80px', height:'80px', borderRadius:'50%', background:'var(--accent)', color:'white', display:'flex', justifyContent:'center', alignItems:'center', fontSize:'2.5rem', fontWeight:'bold', flexShrink:0, boxShadow: '0 4px 10px rgba(0,0,0,0.1)'}}>
+                <div style={{width:'80px', height:'80px', borderRadius:'50%', background:'var(--accent)', color:'white', display:'flex', justifyContent:'center', alignItems:'center', fontSize:'2.5rem', fontWeight:'bold', flexShrink:0}}>
                     {user.name ? user.name.charAt(0) : 'U'}
                 </div>
                 <div style={{flex:1}}>
                     {isEditing ? (
                         <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
                             <div style={{display:'flex', gap:'10px'}}>
-                                <input className="login-input" style={{flex: 1}} value={formData.name} onChange={e=>setFormData({...formData, name:e.target.value})} placeholder="Prenume"/>
-                                <input className="login-input" style={{flex: 1}} value={formData.surname} onChange={e=>setFormData({...formData, surname:e.target.value})} placeholder="Nume"/>
+                                <input className="login-input" value={formData.name} onChange={e=>setFormData({...formData, name:e.target.value})} placeholder="Prenume"/>
+                                <input className="login-input" value={formData.surname} onChange={e=>setFormData({...formData, surname:e.target.value})} placeholder="Nume"/>
                             </div>
-                            {/* INPUT NOU PENTRU USERNAME */}
-                            <div style={{background: '#f8fafc', padding: '10px', borderRadius: '10px', border: '1px dashed var(--accent)'}}>
-                                <label style={{fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--accent)'}}>USERNAME (ID LOGIN):</label>
-                                <input
-                                    className="login-input"
-                                    style={{marginTop: '5px', background: 'white', fontWeight: 'bold'}}
-                                    value={formData.username || ''}
-                                    onChange={e => {
-                                        const val = e.target.value.toLowerCase().replace(/\s/g, '');
-                                        setFormData({...formData, username: val});
-                                    }}
-                                    placeholder="utilizator123"
-                                />
-                                <small style={{color: '#64748b'}}>Acesta este numele cu care te vei loga.</small>
-                            </div>
+                            <input className="login-input" value={formData.username || ''} onChange={e=>setFormData({...formData, username: e.target.value.toLowerCase().replace(/\s/g, '')})} placeholder="username"/>
                         </div>
                     ) : (
                         <>
                             <h1 className="profile-name" style={{margin:0}}>{user.name} {user.surname}</h1>
-                            <p style={{margin: '2px 0', color: '#64748b', fontWeight: '500'}}>ID: @{user.username || 'fara_username'}</p>
+                            <p style={{margin:0, color:'#666'}}>@{user.username || 'fara_username'}</p>
                         </>
                     )}
-                    <span className="badge" style={{background:'#e0f2fe', color:'#0284c7', marginTop:'8px'}}>
+                    <span className="badge" style={{background:'#e0f2fe', color:'#0284c7', marginTop:'5px'}}>
                         {isChild ? '👶 Copil' : `👔 ${user.role || 'Lider'}`}
                     </span>
                 </div>
@@ -1620,42 +1596,31 @@ const MyProfile = ({ user, onUpdateUser }) => {
                         {!isChild ? (
                             <>
                                 <div><label>Telefon:</label>{isEditing ? <input className="login-input" value={formData.phoneNumber||''} onChange={e=>setFormData({...formData, phoneNumber:e.target.value})}/> : <p>📞 {user.phoneNumber||'Nespecificat'}</p>}</div>
-                                {isEditing && (<div style={{background:'#fff1f2', padding:'10px', borderRadius:'8px', border:'1px solid #ffccd5', marginTop:'10px'}}><label style={{fontWeight:'bold', color:'#e11d48'}}>🔒 Schimba Parola:</label><input type="password" className="login-input" style={{background:'white', margin:0}} value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></div>)}
-
-                                <div style={{marginTop:'20px', paddingTop:'15px', borderTop:'1px solid #eee'}}>
-                                    <label style={{fontWeight:'bold', display:'block', marginBottom:'10px'}}>Departamentele Mele:</label>
+                                {isEditing && (<div><label>🔒 Parola:</label><input type="password" className="login-input" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></div>)}
+                                <div style={{marginTop:'10px'}}>
+                                    <label>Departamente:</label>
                                     {isEditing ? (
-                                        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:'10px' }}>
+                                        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginTop:'5px'}}>
                                             {allDepartments.map(dept => (
-                                                <label key={dept.id} style={{ display:'flex', alignItems:'center', gap:'10px', cursor:'pointer', padding:'8px', border:'1px solid #e2e8f0', borderRadius:'8px', background:'white' }}>
-                                                    <input type="checkbox" checked={formData.departments.some(d => d.id === dept.id)} onChange={() => toggleDepartment(dept)} style={{ width:'20px', height:'20px', cursor:'pointer', margin:0, accentColor: 'var(--accent)' }} />
-                                                    <span style={{fontSize:'0.9rem', fontWeight:'500'}}>{dept.name}</span>
+                                                <label key={dept.id} style={{display:'flex', alignItems:'center', gap:'8px', cursor:'pointer'}}>
+                                                    <input type="checkbox" checked={formData.departments?.some(d => d.id === dept.id)} onChange={() => toggleDepartment(dept)} />
+                                                    {dept.name}
                                                 </label>
                                             ))}
                                         </div>
                                     ) : (
-                                        <div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>
-                                            {user.departments && user.departments.map(d => (<span key={d.id} className="badge" style={{background:'#dcfce7', color:'#166534'}}>🏷️ {d.name}</span>))}
-                                        </div>
+                                        <div style={{display:'flex', flexWrap:'wrap', gap:'8px'}}>{user.departments?.map(d => (<span key={d.id} className="badge">🏷️ {d.name}</span>))}</div>
                                     )}
                                 </div>
                             </>
                         ) : (
                             <>
                                 <div><label>Data Nasterii:</label>{isEditing ? <input type="date" className="login-input" value={formData.birthDate||''} onChange={e=>setFormData({...formData, birthDate:e.target.value})}/> : <p>🎂 {user.birthDate||'-'}</p>}</div>
-                                <div><label>Vârstă:</label><p style={{fontWeight:'bold', color:'#0369a1', fontSize:'1.1rem'}}>{user.age ? `${user.age} ani` : '-'}</p></div>
                                 <div><label>Parinte:</label>{isEditing ? <input className="login-input" value={formData.parentName||''} onChange={e=>setFormData({...formData, parentName:e.target.value})}/> : <p>👤 {user.parentName||'-'}</p>}</div>
                                 <div><label>Telefon Parinte:</label>{isEditing ? <input className="login-input" value={formData.parentPhone||''} onChange={e=>setFormData({...formData, parentPhone:e.target.value})}/> : <p>📞 {user.parentPhone||'-'}</p>}</div>
-
-                                <div style={{display: 'flex', gap: '10px', marginTop: '15px', flexWrap: 'wrap'}}>
-                                    <div style={{flex: '1 1 120px', background: '#f0f9ff', padding: '15px', borderRadius: '10px', border: '1px solid #bae6fd', textAlign: 'center'}}>
-                                        <div style={{fontSize: '0.85rem', color: '#0369a1', fontWeight: 'bold', textTransform: 'uppercase'}}>⭐ Puncte Sezon</div>
-                                        <div style={{fontSize: '2rem', fontWeight: '900', color: 'var(--accent)', lineHeight: '1.2'}}>{user.seasonPoints || 0}</div>
-                                    </div>
-                                    <div style={{flex: '1 1 120px', background: '#f0fdf4', padding: '15px', borderRadius: '10px', border: '1px solid #bbf7d0', textAlign: 'center'}}>
-                                        <div style={{fontSize: '0.85rem', color: '#166534', fontWeight: 'bold', textTransform: 'uppercase'}}>✅ Prezențe</div>
-                                        <div style={{fontSize: '2rem', fontWeight: '900', color: '#16a34a', lineHeight: '1.2'}}>{user.totalAttendance || 0}</div>
-                                    </div>
+                                <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
+                                    <div style={{flex: 1, background: '#f0f9ff', padding: '10px', borderRadius: '8px', textAlign:'center'}}>⭐ {user.seasonPoints || 0} pct</div>
+                                    <div style={{flex: 1, background: '#f0fdf4', padding: '10px', borderRadius: '8px', textAlign:'center'}}>✅ {user.totalAttendance || 0} prez</div>
                                 </div>
                             </>
                         )}
@@ -1665,15 +1630,11 @@ const MyProfile = ({ user, onUpdateUser }) => {
                 <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
                     {isChild && (
                         <div className="card">
-                            <h3>🎒 Inventar & Realizări</h3>
+                            <h3>🎒 Inventar</h3>
                             <div style={{display:'flex', flexDirection:'column', gap:'10px', marginTop:'15px'}}>
-                                <StatusItem icon="📚" label="Manual Activ" value={user.hasManual} />
+                                <StatusItem icon="📚" label="Manual" value={user.hasManual} />
                                 <StatusItem icon="👕" label="Tricou" value={user.hasShirt} />
                                 <StatusItem icon="🧢" label="Căciulă" value={user.hasHat} />
-                                <div style={{marginTop:'15px', padding:'10px', background:'#f0f9ff', borderRadius:'8px', border:'1px solid #bae6fd'}}>
-                                    <h4 style={{margin:0, color:'#0369a1'}}>🏅 Insigne: {user.badgesCount || 0}</h4>
-                                    {user.manuals && user.manuals.length > 0 && (<div style={{marginTop:'10px'}}><p style={{fontSize:'0.85rem', fontWeight:'bold', color:'#64748b'}}>Istoric Manuale:</p><div style={{display:'flex', flexWrap:'wrap', gap:'5px'}}>{user.manuals.map((m, idx) => (<span key={idx} className="badge" style={{background:'#e2e8f0', color:'#475569', fontSize:'0.75rem'}}>📖 {m.name}</span>))}</div></div>)}
-                                </div>
                             </div>
                         </div>
                     )}
@@ -1681,20 +1642,15 @@ const MyProfile = ({ user, onUpdateUser }) => {
                     {!isAdmin && (
                         <div className="card" style={{border:'2px solid #fee2e2'}}>
                             <h3 style={{color:'#dc2626'}}>🚨 Zona de Pericol</h3>
-                            <p style={{fontSize:'0.9rem', marginBottom:'15px', color:'#7f1d1d'}}>Ștergerea contului necesită aprobarea Directorului.</p>
                             {!showDeleteInput ? (
                                 <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
-                                    <button onClick={requestDeletionCode} style={{padding:'10px', background:'orange', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>📨 Cere Cod Ștergere</button>
-                                    <button onClick={() => setShowDeleteInput(true)} style={{padding:'10px', background:'#fee2e2', color:'#dc2626', border:'1px solid #dc2626', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>🗑️ Am primit codul!</button>
+                                    <button onClick={requestDeletionCode} style={{padding:'10px', background:'orange', color:'white', border:'none', borderRadius:'8px', cursor:'pointer'}}>Cere Cod</button>
+                                    <button onClick={() => setShowDeleteInput(true)} style={{padding:'10px', background:'#fee2e2', color:'#dc2626', border:'1px solid #dc2626', borderRadius:'8px', cursor:'pointer'}}>Am codul!</button>
                                 </div>
                             ) : (
-                                <div style={{background:'#fef2f2', padding:'15px', borderRadius:'10px'}}>
-                                    <label style={{fontWeight:'bold', color:'#dc2626'}}>Introdu Codul Primit:</label>
-                                    <input className="login-input" placeholder="Ex: 1EA0FA" value={deleteCode} onChange={e => setDeleteCode(e.target.value)} style={{borderColor:'#dc2626'}} />
-                                    <div style={{display:'flex', gap:'10px', marginTop:'10px'}}>
-                                        <button onClick={performDeletion} style={{flex:1, padding:'10px', background:'#dc2626', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>STERGE CONTUL</button>
-                                        <button onClick={() => {setShowDeleteInput(false); setDeleteCode('');}} style={{padding:'10px', background:'transparent', border:'1px solid #94a3b8', borderRadius:'8px', cursor:'pointer'}}>Anulează</button>
-                                    </div>
+                                <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                                    <input className="login-input" placeholder="Cod" value={deleteCode} onChange={e => setDeleteCode(e.target.value)} />
+                                    <button onClick={performDeletion} style={{padding:'10px', background:'#dc2626', color:'white', border:'none', borderRadius:'8px', cursor:'pointer'}}>STERGE CONT</button>
                                 </div>
                             )}
                         </div>

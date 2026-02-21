@@ -6,6 +6,7 @@ import com.awanabetania.awanabetania.Model.Notification;
 import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.LeaderRepository;
 import com.awanabetania.awanabetania.Repository.NotificationRepository;
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -28,36 +29,43 @@ public class AccountController {
      * Generează un cod și trimite notificare la Director.
      */
     @PostMapping("/request-deletion")
+    @Transactional
     public ResponseEntity<?> requestDeletion(@RequestBody Map<String, Object> payload) {
         Integer id = (Integer) payload.get("id");
         String role = (String) payload.get("role");
 
         if ("LEADER".equalsIgnoreCase(role) && id == 1) {
-            return ResponseEntity.badRequest().body("Administratorul nu poate fi șters!");
+            return ResponseEntity.badRequest().body("Administratorul principal nu poate fi șters!");
         }
 
+        // Generăm un cod scurt de 6 caractere
         String code = UUID.randomUUID().toString().substring(0, 6).toUpperCase();
         String userName = "";
 
         if ("CHILD".equalsIgnoreCase(role)) {
             Child c = childRepository.findById(id).orElse(null);
-            if (c == null) return ResponseEntity.badRequest().body("Utilizator inexistent");
+            if (c == null) return ResponseEntity.badRequest().body("Copil inexistent");
             c.setDeletionCode(code);
             childRepository.save(c);
             userName = c.getName() + " " + c.getSurname() + " (Copil)";
         } else {
             Leader l = leaderRepository.findById(id).orElse(null);
-            if (l == null) return ResponseEntity.badRequest().body("Utilizator inexistent");
+            if (l == null) return ResponseEntity.badRequest().body("Lider inexistent");
             l.setDeletionCode(code);
             leaderRepository.save(l);
             userName = l.getName() + " " + l.getSurname() + " (Lider)";
         }
 
-        // Notificare Director
-        String adminMsg = String.format("🗑️ SOLICITARE: %s vrea să șteargă contul. Cod: %s.", userName, code);
-        Notification n = new Notification(adminMsg, "ALERT", "1", LocalDate.now());
+        // Trimitem notificare către Director (ID 1)
+        String adminMsg = String.format("🗑️ SOLICITARE ȘTERGERE: %s. Cod de confirmare: %s", userName, code);
+        Notification n = new Notification();
+        n.setMessage(adminMsg);
+        n.setType("ALERT");
+        n.setVisibleTo("DIRECTOR"); // Sau "1" depinde cum ai logica
+        n.setDate(LocalDate.now());
+        n.setIsVisible(true);
         notificationRepository.save(n);
 
-        return ResponseEntity.ok("Solicitare trimisă! Așteaptă codul de la Director.");
+        return ResponseEntity.ok("Cererea a fost trimisă. Contactează Directorul pentru codul de confirmare.");
     }
 }
