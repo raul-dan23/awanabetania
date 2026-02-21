@@ -30,4 +30,6 @@ public interface LeaderRepository extends JpaRepository<Leader, Integer> {
     Optional<Leader> findByPhoneNumber(String phoneNumber);
 
     Optional<Leader> findByName(String name);
+
+    Optional<Leader> findByUsername(String username);
 }

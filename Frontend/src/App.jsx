@@ -1477,7 +1477,7 @@ const Dashboard = ({ user }) => {
 };
 
 // ==========================================
-// 11. MY PROFILE (MODIFICAT - CHECKBOX ALINIAT SI STATISTICI COPIL)
+// 11. MY PROFILE (ACTUALIZAT - EDITARE USERNAME INCLUSĂ)
 // ==========================================
 const MyProfile = ({ user, onUpdateUser }) => {
     const isChild = user.hasOwnProperty('parentPhone');
@@ -1504,13 +1504,26 @@ const MyProfile = ({ user, onUpdateUser }) => {
     const handleSave = () => {
         setLoading(true);
         const endpoint = isChild ? `${API_URL}/children/${user.id}` : `${API_URL}/leaders/${user.id}`;
+
+        // Trimitem formData care acum conține și username-ul modificat
         const payload = { ...formData };
         if (!payload.password) delete payload.password;
 
         fetch(endpoint, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-            .then(res => res.json()).then(u => {
-            setLoading(false); setIsEditing(false); onUpdateUser(u); alert("✅ Actualizat!");
-        }).catch(() => { setLoading(false); alert("Eroare server."); });
+            .then(res => {
+                if(!res.ok) throw new Error("Eroare la salvare");
+                return res.json();
+            })
+            .then(u => {
+                setLoading(false);
+                setIsEditing(false);
+                onUpdateUser(u);
+                alert("✅ Profil actualizat cu succes!");
+            })
+            .catch((err) => {
+                setLoading(false);
+                alert("❌ Eroare server: Username-ul s-ar putea să fie deja luat sau conexiunea a eșuat.");
+            });
     };
 
     const toggleDepartment = (dept) => {
@@ -1554,7 +1567,6 @@ const MyProfile = ({ user, onUpdateUser }) => {
 
     return (
         <div className="animate-in">
-            {/* HEADER */}
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
                 <h2>👤 Contul Meu</h2>
                 <button onClick={() => isEditing ? handleSave() : setIsEditing(true)} style={{background: isEditing ? 'var(--success)' : 'var(--accent)', color: 'white', padding:'10px 20px', borderRadius:'10px', fontWeight:'bold', border:'none', cursor:'pointer'}}>
@@ -1562,30 +1574,46 @@ const MyProfile = ({ user, onUpdateUser }) => {
                 </button>
             </div>
 
-            {/* CARD PROFIL */}
             <div className="card" style={{marginTop:'20px', display:'flex', gap:'20px', alignItems:'center'}}>
-                <div style={{width:'60px', height:'60px', borderRadius:'50%', background:'var(--accent)', color:'white', display:'flex', justifyContent:'center', alignItems:'center', fontSize:'2rem', fontWeight:'bold', flexShrink:0}}>
+                <div style={{width:'80px', height:'80px', borderRadius:'50%', background:'var(--accent)', color:'white', display:'flex', justifyContent:'center', alignItems:'center', fontSize:'2.5rem', fontWeight:'bold', flexShrink:0, boxShadow: '0 4px 10px rgba(0,0,0,0.1)'}}>
                     {user.name ? user.name.charAt(0) : 'U'}
                 </div>
                 <div style={{flex:1}}>
                     {isEditing ? (
-                        <div style={{display:'flex', gap:'10px', flexWrap:'wrap'}}>
-                            <input className="login-input" style={{flex: '1 1 120px'}} value={formData.name} onChange={e=>setFormData({...formData, name:e.target.value})} placeholder="Nume"/>
-                            <input className="login-input" style={{flex: '1 1 120px'}} value={formData.surname} onChange={e=>setFormData({...formData, surname:e.target.value})} placeholder="Prenume"/>
+                        <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                            <div style={{display:'flex', gap:'10px'}}>
+                                <input className="login-input" style={{flex: 1}} value={formData.name} onChange={e=>setFormData({...formData, name:e.target.value})} placeholder="Prenume"/>
+                                <input className="login-input" style={{flex: 1}} value={formData.surname} onChange={e=>setFormData({...formData, surname:e.target.value})} placeholder="Nume"/>
+                            </div>
+                            {/* INPUT NOU PENTRU USERNAME */}
+                            <div style={{background: '#f8fafc', padding: '10px', borderRadius: '10px', border: '1px dashed var(--accent)'}}>
+                                <label style={{fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--accent)'}}>USERNAME (ID LOGIN):</label>
+                                <input
+                                    className="login-input"
+                                    style={{marginTop: '5px', background: 'white', fontWeight: 'bold'}}
+                                    value={formData.username || ''}
+                                    onChange={e => {
+                                        const val = e.target.value.toLowerCase().replace(/\s/g, '');
+                                        setFormData({...formData, username: val});
+                                    }}
+                                    placeholder="utilizator123"
+                                />
+                                <small style={{color: '#64748b'}}>Acesta este numele cu care te vei loga.</small>
+                            </div>
                         </div>
                     ) : (
-                        <h1 className="profile-name" style={{margin:0}}>{user.name} {user.surname}</h1>
+                        <>
+                            <h1 className="profile-name" style={{margin:0}}>{user.name} {user.surname}</h1>
+                            <p style={{margin: '2px 0', color: '#64748b', fontWeight: '500'}}>ID: @{user.username || 'fara_username'}</p>
+                        </>
                     )}
-                    <span className="badge" style={{background:'#e0f2fe', color:'#0284c7', marginTop:'5px'}}>
+                    <span className="badge" style={{background:'#e0f2fe', color:'#0284c7', marginTop:'8px'}}>
                         {isChild ? '👶 Copil' : `👔 ${user.role || 'Lider'}`}
                     </span>
                 </div>
             </div>
 
-            {/* GRID PRINCIPAL */}
             <div className="profile-grid" style={{ marginTop:'20px' }}>
-
-                {/* COLOANA 1: DATE PERSONALE */}
                 <div className="card">
                     <h3>📋 Date Personale</h3>
                     <div style={{marginTop:'15px', display:'flex', flexDirection:'column', gap:'15px'}}>
@@ -1594,38 +1622,13 @@ const MyProfile = ({ user, onUpdateUser }) => {
                                 <div><label>Telefon:</label>{isEditing ? <input className="login-input" value={formData.phoneNumber||''} onChange={e=>setFormData({...formData, phoneNumber:e.target.value})}/> : <p>📞 {user.phoneNumber||'Nespecificat'}</p>}</div>
                                 {isEditing && (<div style={{background:'#fff1f2', padding:'10px', borderRadius:'8px', border:'1px solid #ffccd5', marginTop:'10px'}}><label style={{fontWeight:'bold', color:'#e11d48'}}>🔒 Schimba Parola:</label><input type="password" className="login-input" style={{background:'white', margin:0}} value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} /></div>)}
 
-                                {/* AICI ESTE MODIFICAREA PENTRU DEPARTAMENTE */}
                                 <div style={{marginTop:'20px', paddingTop:'15px', borderTop:'1px solid #eee'}}>
                                     <label style={{fontWeight:'bold', display:'block', marginBottom:'10px'}}>Departamentele Mele:</label>
                                     {isEditing ? (
-                                        <div style={{
-                                            display:'grid',
-                                            gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', // Se adapteaza automat (mobile/laptop)
-                                            gap:'10px'
-                                        }}>
+                                        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))', gap:'10px' }}>
                                             {allDepartments.map(dept => (
-                                                <label key={dept.id} style={{
-                                                    display:'flex',
-                                                    alignItems:'center', // Centreaza vertical textul cu casuta
-                                                    gap:'10px',
-                                                    cursor:'pointer',
-                                                    padding:'8px',
-                                                    border:'1px solid #e2e8f0', // Chenar gri deschis
-                                                    borderRadius:'8px',
-                                                    background:'white'
-                                                }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={formData.departments.some(d => d.id === dept.id)}
-                                                        onChange={() => toggleDepartment(dept)}
-                                                        style={{
-                                                            width:'20px',
-                                                            height:'20px',
-                                                            cursor:'pointer',
-                                                            margin:0, // Scoate marginile implicite care stricau alinierea
-                                                            accentColor: 'var(--accent)' // Foloseste culoarea temei cand e bifat
-                                                        }}
-                                                    />
+                                                <label key={dept.id} style={{ display:'flex', alignItems:'center', gap:'10px', cursor:'pointer', padding:'8px', border:'1px solid #e2e8f0', borderRadius:'8px', background:'white' }}>
+                                                    <input type="checkbox" checked={formData.departments.some(d => d.id === dept.id)} onChange={() => toggleDepartment(dept)} style={{ width:'20px', height:'20px', cursor:'pointer', margin:0, accentColor: 'var(--accent)' }} />
                                                     <span style={{fontSize:'0.9rem', fontWeight:'500'}}>{dept.name}</span>
                                                 </label>
                                             ))}
@@ -1644,7 +1647,6 @@ const MyProfile = ({ user, onUpdateUser }) => {
                                 <div><label>Parinte:</label>{isEditing ? <input className="login-input" value={formData.parentName||''} onChange={e=>setFormData({...formData, parentName:e.target.value})}/> : <p>👤 {user.parentName||'-'}</p>}</div>
                                 <div><label>Telefon Parinte:</label>{isEditing ? <input className="login-input" value={formData.parentPhone||''} onChange={e=>setFormData({...formData, parentPhone:e.target.value})}/> : <p>📞 {user.parentPhone||'-'}</p>}</div>
 
-                                {/* NOU: CARDURI PENTRU PUNCTE SI PREZENTE (MOBILE FRIENDLY) */}
                                 <div style={{display: 'flex', gap: '10px', marginTop: '15px', flexWrap: 'wrap'}}>
                                     <div style={{flex: '1 1 120px', background: '#f0f9ff', padding: '15px', borderRadius: '10px', border: '1px solid #bae6fd', textAlign: 'center'}}>
                                         <div style={{fontSize: '0.85rem', color: '#0369a1', fontWeight: 'bold', textTransform: 'uppercase'}}>⭐ Puncte Sezon</div>
@@ -1660,7 +1662,6 @@ const MyProfile = ({ user, onUpdateUser }) => {
                     </div>
                 </div>
 
-                {/* COLOANA 2: INVENTAR & ZONA PERICULOASA */}
                 <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
                     {isChild && (
                         <div className="card">
@@ -1689,13 +1690,7 @@ const MyProfile = ({ user, onUpdateUser }) => {
                             ) : (
                                 <div style={{background:'#fef2f2', padding:'15px', borderRadius:'10px'}}>
                                     <label style={{fontWeight:'bold', color:'#dc2626'}}>Introdu Codul Primit:</label>
-                                    <input
-                                        className="login-input"
-                                        placeholder="Ex: 1EA0FA"
-                                        value={deleteCode}
-                                        onChange={e => setDeleteCode(e.target.value)}
-                                        style={{borderColor:'#dc2626'}}
-                                    />
+                                    <input className="login-input" placeholder="Ex: 1EA0FA" value={deleteCode} onChange={e => setDeleteCode(e.target.value)} style={{borderColor:'#dc2626'}} />
                                     <div style={{display:'flex', gap:'10px', marginTop:'10px'}}>
                                         <button onClick={performDeletion} style={{flex:1, padding:'10px', background:'#dc2626', color:'white', border:'none', borderRadius:'8px', fontWeight:'bold', cursor:'pointer'}}>STERGE CONTUL</button>
                                         <button onClick={() => {setShowDeleteInput(false); setDeleteCode('');}} style={{padding:'10px', background:'transparent', border:'1px solid #94a3b8', borderRadius:'8px', cursor:'pointer'}}>Anulează</button>
@@ -1712,7 +1707,7 @@ const MyProfile = ({ user, onUpdateUser }) => {
 
 
 // ==========================================
-// 12. REGISTER (CENTRAT, STILIZAT, SCRIS MARE)
+// 12. REGISTER (ACTUALIZAT CU AFISARE USERNAME)
 // ==========================================
 const Register = ({ onSwitchToLogin }) => {
     const [roleType, setRoleType] = useState('CHILD');
@@ -1754,8 +1749,10 @@ const Register = ({ onSwitchToLogin }) => {
             .then(async r => {
                 const text = await r.text();
                 if(r.ok) {
-                    setMsg('✅ Cont creat! Redirectionare...');
-                    setTimeout(onSwitchToLogin, 1500);
+                    // SERVERUL trimite acum: "Cont creat! Username: davidpopescu"
+                    setMsg('✅ ' + text + '. Notează-ți username-ul pentru login!');
+                    // Lăsăm 4 secunde să apuce să citească username-ul generat
+                    setTimeout(onSwitchToLogin, 4500);
                 } else {
                     setMsg('❌ ' + text);
                 }
@@ -1775,7 +1772,6 @@ const Register = ({ onSwitchToLogin }) => {
                 <div style={{marginBottom:'20px', display:'flex', justifySelf:'center'}}><AwanaLogo width="200px"/></div>
                 <h2 style={{marginBottom:'25px', fontSize:'1.8rem', color:'#111'}}>Înregistrare Cont</h2>
 
-                {/* Selector Roluri - Butoane Negre */}
                 <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
                     {['CHILD','LEADER','DIRECTOR'].map(t => (
                         <button key={t} type="button" onClick={()=>{setRoleType(t); setSelectedDepts(new Set());}}
@@ -1796,7 +1792,7 @@ const Register = ({ onSwitchToLogin }) => {
                     <input type="password" placeholder="Parolă" className="login-input" style={{fontSize:'1rem', color:'#000'}} onChange={e=>setForm({...form, pass:e.target.value})} required/>
 
                     {roleType !== 'CHILD' && (
-                        <input placeholder="🔒 Cod de Acces (de la Director)" className="login-input" style={{borderColor:'red', fontSize:'1rem'}} onChange={e=>setForm({...form, regCode:e.target.value})} required/>
+                        <input placeholder="🔒 Cod de Acces" className="login-input" style={{borderColor:'red', fontSize:'1rem'}} onChange={e=>setForm({...form, regCode:e.target.value})} required/>
                     )}
 
                     {roleType === 'CHILD' ? (
@@ -1823,7 +1819,15 @@ const Register = ({ onSwitchToLogin }) => {
                         </>
                     )}
 
-                    {msg && <p style={{color: msg.startsWith('✅')?'green':'red', fontWeight:'bold', marginTop:'10px', fontSize:'1rem'}}>{msg}</p>}
+                    {msg && (
+                        <div style={{
+                            color: msg.startsWith('✅')?'#15803d':'#dc2626',
+                            background: msg.startsWith('✅')?'#f0fdf4':'#fee2e2',
+                            padding:'12px', borderRadius:'8px', fontWeight:'bold', fontSize:'0.95rem', border:'1px solid'
+                        }}>
+                            {msg}
+                        </div>
+                    )}
 
                     <button type="submit" disabled={loading} style={{
                         width:'100%', padding:'15px',
@@ -1848,7 +1852,8 @@ const Register = ({ onSwitchToLogin }) => {
 // 13. LOGIN (CENTRAT, SCRIS MARE, BUTOANE NEGRE)
 // ==========================================
 const Login = ({ onLogin, onSwitchToRegister }) => {
-    const [form, setForm] = useState({ user:'', pass:'', role: 'LEADER' });
+    // Am schimbat 'user' in 'username' pentru a fi cat mai clar
+    const [form, setForm] = useState({ username:'', pass:'', role: 'LEADER' });
     const [err, setErr] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -1864,7 +1869,7 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
             body: JSON.stringify({
-                username: form.user,
+                username: form.username, // Acum trimite corect noul field
                 password: form.pass,
                 role: form.role
             }),
@@ -1919,11 +1924,16 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
 
                 <form onSubmit={doLogin} style={{display:'flex', flexDirection:'column', gap:'15px'}}>
                     <input
-                        placeholder={form.role === 'CHILD' ? "Prenume" : "Prenume"}
+                        type="text"
+                        placeholder="Nume utilizator (ex: davidpopescu)"
                         className="login-input"
                         style={{fontSize:'1.1rem', padding:'15px', color:'#000'}}
-                        value={form.user}
-                        onChange={e=>setForm({...form, user:e.target.value})}
+                        value={form.username}
+                        onChange={e => {
+                            // Fortam scrierea cu litere mici si fara spatii vizual
+                            const cleanValue = e.target.value.toLowerCase().replace(/\s/g, '');
+                            setForm({...form, username: cleanValue});
+                        }}
                         required
                     />
                     <input

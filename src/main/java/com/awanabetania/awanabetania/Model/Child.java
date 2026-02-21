@@ -23,6 +23,11 @@ import java.util.List;
 @NoArgsConstructor
 public class Child {
 
+    @Column(unique = true) // Ne asiguram ca nu exista 2 username-uri identice
+    private String username;
+
+
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;

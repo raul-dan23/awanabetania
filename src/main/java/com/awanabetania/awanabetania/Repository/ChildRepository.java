@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Aceasta interfata ne ajuta sa lucram cu baza de date pentru Copii.
@@ -21,4 +22,6 @@ public interface ChildRepository extends JpaRepository<Child, Integer> {
      * Daca scrii "Ion", el va gasi si "Ionel" sau "Ionut" (cautare partiala).
      */
     List<Child> findByNameContaining(String name);
+
+    Optional<Child> findByUsername(String username);
 }

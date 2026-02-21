@@ -1,10 +1,11 @@
 package com.awanabetania.awanabetania.Controller;
 
+import com.awanabetania.awanabetania.DataInitializer; // Import pentru a folosi functia de generare username
 import com.awanabetania.awanabetania.Model.*;
 import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.DepartmentRepository;
 import com.awanabetania.awanabetania.Repository.LeaderRepository;
-import com.awanabetania.awanabetania.Model.AESUtil; // <--- IMPORT NOU
+import com.awanabetania.awanabetania.Model.AESUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Optional;
 
 /**
  * Acest Controller este partea de autentificare a aplicatiei.
@@ -37,7 +39,9 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
         String role = request.getRole();
-        String username = request.getUsername();
+        // Aici tratam 'username' ca fiind ceea ce introduce userul in campul de login.
+        // Poate fi username-ul curatat SAU numele real (pentru compatibilitate in tranzitie).
+        String inputUsername = request.getUsername().toLowerCase().trim();
         String rawPassword = request.getPassword(); // Parola scrisa de user (ex: "popescu123")
 
         // 1. Calculam varianta criptata
@@ -47,7 +51,11 @@ public class AuthController {
         if ("CHILD".equalsIgnoreCase(role)) {
             List<Child> children = childRepository.findAll();
             for (Child child : children) {
-                if (child.getName().equalsIgnoreCase(username)) {
+                // Verificam atat dupa 'username' generat, cat si dupa 'name' (pentru conturile vechi inca nemigrate 100%)
+                boolean matchFound = (child.getUsername() != null && child.getUsername().equals(inputUsername)) ||
+                        (child.getName() != null && child.getName().toLowerCase().equals(inputUsername));
+
+                if (matchFound) {
                     // VERIFICARE 1: E deja criptata in baza?
                     if (child.getPassword() != null && child.getPassword().equals(encryptedPassword)) {
                         return ResponseEntity.ok(child);
@@ -67,10 +75,12 @@ public class AuthController {
         else {
             List<Leader> leaders = leaderRepository.findAll();
             for (Leader leader : leaders) {
-                if (leader.getName().equalsIgnoreCase(username)) {
+                boolean matchFound = (leader.getUsername() != null && leader.getUsername().equals(inputUsername)) ||
+                        (leader.getName() != null && leader.getName().toLowerCase().equals(inputUsername));
 
+                if (matchFound) {
                     // VERIFICARE 1: E deja criptata?
-                    if (leader.getPassword().equals(encryptedPassword)) {
+                    if (leader.getPassword() != null && leader.getPassword().equals(encryptedPassword)) {
                         if ("DIRECTOR".equalsIgnoreCase(role)) {
                             if (leader.getRole() != null && (leader.getRole().equalsIgnoreCase("Coordonator") || leader.getRole().equalsIgnoreCase("Director"))) {
                                 return ResponseEntity.ok(leader);
@@ -80,7 +90,7 @@ public class AuthController {
                         }
                     }
                     // VERIFICARE 2 (MIGRARE): E parola veche?
-                    else if (leader.getPassword().equals(rawPassword)) {
+                    else if (leader.getPassword() != null && leader.getPassword().equals(rawPassword)) {
                         // BINGO! O criptam acum.
                         leader.setPassword(encryptedPassword);
                         leaderRepository.save(leader);
@@ -115,6 +125,13 @@ public class AuthController {
             newChild.setName(request.getName());
             newChild.setSurname(request.getSurname());
 
+            // --- GENERARE USERNAME SIGUR ---
+            String baseUsername = DataInitializer.generateCleanUsername(request.getName(), request.getSurname());
+            if (childRepository.findByUsername(baseUsername).isPresent()) {
+                baseUsername += new java.util.Random().nextInt(1000); // Evitam duplicatele
+            }
+            newChild.setUsername(baseUsername);
+
             // --- CRIPTARE LA INREGISTRARE ---
             newChild.setPassword(AESUtil.encrypt(request.getPassword()));
 
@@ -141,7 +158,7 @@ public class AuthController {
             newChild.setHasHat(false);
 
             childRepository.save(newChild);
-            return ResponseEntity.ok("Cont COPIL creat!");
+            return ResponseEntity.ok("Cont COPIL creat! Username: " + baseUsername);
         }
 
         // CAZUL 2: Inregistrare LIDER
@@ -162,6 +179,13 @@ public class AuthController {
             newLeader.setName(request.getName());
             newLeader.setSurname(request.getSurname());
 
+            // --- GENERARE USERNAME SIGUR ---
+            String baseUsername = DataInitializer.generateCleanUsername(request.getName(), request.getSurname());
+            if (leaderRepository.findByUsername(baseUsername).isPresent()) {
+                baseUsername += new java.util.Random().nextInt(1000);
+            }
+            newLeader.setUsername(baseUsername);
+
             // --- CRIPTARE LA INREGISTRARE ---
             newLeader.setPassword(AESUtil.encrypt(request.getPassword()));
 
@@ -178,7 +202,7 @@ public class AuthController {
             }
 
             leaderRepository.save(newLeader);
-            return ResponseEntity.ok("Cont Lider creat cu succes!");
+            return ResponseEntity.ok("Cont Lider creat cu succes! Username: " + baseUsername);
         }
     }
 

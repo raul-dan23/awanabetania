@@ -60,32 +60,28 @@ public class LeaderController {
      * Actualizeaza datele unui lider.
      */
     @PutMapping("/{id}")
-    public ResponseEntity<Leader> updateLeader(@PathVariable Integer id, @RequestBody Leader leaderDetails) {
+    public ResponseEntity<?> updateLeader(@PathVariable Integer id, @RequestBody Leader leaderDetails) {
         return leaderRepository.findById(id).map(leader -> {
+
+            // --- START VALIDARE USERNAME ---
+            var existingUser = leaderRepository.findByUsername(leaderDetails.getUsername());
+            if (existingUser.isPresent() && !existingUser.get().getId().equals(id)) {
+                return ResponseEntity.badRequest().body("❌ Acest username este deja folosit de alt lider!");
+            }
+            // --- END VALIDARE USERNAME ---
+
             leader.setName(leaderDetails.getName());
             leader.setSurname(leaderDetails.getSurname());
+            leader.setUsername(leaderDetails.getUsername()); // Salvăm noul username
             leader.setPhoneNumber(leaderDetails.getPhoneNumber());
-            leader.setNotes(leaderDetails.getNotes());
 
-            // --- CRIPTARE LA ACTUALIZARE ---
-            if (leaderDetails.getPassword() != null && !leaderDetails.getPassword().trim().isEmpty()) {
-                // Daca parola vine din frontend in clar (ex: "1234"), o criptam
-                String encryptedPass = AESUtil.encrypt(leaderDetails.getPassword());
-                leader.setPassword(encryptedPass);
+            if (leaderDetails.getPassword() != null && !leaderDetails.getPassword().isEmpty()) {
+                leader.setPassword(leaderDetails.getPassword());
             }
 
-            // Actualizare departamente
-            if (leaderDetails.getDepartments() != null) {
-                leader.getDepartments().clear();
-                for (Department d : leaderDetails.getDepartments()) {
-                    departmentRepository.findById(d.getId()).ifPresent(leader.getDepartments()::add);
-                }
-            }
             return ResponseEntity.ok(leaderRepository.save(leader));
         }).orElse(ResponseEntity.notFound().build());
     }
-
-    // --- METODA DE STERGERE (RAMANE IDENTICA, DOAR COPIATA AICI PENTRU COMPLETITUDINE) ---
 
     /**
      * Sterge un lider si toate datele asociate acestuia.

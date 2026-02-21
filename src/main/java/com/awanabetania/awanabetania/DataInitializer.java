@@ -1,12 +1,13 @@
 package com.awanabetania.awanabetania;
 
+import com.awanabetania.awanabetania.Model.Child; // Import nou pentru copii
 import com.awanabetania.awanabetania.Model.Department;
 import com.awanabetania.awanabetania.Model.Leader;
-import com.awanabetania.awanabetania.Model.Sticker; // Import nou
+import com.awanabetania.awanabetania.Model.Sticker;
 import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.DepartmentRepository;
 import com.awanabetania.awanabetania.Repository.LeaderRepository;
-import com.awanabetania.awanabetania.Repository.StickerRepository; // Import nou
+import com.awanabetania.awanabetania.Repository.StickerRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
@@ -17,6 +18,7 @@ import java.util.Optional;
  * Această clasă se execută o singură dată, la pornirea aplicației.
  * Rolul ei este să populeze baza de date cu datele inițiale necesare (Seed Data),
  * cum ar fi: Departamentele, Contul de Admin și Stickerele pentru joc.
+ * DE ASEMENEA: Curăță și generează username-uri pentru utilizatorii vechi.
  */
 @Component
 public class DataInitializer implements CommandLineRunner {
@@ -28,7 +30,7 @@ public class DataInitializer implements CommandLineRunner {
     @Autowired
     private ChildRepository childRepository;
     @Autowired
-    private StickerRepository stickerRepository; // Repository pentru stickere
+    private StickerRepository stickerRepository;
 
     /**
      * Metoda principală care rulează la start-up.
@@ -78,6 +80,37 @@ public class DataInitializer implements CommandLineRunner {
             }
         }
 
+        // ==========================================
+        // 4. REPARARE COPII VECHI (Generare Username)
+        // ==========================================
+        System.out.println("🔧 Verificare username-uri copii...");
+        for (Child c : childRepository.findAll()) {
+            if (c.getUsername() == null || c.getUsername().isEmpty()) {
+                String baseUsername = generateCleanUsername(c.getName(), c.getSurname());
+                // Daca mai exista cineva cu exact acelasi username, ii adaugam ID-ul la final ca sa fie unic
+                if (childRepository.findByUsername(baseUsername).isPresent()) {
+                    baseUsername += c.getId();
+                }
+                c.setUsername(baseUsername);
+                childRepository.save(c);
+            }
+        }
+
+        // ==========================================
+        // 5. REPARARE LIDERI VECHI (Generare Username)
+        // ==========================================
+        System.out.println("🔧 Verificare username-uri lideri...");
+        for (Leader l : leaderRepository.findAll()) {
+            if (l.getUsername() == null || l.getUsername().isEmpty()) {
+                String baseUsername = generateCleanUsername(l.getName(), l.getSurname());
+                if (leaderRepository.findByUsername(baseUsername).isPresent()) {
+                    baseUsername += l.getId();
+                }
+                l.setUsername(baseUsername);
+                leaderRepository.save(l);
+            }
+        }
+
         System.out.println("✅ Datele sunt gata!");
     }
 
@@ -110,5 +143,23 @@ public class DataInitializer implements CommandLineRunner {
             }
             leaderRepository.save(l);
         }
+    }
+
+    /**
+     * Funcția care curăță numele pentru a genera un username sigur:
+     * Ex: "David Ștefan" + "Popescu" -> "davidstefanpopescu"
+     * * @param name Prenumele utilizatorului
+     * @param surname Numele de familie
+     * @return String curățat, fără spații și diacritice, cu litere mici
+     */
+    public static String generateCleanUsername(String name, String surname) {
+        if (name == null) name = "";
+        if (surname == null) surname = "";
+        String raw = (name + surname).replaceAll("\\s+", "").toLowerCase();
+
+        // Scoatem diacriticele romanesti
+        return raw.replace("ă", "a").replace("â", "a").replace("î", "i")
+                .replace("ș", "s").replace("ț", "t")
+                .replace("ş", "s").replace("ţ", "t");
     }
 }

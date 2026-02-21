@@ -1,10 +1,11 @@
 package com.awanabetania.awanabetania.Controller;
 
+import com.awanabetania.awanabetania.DataInitializer; // Import pentru username
 import com.awanabetania.awanabetania.Model.Child;
 import com.awanabetania.awanabetania.Model.ChildManual;
 import com.awanabetania.awanabetania.Model.ChildProgress;
 import com.awanabetania.awanabetania.Model.Notification;
-import com.awanabetania.awanabetania.Repository.*; // Importam toate repo-urile
+import com.awanabetania.awanabetania.Repository.*;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -36,25 +37,39 @@ public class ChildController {
     }
 
     @PostMapping("/add")
-    public Child addChild(@RequestBody Child child) { return childRepository.save(child); }
+    public Child addChild(@RequestBody Child child) {
+        // Generam automat username-ul la adaugarea manuala a unui copil
+        String baseUsername = DataInitializer.generateCleanUsername(child.getName(), child.getSurname());
+        if (childRepository.findByUsername(baseUsername).isPresent()) {
+            baseUsername += new java.util.Random().nextInt(1000);
+        }
+        child.setUsername(baseUsername);
+
+        return childRepository.save(child);
+    }
 
     @PutMapping("/{id}")
     public ResponseEntity<?> updateChild(@PathVariable Integer id, @RequestBody Child childDetails) {
-        Child child = childRepository.findById(id).orElse(null);
-        if(child == null) return ResponseEntity.notFound().build();
+        return childRepository.findById(id).map(child -> {
 
-        child.setName(childDetails.getName());
-        child.setSurname(childDetails.getSurname());
-        child.setParentName(childDetails.getParentName());
-        child.setParentPhone(childDetails.getParentPhone());
-        child.setBirthDate(childDetails.getBirthDate());
-        child.setIsSuspended(childDetails.getIsSuspended());
+            // --- START VALIDARE USERNAME ---
+            // Verificăm dacă noul username există deja la alt copil (id diferit)
+            var existingUser = childRepository.findByUsername(childDetails.getUsername());
+            if (existingUser.isPresent() && !existingUser.get().getId().equals(id)) {
+                return ResponseEntity.badRequest().body("❌ Acest username este deja folosit de altcineva!");
+            }
+            // --- END VALIDARE USERNAME ---
 
-        return ResponseEntity.ok(childRepository.save(child));
+            child.setName(childDetails.getName());
+            child.setSurname(childDetails.getSurname());
+            child.setUsername(childDetails.getUsername()); // Salvăm noul username
+            child.setBirthDate(childDetails.getBirthDate());
+            child.setParentName(childDetails.getParentName());
+            child.setParentPhone(childDetails.getParentPhone());
+
+            return ResponseEntity.ok(childRepository.save(child));
+        }).orElse(ResponseEntity.notFound().build());
     }
-
-    // ... (Metodele unlock-next, give-reward, assign-manual raman neschimbate cum ti le-am dat ultima data) ...
-    // Le pun pe scurt aici ca sa fie fisierul complet, dar tu ai deja codul bun pentru ele.
 
     @PostMapping("/{childId}/unlock-next")
     @Transactional
@@ -84,11 +99,6 @@ public class ChildController {
 
         String message = "Sticker " + nextId + " deblocat!";
 
-        // --- AM SCOS LOGICA DE INSIGNE AUTOMATE (BADGES) DE AICI ---
-        // Insignele se vor acorda probabil manual sau prin alta logica, conform cerintei tale.
-
-        // Logica de terminare manual (la fiecare 20 de stickere) ramane valabila?
-        // Daca da, o lasam. Daca nu, o poti sterge si pe asta.
         if (nextId % 20 == 0) {
             createNotification(child, "MANUAL_FINISHED", "🎉 DIRECTOR! " + child.getName() + " a terminat manualul!");
             message += " | 🏁 Manual Terminat!";
