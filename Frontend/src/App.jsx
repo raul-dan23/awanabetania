@@ -69,10 +69,10 @@ const MeetingFeedback = ({ meeting, user, onComplete, onCancel }) => {
                 ⬅ Anuleaza Inchiderea
             </button>
 
-            <h2 style={{borderBottom:'2px solid var(--accent)', paddingBottom:'10px'}}>🏁 Finalizare Seara: {meeting.date}</h2>
+            <h2 style={{borderBottom:'2px solid var(--accent)', paddingBottom:'10px'}}>🏁 Finalizare: {meeting.date}</h2>
 
             <div className="card" style={{marginBottom:'20px', borderLeft:'5px solid var(--accent)'}}>
-                <h3>General - Cum a fost seara?</h3>
+                <h3>General - Cum a fost întâlnirea?</h3>
                 <div style={{marginBottom:'10px'}}>
                     <label>Rating: </label>
                     {[1,2,3,4,5].map(star => (
@@ -96,7 +96,7 @@ const MeetingFeedback = ({ meeting, user, onComplete, onCancel }) => {
                         </div>
                     ))}
                 </div>
-                <button onClick={finishNight} style={{marginTop:'20px', width:'100%', padding:'15px', background:'#ef4444', color:'white', borderRadius:'10px', fontWeight:'bold', fontSize:'1.2rem', border:'2px solid #b91c1c', cursor:'pointer'}}>🚨 INCHEIE DEFINITIV SEARA</button>
+                <button onClick={finishNight} style={{marginTop:'20px', width:'100%', padding:'15px', background:'#ef4444', color:'white', borderRadius:'10px', fontWeight:'bold', fontSize:'1.2rem', border:'2px solid #b91c1c', cursor:'pointer'}}>🚨 INCHEIE DEFINITIV ÎNTÂLNIREA</button>
             </div>
         </div>
     );
@@ -1087,11 +1087,11 @@ const CalendarManager = ({ user }) => {
                         </button>
                         {isDirector && (
                             <button
-                                onClick={()=>{ if(!window.confirm("🚨 ATENTIE!\n\nInchizi seara?\n\nContinui?")) return; setShowFeedbackModal(true) }}
+                                onClick={()=>{ if(!window.confirm("🚨 ATENTIE!\n\nInchizi întâlnirea?\n\nContinui?")) return; setShowFeedbackModal(true) }}
                                 style={{background:'#ef4444', color:'white', padding:'10px 20px', borderRadius:'10px', fontWeight:'bold', border:'2px solid #b91c1c', cursor:'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)'}}
                                 className="session-btn-small"
                             >
-                                🏁 INCHEIE SEARA
+                                🏁 INCHEIE ÎNTÂLNIREA
                             </button>
                         )}
                     </div>
