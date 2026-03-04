@@ -14,11 +14,6 @@ fi
 
 git add .
 git commit -m "$commit_msg" || echo -e "${GREEN}Nu sunt modificari de commitat.${NC}"
-
-# Pull cu rebase ca sa nu pierzi modificarile remote
-git pull --rebase origin main || { echo -e "${RED}Eroare la pull! Verifica conflictele.${NC}"; exit 1; }
-
-# Push modificari
 git push origin main || { echo -e "${RED}Eroare la push!${NC}"; exit 1; }
 
 # ===== PAS 2: Oprim procesul Java =====
@@ -60,5 +55,5 @@ fi
 echo -e "${GREEN}Pas6: Pornim server…${NC}"
 nohup java -jar "$JAR_FILE" > log.txt 2>&1 &
 
-echo -e "${GREEN}GATA! Aplicatia ruleaza si modificarile au fost salvate pe Git.${NC}"
+echo -e "${GREEN}GATA! Aplicatia ruleaza si modificarile tale au fost salvate pe Git.${NC}"
 echo -e "Urmaresti log-ul cu: ${GREEN}tail -f log.txt${NC}"
