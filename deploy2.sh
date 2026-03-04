@@ -5,15 +5,20 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-# ===== PAS 1: Commit pe Git =====
+# ===== PAS 1: Commit si push pe Git =====
 echo -e "${GREEN}Pas1: Salvam modificarile pe Git…${NC}"
 read -p "Mesaj commit: " commit_msg
 if [ -z "$commit_msg" ]; then
-    commit_msg="Remote Dev commit"
+    commit_msg="Remote Dev commit $(date +'%Y-%m-%d %H:%M:%S')"
 fi
 
 git add .
-git commit -m "$commit_msg"
+git commit -m "$commit_msg" || echo -e "${GREEN}Nu sunt modificari de commitat.${NC}"
+
+# Pull cu rebase ca sa nu pierzi modificarile remote
+git pull --rebase origin main || { echo -e "${RED}Eroare la pull! Verifica conflictele.${NC}"; exit 1; }
+
+# Push modificari
 git push origin main || { echo -e "${RED}Eroare la push!${NC}"; exit 1; }
 
 # ===== PAS 2: Oprim procesul Java =====
