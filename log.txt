@@ -8,23 +8,23 @@
 
  :: Spring Boot ::                (v3.5.9)
 
-2026-03-04T10:53:53.074Z  INFO 2234752 --- [AwanaBetania] [           main] c.a.a.AwanaBetaniaApplication            : Starting AwanaBetaniaApplication v0.0.1-SNAPSHOT using Java 17.0.18 with PID 2234752 (/var/www/html/target/awanabetania-0.0.1-SNAPSHOT.jar started by awana in /var/www/html)
-2026-03-04T10:53:53.077Z  INFO 2234752 --- [AwanaBetania] [           main] c.a.a.AwanaBetaniaApplication            : No active profile set, falling back to 1 default profile: "default"
-2026-03-04T10:53:53.712Z  INFO 2234752 --- [AwanaBetania] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-03-04T10:53:53.790Z  INFO 2234752 --- [AwanaBetania] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 68 ms. Found 13 JPA repository interfaces.
-2026-03-04T10:53:54.213Z  INFO 2234752 --- [AwanaBetania] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
-2026-03-04T10:53:54.225Z  INFO 2234752 --- [AwanaBetania] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
-2026-03-04T10:53:54.225Z  INFO 2234752 --- [AwanaBetania] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.50]
-2026-03-04T10:53:54.251Z  INFO 2234752 --- [AwanaBetania] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
-2026-03-04T10:53:54.252Z  INFO 2234752 --- [AwanaBetania] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1131 ms
-2026-03-04T10:53:54.402Z  INFO 2234752 --- [AwanaBetania] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-03-04T10:53:54.447Z  INFO 2234752 --- [AwanaBetania] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.39.Final
-2026-03-04T10:53:54.476Z  INFO 2234752 --- [AwanaBetania] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
-2026-03-04T10:53:54.712Z  INFO 2234752 --- [AwanaBetania] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-03-04T10:53:54.744Z  INFO 2234752 --- [AwanaBetania] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
-2026-03-04T10:53:54.908Z  INFO 2234752 --- [AwanaBetania] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@3a3ad8e7
-2026-03-04T10:53:54.910Z  INFO 2234752 --- [AwanaBetania] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
-2026-03-04T10:53:54.998Z  INFO 2234752 --- [AwanaBetania] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
+2026-03-04T10:57:44.396Z  INFO 2237371 --- [AwanaBetania] [           main] c.a.a.AwanaBetaniaApplication            : Starting AwanaBetaniaApplication v0.0.1-SNAPSHOT using Java 17.0.18 with PID 2237371 (/var/www/html/target/awanabetania-0.0.1-SNAPSHOT.jar started by awana in /var/www/html)
+2026-03-04T10:57:44.398Z  INFO 2237371 --- [AwanaBetania] [           main] c.a.a.AwanaBetaniaApplication            : No active profile set, falling back to 1 default profile: "default"
+2026-03-04T10:57:45.300Z  INFO 2237371 --- [AwanaBetania] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-03-04T10:57:45.399Z  INFO 2237371 --- [AwanaBetania] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 77 ms. Found 13 JPA repository interfaces.
+2026-03-04T10:57:46.193Z  INFO 2237371 --- [AwanaBetania] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8080 (http)
+2026-03-04T10:57:46.260Z  INFO 2237371 --- [AwanaBetania] [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-03-04T10:57:46.262Z  INFO 2237371 --- [AwanaBetania] [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.50]
+2026-03-04T10:57:46.354Z  INFO 2237371 --- [AwanaBetania] [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-03-04T10:57:46.360Z  INFO 2237371 --- [AwanaBetania] [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1907 ms
+2026-03-04T10:57:46.849Z  INFO 2237371 --- [AwanaBetania] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-03-04T10:57:46.924Z  INFO 2237371 --- [AwanaBetania] [           main] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.6.39.Final
+2026-03-04T10:57:46.963Z  INFO 2237371 --- [AwanaBetania] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-03-04T10:57:47.285Z  INFO 2237371 --- [AwanaBetania] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-03-04T10:57:47.341Z  INFO 2237371 --- [AwanaBetania] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-03-04T10:57:47.555Z  INFO 2237371 --- [AwanaBetania] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@68e24e7
+2026-03-04T10:57:47.557Z  INFO 2237371 --- [AwanaBetania] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-03-04T10:57:47.654Z  INFO 2237371 --- [AwanaBetania] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Database info:
 	Database JDBC URL [Connecting through datasource 'HikariDataSource (HikariPool-1)']
 	Database driver: undefined/unknown
 	Database version: 8.0.45
@@ -32,32 +32,17 @@
 	Isolation level: undefined/unknown
 	Minimum pool size: undefined/unknown
 	Maximum pool size: undefined/unknown
-2026-03-04T10:53:56.148Z  INFO 2234752 --- [AwanaBetania] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-03-04T10:53:56.289Z  INFO 2234752 --- [AwanaBetania] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-03-04T10:53:56.773Z  INFO 2234752 --- [AwanaBetania] [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
-2026-03-04T10:53:58.489Z  WARN 2234752 --- [AwanaBetania] [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
-2026-03-04T10:53:58.515Z  INFO 2234752 --- [AwanaBetania] [           main] o.s.b.a.w.s.WelcomePageHandlerMapping    : Adding welcome page: class path resource [static/index.html]
-2026-03-04T10:53:59.136Z  INFO 2234752 --- [AwanaBetania] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
-2026-03-04T10:53:59.161Z  INFO 2234752 --- [AwanaBetania] [           main] c.a.a.AwanaBetaniaApplication            : Started AwanaBetaniaApplication in 6.491 seconds (process running for 6.919)
+2026-03-04T10:57:48.840Z  INFO 2237371 --- [AwanaBetania] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-03-04T10:57:48.979Z  INFO 2237371 --- [AwanaBetania] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-03-04T10:57:49.340Z  INFO 2237371 --- [AwanaBetania] [           main] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-03-04T10:57:50.364Z  WARN 2237371 --- [AwanaBetania] [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-03-04T10:57:50.389Z  INFO 2237371 --- [AwanaBetania] [           main] o.s.b.a.w.s.WelcomePageHandlerMapping    : Adding welcome page: class path resource [static/index.html]
+2026-03-04T10:57:50.851Z  INFO 2237371 --- [AwanaBetania] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-03-04T10:57:50.879Z  INFO 2237371 --- [AwanaBetania] [           main] c.a.a.AwanaBetaniaApplication            : Started AwanaBetaniaApplication in 6.962 seconds (process running for 7.396)
 ⏳ Inițializare date...
 🔧 Verificare username-uri copii...
 🔧 Verificare username-uri lideri...
 ✅ Datele sunt gata!
-2026-03-04T10:54:00.183Z  INFO 2234752 --- [AwanaBetania] [0.0-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-03-04T10:54:00.183Z  INFO 2234752 --- [AwanaBetania] [0.0-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
-2026-03-04T10:54:00.184Z  INFO 2234752 --- [AwanaBetania] [0.0-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
-2026-03-04T10:54:05.495Z  INFO 2234752 --- [AwanaBetania] [0.0-8080-exec-6] o.apache.coyote.http11.Http11Processor   : Error parsing HTTP request header
- Note: further occurrences of HTTP request parsing errors will be logged at DEBUG level.
-
-java.lang.IllegalArgumentException: Invalid character found in method name [0x160x030x010x000xee0x010x000x000xea0x030x03'0x130xa40xe80x980x0b0x190xc7P}0x1780x090x900xadc0x940xb30xd20xcfy0x1e0x820xeeJ0xe10xe90x0b_0xf7a0x1a ]. HTTP method names must be tokens
-	at org.apache.coyote.http11.Http11InputBuffer.parseRequestLine(Http11InputBuffer.java:402) ~[tomcat-embed-core-10.1.50.jar!/:na]
-	at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:272) ~[tomcat-embed-core-10.1.50.jar!/:na]
-	at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:63) ~[tomcat-embed-core-10.1.50.jar!/:na]
-	at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:903) ~[tomcat-embed-core-10.1.50.jar!/:na]
-	at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1774) ~[tomcat-embed-core-10.1.50.jar!/:na]
-	at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:52) ~[tomcat-embed-core-10.1.50.jar!/:na]
-	at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:973) ~[tomcat-embed-core-10.1.50.jar!/:na]
-	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:491) ~[tomcat-embed-core-10.1.50.jar!/:na]
-	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63) ~[tomcat-embed-core-10.1.50.jar!/:na]
-	at java.base/java.lang.Thread.run(Thread.java:840) ~[na:na]
-
+2026-03-04T10:57:52.993Z  INFO 2237371 --- [AwanaBetania] [0.0-8080-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-03-04T10:57:52.994Z  INFO 2237371 --- [AwanaBetania] [0.0-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-03-04T10:57:52.995Z  INFO 2237371 --- [AwanaBetania] [0.0-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms

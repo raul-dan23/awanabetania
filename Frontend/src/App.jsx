@@ -80,7 +80,7 @@ const MeetingFeedback = ({ meeting, user, onComplete, onCancel }) => {
                               style={{cursor:'pointer', fontSize:'2rem', color: star <= generalData.rating ? 'orange' : '#ddd', margin:'0 5px'}}>★</span>
                     ))}
                 </div>
-                <textarea placeholder="Observatii generale despre intalnire..." value={generalData.feedback} onChange={e=>setGeneralData({...generalData, feedback: e.target.value})} />
+                <textarea placeholder="Observatii generale despre intalnirea de azi..." value={generalData.feedback} onChange={e=>setGeneralData({...generalData, feedback: e.target.value})} />
             </div>
 
             <div className="card">
