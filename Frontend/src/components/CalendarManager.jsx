@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { API_URL } from '../config';
 import DepartmentsPlan from './DepartmentsPlan';
 import ScoringWidget from './ScoringWidget';
@@ -10,7 +11,7 @@ const MeetingFeedback = ({ meeting, user, onComplete, onCancel }) => {
     const [leaderEvals, setLeaderEvals] = useState({});
 
     useEffect(() => {
-        fetch(`${API_URL}/leaders`).then(r=>r.json()).then(setLeaders).catch(()=>{});
+        fetch(`${API_URL}/leaders`).then(r=>r.json()).then(setLeaders).catch(() => console.error('Eroare la incarcarea liderilor'));
     }, []);
 
     const handleLeaderChange = (id, field, value) => {
@@ -19,7 +20,7 @@ const MeetingFeedback = ({ meeting, user, onComplete, onCancel }) => {
 
     const finishNight = () => {
         if(generalData.rating === 0) {
-            if(!window.confirm("Nu ai dat o nota generala serii. Continui fara nota?")) return;
+            toast.warning("Nu ai dat o nota generala serii.");
         }
 
         const evaluationsList = Object.keys(leaderEvals).map(lid => ({
@@ -40,13 +41,12 @@ const MeetingFeedback = ({ meeting, user, onComplete, onCancel }) => {
             method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify(payload)
         }).then(res => {
-            if(res.ok) { onComplete(); } else alert("Eroare la salvare feedback.");
-        }).catch(() => alert("Eroare server."));
+            if(res.ok) { onComplete(); } else toast.error("Eroare la salvare feedback.");
+        }).catch(() => toast.error("Eroare server."));
     };
 
     return (
         <div className="animate-in">
-            {/* MODIFICAT: Buton cu clasa CSS */}
             <button onClick={onCancel} className="btn-secondary" style={{marginBottom:'20px'}}>
                 ⬅ Anuleaza Inchiderea
             </button>
@@ -93,22 +93,24 @@ const CalendarManager = ({ user }) => {
     const [newDate, setNewDate] = useState('');
     const [newDesc, setNewDesc] = useState('');
     const [showAddForm, setShowAddForm] = useState(false);
+    const [fetchError, setFetchError] = useState(null);
+    const [confirmingClose, setConfirmingClose] = useState(false);
 
     const isDirector = user.role === 'DIRECTOR' || user.role === 'COORDONATOR';
 
-    const loadMeetings = () => { fetch(`${API_URL}/meetings`).then(r => r.ok?r.json():[]).then(setMeetings).catch(()=>{}); };
+    const loadMeetings = () => { fetch(`${API_URL}/meetings`).then(r => r.ok?r.json():[]).then(setMeetings).catch(() => setFetchError('Eroare la conectarea cu serverul.')); };
     useEffect(() => { loadMeetings(); }, []);
 
     const addMeeting = () => {
-        if(!newDate) return alert("Alege o data!");
+        if(!newDate) return toast.warning("Alege o data!");
         fetch(`${API_URL}/meetings/add`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ date: newDate, description: newDesc }) })
             .then(() => { loadMeetings(); setNewDate(''); setNewDesc(''); setShowAddForm(false); });
     };
 
     const finalizeClose = () => {
         fetch(`${API_URL}/meetings/close/${activeSession.id}`, { method: 'POST' }).then(async res => {
-            if(res.ok) { alert(await res.text()); setShowFeedbackModal(false); setActiveSession(null); loadMeetings(); }
-            else alert("Eroare la inchidere.");
+            if(res.ok) { toast.success(await res.text()); setShowFeedbackModal(false); setActiveSession(null); loadMeetings(); }
+            else toast.error("Eroare la inchidere.");
         });
     };
 
@@ -141,12 +143,25 @@ const CalendarManager = ({ user }) => {
                             Inapoi
                         </button>
                         {isDirector && (
-                            <button onClick={() => { if(!window.confirm("Inchizi seara? Actiunea este ireversibila.")) return; setShowFeedbackModal(true); }} style={{
-                                background:'rgba(239,68,68,0.25)', border:'1.5px solid rgba(239,68,68,0.6)',
-                                color:'#fca5a5', padding:'9px 18px', borderRadius:'12px', fontWeight:'700', fontSize:'0.88rem'
-                            }}>
-                                Incheie Seara
-                            </button>
+                            confirmingClose ? (
+                                <div style={{display:'flex', flexDirection:'column', gap:'6px', alignItems:'flex-end'}}>
+                                    <button onClick={() => { setConfirmingClose(false); setShowFeedbackModal(true); }} style={{
+                                        background:'rgba(239,68,68,0.5)', border:'1.5px solid rgba(239,68,68,0.8)',
+                                        color:'white', padding:'9px 18px', borderRadius:'12px', fontWeight:'700', fontSize:'0.88rem'
+                                    }}>Confirma</button>
+                                    <button onClick={() => setConfirmingClose(false)} style={{
+                                        background:'transparent', border:'1.5px solid rgba(255,255,255,0.3)',
+                                        color:'rgba(255,255,255,0.7)', padding:'5px 14px', borderRadius:'10px', fontWeight:'600', fontSize:'0.8rem'
+                                    }}>Anuleaza</button>
+                                </div>
+                            ) : (
+                                <button onClick={() => setConfirmingClose(true)} style={{
+                                    background:'rgba(239,68,68,0.25)', border:'1.5px solid rgba(239,68,68,0.6)',
+                                    color:'#fca5a5', padding:'9px 18px', borderRadius:'12px', fontWeight:'700', fontSize:'0.88rem'
+                                }}>
+                                    Incheie Seara
+                                </button>
+                            )
                         )}
                     </div>
                 </div>
@@ -176,6 +191,11 @@ const CalendarManager = ({ user }) => {
 
     return (
         <div className="animate-in">
+            {fetchError && (
+                <div style={{background:'#fee2e2', border:'1px solid #fca5a5', color:'#991b1b', borderRadius:'12px', padding:'12px 16px', marginBottom:'16px', fontWeight:'600', fontSize:'0.9rem'}}>
+                    {fetchError}
+                </div>
+            )}
 
             {/* Hero — urmatoarea sedinta */}
             <div className="db-hero" style={{marginBottom:'24px', alignItems:'center'}}>

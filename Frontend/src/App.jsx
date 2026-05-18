@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Toaster } from 'sonner';
 import './App.css';
 import AwanaLogo from './AwanaLogo';
 import AdminDashboard from './AdminDashboard';
@@ -90,11 +91,12 @@ function App() {
 
     if (!user) return register ? <Register onSwitchToLogin={() => setRegister(false)} /> : <Login onLogin={setUser} onSwitchToRegister={() => setRegister(true)} />;
 
-    const isChild = user.hasOwnProperty('parentPhone');
+    const isChild = !user.role;
     const isDirector = user.role === 'DIRECTOR' || user.role === 'COORDONATOR';
 
     return (
         <div className="app-container">
+            <Toaster richColors position="top-center" />
 
             {/* HEADER MOBIL */}
             <div className="mobile-header">

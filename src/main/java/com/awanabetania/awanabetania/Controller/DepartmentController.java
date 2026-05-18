@@ -87,7 +87,7 @@ public class DepartmentController {
 
         if (m != null && d != null && l != null) {
             boolean exists = assignmentRepo.findByMeetingId(meetingId).stream()
-                    .anyMatch(a -> a.getLeader().getId().equals(leaderId) && a.getDepartment().getId().equals(deptId));
+                    .anyMatch(a -> a.getLeader() != null && a.getLeader().getId().equals(leaderId) && a.getDepartment().getId().equals(deptId));
 
             if (!exists) {
                 MeetingAssignment ma = new MeetingAssignment();
@@ -99,16 +99,17 @@ public class DepartmentController {
 
                 // --- LOGICA GENERARE PIN ---
                 if (d.getName().toLowerCase().contains("secretar")) {
-                    // Generam PIN matematic
-                    int pinCode = 1000 + (m.getId() * 17) % 9000;
+                    // Generam PIN random doar daca nu exista deja pentru aceasta sedinta
+                    if (m.getMeetingPin() == null) {
+                        String pinCode = String.valueOf(1000 + new java.security.SecureRandom().nextInt(9000));
+                        m.setMeetingPin(pinCode);
+                        meetingRepo.save(m);
+                    }
 
                     Notification n = new Notification();
-                    n.setTitle("COD ACCES SECRETARIAT"); // Acum merge datorita @Transient
-                    n.setMessage("Ai fost planificat la Secretariat.\n\nCodul PIN pentru punctaje este: " + pinCode + "\n\nNu îl comunica copiilor!");
-
-                    // --- AICI AM CORECTAT EROAREA ---
-                    n.setDate(LocalDate.now()); // FARA .toString() !!!
-
+                    n.setTitle("COD ACCES SECRETARIAT");
+                    n.setMessage("Ai fost planificat la Secretariat.\n\nCodul PIN pentru punctaje este: " + m.getMeetingPin() + "\n\nNu îl comunica copiilor!");
+                    n.setDate(LocalDate.now());
                     n.setType("INFO");
                     n.setVisibleTo(String.valueOf(l.getId()));
                     notificationRepository.save(n);

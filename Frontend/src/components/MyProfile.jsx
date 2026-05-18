@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config';
 
 const MyProfile = ({ user, onUpdateUser }) => {
-    const isChild = user.hasOwnProperty('parentPhone');
+    const isChild = !user.role;
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({ ...user, password: '' });
     const [loading, setLoading] = useState(false);

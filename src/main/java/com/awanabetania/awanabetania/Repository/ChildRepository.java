@@ -25,4 +25,7 @@ public interface ChildRepository extends JpaRepository<Child, Integer> {
 
     /** Cauta un copil dupa username-ul unic de login */
     Optional<Child> findByUsername(String username);
+
+    /** Cauta un copil dupa UID-ul cardului NFC */
+    Optional<Child> findByNfcUid(String nfcUid);
 }

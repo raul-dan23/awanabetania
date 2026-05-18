@@ -18,10 +18,12 @@ const DepartmentsList = ({ user }) => {
 
     const isDirector = user.role === 'DIRECTOR' || user.role === 'COORDONATOR';
 
+    const [fetchError, setFetchError] = useState(null);
+
     const loadData = () => {
-        fetch(`${API_URL}/departments`).then(r=>r.json()).then(setDepartments).catch(()=>{});
-        fetch(`${API_URL}/leaders`).then(r=>r.json()).then(setLeaders).catch(()=>{});
-        fetch(`${API_URL}/meetings`).then(r=>r.ok?r.json():[]).then(setMeetings).catch(()=>{});
+        fetch(`${API_URL}/departments`).then(r=>r.json()).then(setDepartments).catch(() => setFetchError('Eroare la conectarea cu serverul.'));
+        fetch(`${API_URL}/leaders`).then(r=>r.json()).then(setLeaders).catch(() => setFetchError('Eroare la conectarea cu serverul.'));
+        fetch(`${API_URL}/meetings`).then(r=>r.ok?r.json():[]).then(setMeetings).catch(() => setFetchError('Eroare la conectarea cu serverul.'));
     };
     useEffect(() => { loadData(); }, []);
 
@@ -290,6 +292,11 @@ const DepartmentsList = ({ user }) => {
     /* ── LISTA DEPARTAMENTE ──────────────────────────────── */
     return (
         <div className="animate-in">
+            {fetchError && (
+                <div style={{background:'#fee2e2', border:'1px solid #fca5a5', color:'#991b1b', borderRadius:'12px', padding:'12px 16px', marginBottom:'16px', fontWeight:'600', fontSize:'0.9rem'}}>
+                    {fetchError}
+                </div>
+            )}
 
             {/* Hero */}
             <div className="db-hero" style={{marginBottom:'24px', alignItems:'center'}}>

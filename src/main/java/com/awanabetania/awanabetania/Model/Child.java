@@ -93,6 +93,9 @@ public class Child {
     @Column(name = "deletion_code")
     private String deletionCode;
 
+    @Column(name = "nfc_uid", unique = true)
+    private String nfcUid;
+
     @Transient
     private Integer age;
 

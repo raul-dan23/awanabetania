@@ -4,7 +4,7 @@ import { API_URL } from '../config';
 const Dashboard = ({ user }) => {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
-    const isChild = user && user.hasOwnProperty('parentPhone');
+    const isChild = user && !user.role;
 
     useEffect(() => {
         const url = user ? `${API_URL}/dashboard/stats?leaderId=${user.id}` : `${API_URL}/dashboard/stats`;

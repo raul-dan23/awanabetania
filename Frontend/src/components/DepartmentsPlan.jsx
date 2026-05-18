@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { API_URL } from '../config';
 
 const DepartmentsPlan = ({ meetingId, user, onConfirm, isConfirmed }) => {
@@ -19,7 +20,7 @@ const DepartmentsPlan = ({ meetingId, user, onConfirm, isConfirmed }) => {
 
     useEffect(() => { const idToUse = meetingId || selectedMeetingId; if(!idToUse) return; fetch(`${API_URL}/departments/plan/${idToUse}`).then(r=>r.ok?r.json():null).then(d=>{ if(d) setPlan(d); }); }, [meetingId, selectedMeetingId]);
 
-    const assignLeader = (deptId, leaderIdStr) => { if(!leaderIdStr) return; const idToUse = meetingId || selectedMeetingId; const leaderId = parseInt(leaderIdStr); fetch(`${API_URL}/departments/assign`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ meetingId: idToUse, deptId, leaderId }) }).then(res => { if (res.ok) { const newPlan = { ...plan }; if(!newPlan.assignments[deptId]) newPlan.assignments[deptId] = []; const foundLeader = leaders.find(l=>l.id===leaderId); newPlan.assignments[deptId].push({ leader: foundLeader, id: 'temp' + Date.now() }); setPlan(newPlan); } else alert("Eroare la asignare."); }); };
+    const assignLeader = (deptId, leaderIdStr) => { if(!leaderIdStr) return; const idToUse = meetingId || selectedMeetingId; const leaderId = parseInt(leaderIdStr); fetch(`${API_URL}/departments/assign`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ meetingId: idToUse, deptId, leaderId }) }).then(res => { if (res.ok) { const newPlan = { ...plan }; if(!newPlan.assignments[deptId]) newPlan.assignments[deptId] = []; const foundLeader = leaders.find(l=>l.id===leaderId); newPlan.assignments[deptId].push({ leader: foundLeader, id: 'temp' + Date.now() }); setPlan(newPlan); } else toast.error("Eroare la asignare."); }); };
     const removeAssignment = (deptId, leaderId) => { const idToUse = meetingId || selectedMeetingId; fetch(`${API_URL}/departments/remove?meetingId=${idToUse}&deptId=${deptId}&leaderId=${leaderId}`, { method: 'DELETE' }).then(res => { if (res.ok) { const newPlan = { ...plan }; if (newPlan.assignments[deptId]) { newPlan.assignments[deptId] = newPlan.assignments[deptId].filter(item => item.leader && item.leader.id !== leaderId); setPlan(newPlan); } } }); };
     const setDirector = (leaderId) => { if(!leaderId) return; const idToUse = meetingId || selectedMeetingId; fetch(`${API_URL}/departments/director/${idToUse}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: parseInt(leaderId) }).then(res => { if(res.ok) setPlan(prev => ({...prev, directorDay: leaders.find(l=>l.id===parseInt(leaderId))})); }); };
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { API_URL } from '../config';
 
 const Registry = ({ user }) => {
@@ -14,13 +15,14 @@ const Registry = ({ user }) => {
     const [search, setSearch] = useState('');
     const [sortBy, setSortBy] = useState('name');
     const [showAddWarning, setShowAddWarning] = useState(false);
+    const [confirmReward, setConfirmReward] = useState(null);
 
     const isDirector = user && (user.role === 'DIRECTOR' || user.role === 'COORDONATOR');
 
     useEffect(() => { loadChildren(); }, []);
 
     const loadChildren = () => {
-        fetch(`${API_URL}/children`).then(r => r.ok ? r.json() : []).then(async (kids) => {
+        fetch(`${API_URL}/children`).then(r => r.ok ? r.json() : []).then(kids => {
             const existingManualsSet = new Set();
             kids.forEach(child => {
                 if (child.manuals && Array.isArray(child.manuals)) child.manuals.forEach(m => existingManualsSet.add(m.name));
@@ -28,16 +30,8 @@ const Registry = ({ user }) => {
             const uniqueManuals = Array.from(existingManualsSet).sort();
             setAvailableManuals(uniqueManuals);
             if (uniqueManuals.length > 0) { setSelectedManual(uniqueManuals[0]); setManualMode('SELECT'); } else { setManualMode('NEW'); }
-
-            const kidsWithStatus = await Promise.all(kids.map(async (k) => {
-                try {
-                    const wRes = await fetch(`${API_URL}/warnings/child/${k.id}`);
-                    const warnings = await wRes.json();
-                    const isSuspended = Array.isArray(warnings) && warnings.length > 0 && warnings[0].suspension && warnings[0].remainingMeetings > 0;
-                    return { ...k, isSuspended };
-                } catch { return { ...k, isSuspended: false }; }
-            }));
-            setChildren(kidsWithStatus); setLoading(false);
+            setChildren(kids);
+            setLoading(false);
         }).catch(() => setLoading(false));
     };
 
@@ -51,16 +45,16 @@ const Registry = ({ user }) => {
 
     const handleAssignManual = () => {
         const finalName = manualMode === 'NEW' ? customManualName : selectedManual;
-        if (!finalName) return alert("Scrie nume manual!");
+        if (!finalName) return toast.warning("Scrie nume manual!");
         fetch(`${API_URL}/children/${selectedChild.id}/assign-manual?manualName=${encodeURIComponent(finalName)}`, { method: 'POST' })
-            .then(res => { if (res.ok) { alert("Atribuit!"); loadChildren(); openChildFile(selectedChild); }});
+            .then(res => { if (res.ok) { toast.success("Manual atribuit!"); loadChildren(); openChildFile(selectedChild); }});
     };
 
     const handleAddWarning = () => {
-        if (!newWarning.description) return alert("Scrie motiv!");
+        if (!newWarning.description) return toast.warning("Scrie motivul sanctiunii!");
         const payload = { childId: selectedChild.id, ...newWarning, remainingMeetings: newWarning.suspension ? newWarning.remainingMeetings : 0 };
         fetch(`${API_URL}/warnings/add`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
-            .then(res => { if(res.ok) { alert("Salvat!"); openChildFile(selectedChild); setNewWarning({description:'', suspension:false, remainingMeetings:1}); }});
+            .then(res => { if(res.ok) { toast.success("Sanctiune salvata!"); openChildFile(selectedChild); setNewWarning({description:'', suspension:false, remainingMeetings:1}); }});
     };
 
     if (loading) return (
@@ -158,14 +152,28 @@ const Registry = ({ user }) => {
                                     <div style={{fontSize:'0.68rem', color:'var(--text-secondary)', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'4px'}}>Tricou</div>
                                     <div style={{fontWeight:'900', fontSize:'1rem', color: selectedChild.hasShirt ? '#16a34a' : 'var(--text-secondary)'}}>{selectedChild.hasShirt ? 'DAT' : 'Neacordat'}</div>
                                     {isDirector && !selectedChild.hasShirt && (
-                                        <button onClick={()=>{if(window.confirm("Confirmi acordarea tricoului?")) fetch(`${API_URL}/children/${selectedChild.id}/give-reward?type=SHIRT`,{method:'POST'}).then(r=>{if(r.ok)openChildFile(selectedChild)})}} style={{marginTop:'8px', background:'#16a34a', color:'white', border:'none', borderRadius:'8px', padding:'5px 10px', fontWeight:'800', fontSize:'0.72rem', cursor:'pointer', width:'100%'}}>Acorda</button>
+                                        confirmReward === 'SHIRT' ? (
+                                            <div style={{marginTop:'8px', display:'flex', gap:'5px'}}>
+                                                <button onClick={()=>{ fetch(`${API_URL}/children/${selectedChild.id}/give-reward?type=SHIRT`,{method:'POST'}).then(r=>{if(r.ok){openChildFile(selectedChild); setConfirmReward(null);}}); }} style={{flex:1, background:'#16a34a', color:'white', border:'none', borderRadius:'8px', padding:'5px 8px', fontWeight:'800', fontSize:'0.7rem', cursor:'pointer'}}>Sigur?</button>
+                                                <button onClick={()=>setConfirmReward(null)} style={{background:'var(--bg-primary)', color:'var(--text-secondary)', border:'1px solid var(--border-color)', borderRadius:'8px', padding:'5px 8px', fontWeight:'700', fontSize:'0.7rem', cursor:'pointer'}}>Nu</button>
+                                            </div>
+                                        ) : (
+                                            <button onClick={()=>setConfirmReward('SHIRT')} style={{marginTop:'8px', background:'#16a34a', color:'white', border:'none', borderRadius:'8px', padding:'5px 10px', fontWeight:'800', fontSize:'0.72rem', cursor:'pointer', width:'100%'}}>Acorda</button>
+                                        )
                                     )}
                                 </div>
                                 <div style={{padding:'14px 10px', borderRadius:'12px', textAlign:'center', background: selectedChild.hasHat ? '#dbeafe' : 'var(--bg-primary)', border:`2px solid ${selectedChild.hasHat ? '#3b82f6' : 'var(--border-color)'}`}}>
                                     <div style={{fontSize:'0.68rem', color:'var(--text-secondary)', fontWeight:'700', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'4px'}}>Caciula</div>
                                     <div style={{fontWeight:'900', fontSize:'1rem', color: selectedChild.hasHat ? '#1d4ed8' : 'var(--text-secondary)'}}>{selectedChild.hasHat ? 'DATA' : 'Neacordata'}</div>
                                     {isDirector && !selectedChild.hasHat && (
-                                        <button onClick={()=>{if(window.confirm("Confirmi acordarea caciulii?")) fetch(`${API_URL}/children/${selectedChild.id}/give-reward?type=HAT`,{method:'POST'}).then(r=>{if(r.ok)openChildFile(selectedChild)})}} style={{marginTop:'8px', background:'#1d4ed8', color:'white', border:'none', borderRadius:'8px', padding:'5px 10px', fontWeight:'800', fontSize:'0.72rem', cursor:'pointer', width:'100%'}}>Acorda</button>
+                                        confirmReward === 'HAT' ? (
+                                            <div style={{marginTop:'8px', display:'flex', gap:'5px'}}>
+                                                <button onClick={()=>{ fetch(`${API_URL}/children/${selectedChild.id}/give-reward?type=HAT`,{method:'POST'}).then(r=>{if(r.ok){openChildFile(selectedChild); setConfirmReward(null);}}); }} style={{flex:1, background:'#1d4ed8', color:'white', border:'none', borderRadius:'8px', padding:'5px 8px', fontWeight:'800', fontSize:'0.7rem', cursor:'pointer'}}>Sigur?</button>
+                                                <button onClick={()=>setConfirmReward(null)} style={{background:'var(--bg-primary)', color:'var(--text-secondary)', border:'1px solid var(--border-color)', borderRadius:'8px', padding:'5px 8px', fontWeight:'700', fontSize:'0.7rem', cursor:'pointer'}}>Nu</button>
+                                            </div>
+                                        ) : (
+                                            <button onClick={()=>setConfirmReward('HAT')} style={{marginTop:'8px', background:'#1d4ed8', color:'white', border:'none', borderRadius:'8px', padding:'5px 10px', fontWeight:'800', fontSize:'0.72rem', cursor:'pointer', width:'100%'}}>Acorda</button>
+                                        )
                                     )}
                                 </div>
                             </div>

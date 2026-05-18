@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 
 const API_URL = 'http://awana.betania-tm.ro/api';
 
@@ -11,26 +12,31 @@ const AdminDashboard = ({ currentUser }) => {
     const [sortBy, setSortBy] = useState('name');
     const [visiblePasswords, setVisiblePasswords] = useState({});
 
-    const MASTER_PIN = "0000";
-
     useEffect(() => {
         if (isUnlocked) fetchData();
     }, [isUnlocked]);
 
     const fetchData = () => {
-        fetch(`${API_URL}/admin/all-users`)
-            .then(res => res.json())
+        fetch(`${API_URL}/admin/all-users`, {
+            headers: { 'X-Admin-Pin': pin }
+        })
+            .then(res => res.ok ? res.json() : Promise.reject())
             .then(d => setData(d))
-            .catch(() => alert("Eroare la incarcarea datelor!"));
+            .catch(() => toast.error("Eroare la incarcarea datelor!"));
     };
 
     const handleUnlock = () => {
-        if (pin === MASTER_PIN) {
-            setIsUnlocked(true);
-        } else {
-            alert("PIN Incorect!");
-            setPin('');
-        }
+        if (!pin) return;
+        fetch(`${API_URL}/admin/verify-pin`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin })
+        })
+            .then(res => {
+                if (res.ok) setIsUnlocked(true);
+                else { toast.error("PIN Incorect!"); setPin(''); }
+            })
+            .catch(() => { toast.error("Eroare conexiune server."); setPin(''); });
     };
 
     const revealPassword = (id, encryptedPass) => {
@@ -42,12 +48,12 @@ const AdminDashboard = ({ currentUser }) => {
         }
         fetch(`${API_URL}/admin/decrypt-password`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': pin },
             body: JSON.stringify({ password: encryptedPass })
         })
-            .then(res => res.json())
+            .then(res => res.ok ? res.json() : Promise.reject())
             .then(resp => setVisiblePasswords(prev => ({ ...prev, [id]: resp.realPassword })))
-            .catch(() => alert("Eroare decriptare."));
+            .catch(() => toast.error("Eroare decriptare."));
     };
 
     const getList = () => {

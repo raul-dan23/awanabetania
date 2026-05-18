@@ -49,60 +49,52 @@ public class AuthController {
 
         // CAZUL 1: COPIL
         if ("CHILD".equalsIgnoreCase(role)) {
-            List<Child> children = childRepository.findAll();
-            for (Child child : children) {
-                // Verificam atat dupa 'username' generat, cat si dupa 'name' (pentru conturile vechi inca nemigrate 100%)
-                boolean matchFound = (child.getUsername() != null && child.getUsername().equals(inputUsername)) ||
-                        (child.getName() != null && child.getName().toLowerCase().equals(inputUsername));
-
-                if (matchFound) {
-                    // VERIFICARE 1: E deja criptata in baza?
-                    if (child.getPassword() != null && child.getPassword().equals(encryptedPassword)) {
-                        return ResponseEntity.ok(child);
-                    }
-                    // VERIFICARE 2 (MIGRARE): E parola veche (necriptata)?
-                    else if (child.getPassword() != null && child.getPassword().equals(rawPassword)) {
-                        // O gasit-o pe cea veche! O actualizam pe loc sa fie criptata de acum incolo.
-                        child.setPassword(encryptedPassword);
-                        childRepository.save(child);
-                        System.out.println("♻️ Parola migrata automat pentru copilul: " + child.getName());
-                        return ResponseEntity.ok(child);
-                    }
+            // Cauta mai intai dupa username (O(1) — query indexat)
+            Optional<Child> childOpt = childRepository.findByUsername(inputUsername);
+            // Fallback: cauta dupa nume pentru conturile vechi nemigrate
+            if (childOpt.isEmpty()) {
+                childOpt = childRepository.findAll().stream()
+                        .filter(c -> c.getName() != null && c.getName().toLowerCase().equals(inputUsername))
+                        .findFirst();
+            }
+            if (childOpt.isPresent()) {
+                Child child = childOpt.get();
+                if (child.getPassword() != null && child.getPassword().equals(encryptedPassword)) {
+                    return ResponseEntity.ok(child);
+                } else if (child.getPassword() != null && child.getPassword().equals(rawPassword)) {
+                    child.setPassword(encryptedPassword);
+                    childRepository.save(child);
+                    return ResponseEntity.ok(child);
                 }
             }
         }
         // CAZUL 2: LIDER / DIRECTOR
         else {
-            List<Leader> leaders = leaderRepository.findAll();
-            for (Leader leader : leaders) {
-                boolean matchFound = (leader.getUsername() != null && leader.getUsername().equals(inputUsername)) ||
-                        (leader.getName() != null && leader.getName().toLowerCase().equals(inputUsername));
-
-                if (matchFound) {
-                    // VERIFICARE 1: E deja criptata?
-                    if (leader.getPassword() != null && leader.getPassword().equals(encryptedPassword)) {
-                        if ("DIRECTOR".equalsIgnoreCase(role)) {
-                            if (leader.getRole() != null && (leader.getRole().equalsIgnoreCase("Coordonator") || leader.getRole().equalsIgnoreCase("Director"))) {
-                                return ResponseEntity.ok(leader);
-                            }
-                        } else {
+            // Cauta mai intai dupa username (O(1) — query indexat)
+            Optional<Leader> leaderOpt = leaderRepository.findByUsername(inputUsername);
+            // Fallback: cauta dupa nume pentru conturile vechi nemigrate
+            if (leaderOpt.isEmpty()) {
+                leaderOpt = leaderRepository.findAll().stream()
+                        .filter(l -> l.getName() != null && l.getName().toLowerCase().equals(inputUsername))
+                        .findFirst();
+            }
+            if (leaderOpt.isPresent()) {
+                Leader leader = leaderOpt.get();
+                boolean passwordMatch = false;
+                if (leader.getPassword() != null && leader.getPassword().equals(encryptedPassword)) {
+                    passwordMatch = true;
+                } else if (leader.getPassword() != null && leader.getPassword().equals(rawPassword)) {
+                    leader.setPassword(encryptedPassword);
+                    leaderRepository.save(leader);
+                    passwordMatch = true;
+                }
+                if (passwordMatch) {
+                    if ("DIRECTOR".equalsIgnoreCase(role)) {
+                        if (leader.getRole() != null && (leader.getRole().equalsIgnoreCase("Coordonator") || leader.getRole().equalsIgnoreCase("Director"))) {
                             return ResponseEntity.ok(leader);
                         }
-                    }
-                    // VERIFICARE 2 (MIGRARE): E parola veche?
-                    else if (leader.getPassword() != null && leader.getPassword().equals(rawPassword)) {
-                        // BINGO! O criptam acum.
-                        leader.setPassword(encryptedPassword);
-                        leaderRepository.save(leader);
-                        System.out.println("♻️ Parola migrata automat pentru liderul: " + leader.getName());
-
-                        if ("DIRECTOR".equalsIgnoreCase(role)) {
-                            if (leader.getRole() != null && (leader.getRole().equalsIgnoreCase("Coordonator") || leader.getRole().equalsIgnoreCase("Director"))) {
-                                return ResponseEntity.ok(leader);
-                            }
-                        } else {
-                            return ResponseEntity.ok(leader);
-                        }
+                    } else {
+                        return ResponseEntity.ok(leader);
                     }
                 }
             }
@@ -167,9 +159,8 @@ public class AuthController {
                 return ResponseEntity.badRequest().body("Cod de acces invalid! Cere un cod valid de la Director.");
             }
 
-            // Verificam duplicat
-            boolean exists = leaderRepository.findAll().stream()
-                    .anyMatch(l -> l.getName().equalsIgnoreCase(request.getName()) && l.getSurname().equalsIgnoreCase(request.getSurname()));
+            // Verificam duplicat — query direct in loc de findAll()
+            boolean exists = leaderRepository.findByNameAndSurname(request.getName(), request.getSurname()).isPresent();
 
             if (exists) {
                 return ResponseEntity.badRequest().body("Lider existent!");

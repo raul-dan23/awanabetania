@@ -46,22 +46,21 @@ public class MeetingController {
     public ResponseEntity<?> checkPin(@RequestBody Map<String, String> payload) {
         String inputPin = payload.get("pin");
 
-        // 1. Gasim intalnirea activa (cea nefinalizata)
-        Meeting activeMeeting = meetingRepository.findAll().stream()
-                .filter(m -> m.getIsCompleted() == null || !m.getIsCompleted())
-                .findFirst()
-                .orElse(null);
+        // 1. Gasim sedinta activa = cea cu cea mai apropiata data nesfinalizata
+        Meeting activeMeeting = meetingRepository.findByIsCompletedFalseOrderByDateAsc()
+                .stream().findFirst().orElse(null);
 
         if (activeMeeting == null) {
             return ResponseEntity.badRequest().body("Nu exista o seara activa!");
         }
 
-        // 2. Recalculam PIN-ul folosind aceeasi formula matematica ca la assign
-        int correctPin = 1000 + (activeMeeting.getId() * 17) % 9000;
-        String correctPinStr = String.valueOf(correctPin);
+        // 2. Verificam cu PIN-ul stocat in BD (generat la asignare secretariat)
+        String storedPin = activeMeeting.getMeetingPin();
+        if (storedPin == null) {
+            return ResponseEntity.badRequest().body("Codul nu a fost generat inca. Asignati un secretar mai intai.");
+        }
 
-        // 3. Verificam
-        if (correctPinStr.equals(inputPin)) {
+        if (storedPin.equals(inputPin)) {
             return ResponseEntity.ok("Corect");
         } else {
             return ResponseEntity.status(401).body("Cod Incorect");
@@ -102,7 +101,9 @@ public class MeetingController {
         }
 
         // 2. CURATENIE GENERALA & RESETARE ABSENTI
-        LocalDate today = LocalDate.now();
+        // Folosim data sedintei (nu LocalDate.now()) ca sa fie corect daca directorul
+        // inchide sedinta a doua zi dupa ce a avut loc.
+        LocalDate meetingDate = meeting.getDate();
         List<Child> allChildren = childRepository.findAll();
         int absentsReset = 0;
 
@@ -111,9 +112,8 @@ public class MeetingController {
             c.setDailyPoints(0);
             c.setCurrentTeam(null);
 
-            // LOGICA TA: Verificam cine a fost prezent AZI
-            // Daca lastAttendanceDate NU este azi, inseamna ca a lipsit la aceasta intalnire.
-            boolean wasPresentToday = (c.getLastAttendanceDate() != null && c.getLastAttendanceDate().equals(today));
+            // Verificam cine a fost prezent la aceasta sedinta (dupa data sedintei, nu dupa ziua de azi)
+            boolean wasPresentToday = (c.getLastAttendanceDate() != null && c.getLastAttendanceDate().equals(meetingDate));
 
             if (!wasPresentToday) {
                 // A lipsit! Ii resetam streak-ul la 0.

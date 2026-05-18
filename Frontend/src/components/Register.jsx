@@ -11,7 +11,7 @@ const Register = ({ onSwitchToLogin }) => {
     const [selectedDepts, setSelectedDepts] = useState(new Set());
 
     useEffect(() => {
-        fetch(`${API_URL}/departments`).then(r=>r.ok?r.json():[]).then(setDepartments).catch(()=>{});
+        fetch(`${API_URL}/departments`).then(r=>r.ok?r.json():[]).then(setDepartments).catch(() => setMsg('Eroare la conectarea cu serverul.'));
     }, []);
 
     const toggleDept = (id) => {

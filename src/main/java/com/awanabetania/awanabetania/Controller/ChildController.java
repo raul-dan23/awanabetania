@@ -64,16 +64,29 @@ public class ChildController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    @PostMapping("/{id}/give-reward")
+    public ResponseEntity<?> giveReward(@PathVariable Integer id, @RequestParam String type) {
+        Child child = childRepository.findById(id).orElse(null);
+        if (child == null) return ResponseEntity.notFound().build();
+        if ("SHIRT".equals(type)) child.setHasShirt(true);
+        else if ("HAT".equals(type)) child.setHasHat(true);
+        else if ("MANUAL".equals(type)) child.setHasManual(true);
+        else return ResponseEntity.badRequest().body("❌ Tip premiu necunoscut: " + type);
+        childRepository.save(child);
+        return ResponseEntity.ok("✅ Premiu acordat!");
+    }
+
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<?> deleteChild(@PathVariable Integer id, @RequestParam(required = false) String code) {
         Child child = childRepository.findById(id).orElse(null);
         if (child == null) return ResponseEntity.notFound().build();
 
-        if (child.getDeletionCode() != null && !child.getDeletionCode().isEmpty()) {
-            if (code == null || !code.equalsIgnoreCase(child.getDeletionCode())) {
-                return ResponseEntity.badRequest().body("❌ Codul de ștergere este incorect!");
-            }
+        if (child.getDeletionCode() == null || child.getDeletionCode().isEmpty()) {
+            return ResponseEntity.badRequest().body("❌ Contul nu are un cod de ștergere setat. Generați unul mai întâi din panoul de admin!");
+        }
+        if (code == null || !code.equalsIgnoreCase(child.getDeletionCode())) {
+            return ResponseEntity.badRequest().body("❌ Codul de ștergere este incorect!");
         }
 
         // Datorită CascadeType.ALL din Model, multe ștergeri se fac acum automat.

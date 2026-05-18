@@ -45,4 +45,8 @@ public class Meeting {
     @ManyToOne
     @JoinColumn(name = "director_day_id")
     private Leader directorDay;
+
+    /** PIN generat cu SecureRandom la prima asignare de secretariat — nu se recalculeaza */
+    @Column(name = "meeting_pin")
+    private String meetingPin;
 }

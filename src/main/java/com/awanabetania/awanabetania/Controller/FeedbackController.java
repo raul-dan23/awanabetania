@@ -97,9 +97,9 @@ public class FeedbackController {
             le.setIsVisible(true); // Implicit vizibil
 
             Leader l = leaderRepository.findById(leaderId).orElse(null);
-            le.setLeader(l);
 
             if (l != null) {
+                le.setLeader(l);
                 evaluationRepository.save(le);
                 recalculateLeaderRating(leaderId);
 

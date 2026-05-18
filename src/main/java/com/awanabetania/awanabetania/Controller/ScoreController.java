@@ -31,9 +31,9 @@ public class ScoreController {
     public ResponseEntity<?> addScore(@RequestBody ScoreRequest request) {
 
         // 1. Validări standard (Sesiune activă, Copil valid, Dubluri)
-        Meeting meeting = meetingRepository.findAll().stream()
-                .filter(m -> m.getIsCompleted() == null || !m.getIsCompleted())
-                .findFirst().orElse(null);
+        // Luam sedinta nesfinalizata cu cea mai APROPIATA data (nu prima din findAll care e nesortata)
+        Meeting meeting = meetingRepository.findByIsCompletedFalseOrderByDateAsc()
+                .stream().findFirst().orElse(null);
 
         if (meeting == null) return ResponseEntity.badRequest().body("Nu există sesiune activă!");
 
@@ -77,8 +77,8 @@ public class ScoreController {
             int newStreak = currentStreak + 1;
             child.setAttendanceStreak(newStreak);
 
-            // B. Setăm data de AZI (Aceasta este "bifa" că a fost prezent la această sesiune)
-            child.setLastAttendanceDate(LocalDate.now());
+            // B. Setam data SEDINTEI (nu LocalDate.now()) ca sa fie consistent cu logica de streak la inchidere
+            child.setLastAttendanceDate(meeting.getDate());
 
             // C. Totaluri și Lecții
             child.setTotalAttendance((child.getTotalAttendance() == null ? 0 : child.getTotalAttendance()) + 1);

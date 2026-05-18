@@ -1,15 +1,23 @@
 package com.awanabetania.awanabetania.Model;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
+@Component
 public class AESUtil {
 
-    // 🔑 CHEIA SECRETA - Trebuie să aibă FIX 16 caractere!
-    // Aceasta este cheia pe care o vei folosi si in aplicatia de Admin.
-    private static final String SECRET_KEY = "AwanaBetania2026";
+    private static String SECRET_KEY;
+
+    // Spring injecteaza valoarea din application.properties (care o citeste din env var AES_SECRET_KEY)
+    @Value("${aes.secret.key}")
+    public void setSecretKey(String key) {
+        AESUtil.SECRET_KEY = key;
+    }
 
     private static final String ALGORITHM = "AES";
 

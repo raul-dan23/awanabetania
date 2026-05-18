@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { API_URL } from '../config';
 
 const ScoringWidget = () => {
@@ -7,20 +8,19 @@ const ScoringWidget = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isSearching, setIsSearching] = useState(false);
 
-    // Stari pentru butoanele standard
     const [pointsData, setPointsData] = useState({
         attended: false, hasBible: false, hasHandbook: false,
         lesson: false, friend: false, hasUniform: false
     });
 
-    // NOU: Stare pentru punctele manuale (extra)
     const [extraPoints, setExtraPoints] = useState('');
+    const [fetchError, setFetchError] = useState(null);
 
     useEffect(() => {
         fetch(`${API_URL}/children`)
             .then(r => r.ok ? r.json() : [])
             .then(data => { if(Array.isArray(data)) setChildren(data.sort((a,b) => a.name.localeCompare(b.name))); })
-            .catch(()=>{});
+            .catch(() => setFetchError('Eroare la conectarea cu serverul.'));
     }, []);
 
     const getFilteredChildren = () => {
@@ -33,7 +33,6 @@ const ScoringWidget = () => {
         });
     };
 
-    // ACTUALIZAT: Adunam si punctele manuale la total
     const calculateTotal = () => {
         let total = 0;
         if (pointsData.attended) total += 1000;
@@ -43,7 +42,6 @@ const ScoringWidget = () => {
         if (pointsData.friend) total += 1000;
         if (pointsData.hasUniform) total += 10000;
 
-        // Adaugam punctele extra (daca a scris ceva valid)
         const extra = parseInt(extraPoints);
         if (!isNaN(extra)) {
             total += extra;
@@ -56,14 +54,13 @@ const ScoringWidget = () => {
         setPointsData(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    // ACTUALIZAT: Trimitem punctele extra catre server
     const handleSaveScore = () => {
         if (!selectedChild) return;
 
         const payload = {
             childId: selectedChild.id,
             ...pointsData,
-            extraPoints: parseInt(extraPoints) || 0 // Trimitem cat a scris sau 0
+            extraPoints: parseInt(extraPoints) || 0
         };
 
         fetch(`${API_URL}/scores/add`, {
@@ -71,15 +68,14 @@ const ScoringWidget = () => {
         })
             .then(async res => {
                 if(res.ok) {
-                    alert(`✅ Puncte salvate pentru ${selectedChild.name}!`);
-                    // Resetam tot dupa salvare
+                    toast.success(`Puncte salvate pentru ${selectedChild.name}!`);
                     setPointsData({ attended: false, hasBible: false, hasHandbook: false, lesson: false, friend: false, hasUniform: false });
                     setExtraPoints('');
                     setSelectedChild(null);
                     setSearchTerm('');
                     setIsSearching(false);
-                } else alert("❌ EROARE: " + await res.text());
-            }).catch(err => alert("❌ Eroare server!"));
+                } else toast.error("Eroare: " + await res.text());
+            }).catch(() => toast.error("Eroare server!"));
     };
 
     const getButtonStyle = (isActive) => ({
@@ -102,6 +98,11 @@ const ScoringWidget = () => {
 
     return (
         <div className="animate-in">
+            {fetchError && (
+                <div style={{background:'#fee2e2', border:'1px solid #fca5a5', color:'#991b1b', borderRadius:'12px', padding:'12px 16px', marginBottom:'16px', fontWeight:'600', fontSize:'0.9rem'}}>
+                    {fetchError}
+                </div>
+            )}
 
             {/* Cautare copil — mereu vizibila sus */}
             <div className="card" style={{marginBottom:'16px'}}>

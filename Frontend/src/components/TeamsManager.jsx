@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { API_URL } from '../config';
 
 const TeamsManager = () => {
@@ -13,17 +14,17 @@ const TeamsManager = () => {
     const [manualTeam, setManualTeam] = useState('red');
     const [searchAvailable, setSearchAvailable] = useState('');
 
-    // --- STATE PENTRU SECURITATE ---
     const [showPinModal, setShowPinModal] = useState(false);
     const [pinInput, setPinInput] = useState('');
-    const [loadingPin, setLoadingPin] = useState(false); // State nou pentru incarcare
+    const [loadingPin, setLoadingPin] = useState(false);
+    const [confirmRemove, setConfirmRemove] = useState(null);
 
     const teams =['red', 'blue', 'green', 'yellow'];
     const teamStyles = { red: { bg: '#fee2e2', border: '#ef4444', text: '#b91c1c' }, blue: { bg: '#dbeafe', border: '#3b82f6', text: '#1d4ed8' }, green: { bg: '#dcfce7', border: '#22c55e', text: '#15803d' }, yellow: { bg: '#fef9c3', border: '#eab308', text: '#a16207' } };
     const currentTheme = teamStyles[myColor];
 
     const refreshData = () => { fetch(`${API_URL}/teams/available`).then(r => r.ok?r.json():[]).then(setAvailableKids).catch(()=>{}); fetch(`${API_URL}/teams/status/${myColor}`).then(r => r.ok?r.json():null).then(data => { if(data) { setMyTeamMembers(data.members || []); setScores({ individual: data.individualScore || 0, game: data.gameScore || 0, total: data.totalScore || 0 }); } }).catch(()=>{}); };
-    useEffect(() => { refreshData(); const interval = setInterval(refreshData, 2000); return () => clearInterval(interval); }, [myColor]);
+    useEffect(() => { refreshData(); const interval = setInterval(refreshData, 5000); return () => clearInterval(interval); }, [myColor]);
 
     const handleAccessGames = () => {
         if (mode === 'games') return;
@@ -31,9 +32,8 @@ const TeamsManager = () => {
         setPinInput('');
     };
 
-    // --- MODIFICARE AICI: VERIFICARE CU SERVERUL ---
     const verifyPin = () => {
-        if (!pinInput) return alert("Scrie codul!");
+        if (!pinInput) return toast.warning("Scrie codul!");
 
         setLoadingPin(true);
 
@@ -45,26 +45,24 @@ const TeamsManager = () => {
             .then(async res => {
                 setLoadingPin(false);
                 if (res.ok) {
-                    // COD CORECT
                     setShowPinModal(false);
                     setMode('games');
                 } else {
-                    // COD GRESIT
-                    alert("❌ Cod Incorect! Cere codul de la Director/Mesaje.");
+                    toast.error("Cod Incorect! Cere codul de la Director.");
                     setPinInput('');
                 }
             })
             .catch(() => {
                 setLoadingPin(false);
-                alert("Eroare conexiune server.");
+                toast.error("Eroare conexiune server.");
             });
     };
 
-    const pickChild = (childId) => { fetch(`${API_URL}/teams/pick`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ childId: childId, teamColor: myColor }) }).then(async res => { if(res.ok) refreshData(); else alert(await res.text()); }); };
-    const removeChildFromTeam = (child) => { if(!window.confirm(`Îl scoți pe ${child.name} din echipa ${myColor.toUpperCase()}?`)) return; fetch(`${API_URL}/teams/remove`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ childId: child.id }) }).then(async res => { if(res.ok) { refreshData(); } else { alert("Eroare: " + await res.text()); }}); };
+    const pickChild = (childId) => { fetch(`${API_URL}/teams/pick`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ childId: childId, teamColor: myColor }) }).then(async res => { if(res.ok) refreshData(); else toast.error(await res.text()); }); };
+    const removeChildFromTeam = (child) => { fetch(`${API_URL}/teams/remove`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ childId: child.id }) }).then(async res => { if(res.ok) { setConfirmRemove(null); refreshData(); } else { toast.error("Eroare: " + await res.text()); }}); };
     const handleTeamPress = (c) => { if(!ranking.includes(c)) setRanking([...ranking, c]); };
-    const sendGamePoints = () => { if(ranking.length===0) return alert("Selecteaza ordinea!"); fetch(`${API_URL}/teams/game-round`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ ranking, isDouble }) }).then(res => { if(res.ok) { alert("✅ Clasament salvat!"); setRanking([]); setIsDouble(false); refreshData(); } }); };
-    const sendManualPoints = () => { if(!manualPoints || isNaN(manualPoints)) return alert("Introdu un număr valid!"); fetch(`${API_URL}/teams/add-manual-points`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ teamColor: manualTeam, points: parseInt(manualPoints) }) }).then(async res => { if(res.ok) { alert(`✅ ${await res.text()}`); setManualPoints(''); refreshData(); } else { alert("Eroare server: " + await res.text()); } }); };
+    const sendGamePoints = () => { if(ranking.length===0) return toast.warning("Selecteaza ordinea!"); fetch(`${API_URL}/teams/game-round`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ ranking, isDouble }) }).then(res => { if(res.ok) { toast.success("Clasament salvat!"); setRanking([]); setIsDouble(false); refreshData(); } }); };
+    const sendManualPoints = () => { if(!manualPoints || isNaN(manualPoints)) return toast.warning("Introdu un număr valid!"); fetch(`${API_URL}/teams/add-manual-points`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ teamColor: manualTeam, points: parseInt(manualPoints) }) }).then(async res => { if(res.ok) { toast.success(await res.text()); setManualPoints(''); refreshData(); } else { toast.error("Eroare server: " + await res.text()); } }); };
     const getPoints = (i) => { const pts=[1000,500,300,100]; return i<4 ? (isDouble?pts[i]*2:pts[i]) : 0; };
     const getFilteredAvailable = () => { if(!searchAvailable) return availableKids; const term = searchAvailable.toLowerCase(); return availableKids.filter(c => c.name.toLowerCase().includes(term) || c.surname.toLowerCase().includes(term)); };
 
@@ -170,14 +168,21 @@ const TeamsManager = () => {
                         <div style={{overflowY:'auto', flex:1}}>
                             {myTeamMembers.length === 0 && <div style={{padding:'10px', fontSize:'0.82rem', fontStyle:'italic', color: currentTheme.text, opacity:0.6}}>Niciun membru inca.</div>}
                             {myTeamMembers.map(c => (
-                                <div key={c.id} onClick={() => removeChildFromTeam(c)} style={{
-                                    padding:'8px 10px', marginBottom:'5px', cursor:'pointer',
+                                <div key={c.id} style={{
+                                    padding:'8px 10px', marginBottom:'5px',
                                     display:'flex', justifyContent:'space-between', alignItems:'center',
                                     background:'rgba(255,255,255,0.55)', borderRadius:'8px',
                                     border:`1px solid ${currentTheme.border}40`
                                 }}>
                                     <span style={{fontWeight:'700', color: currentTheme.text, fontSize:'0.9rem'}}>{c.name} {c.surname}</span>
-                                    <span style={{color: currentTheme.text, opacity:0.5, fontWeight:'800', fontSize:'0.9rem'}}>×</span>
+                                    {confirmRemove === c.id ? (
+                                        <div style={{display:'flex', gap:'4px'}}>
+                                            <button onClick={() => removeChildFromTeam(c)} style={{background:'#ef4444', color:'white', border:'none', borderRadius:'6px', padding:'3px 8px', fontWeight:'800', fontSize:'0.72rem', cursor:'pointer'}}>Da</button>
+                                            <button onClick={() => setConfirmRemove(null)} style={{background:'transparent', color: currentTheme.text, border:`1px solid ${currentTheme.border}`, borderRadius:'6px', padding:'3px 8px', fontWeight:'700', fontSize:'0.72rem', cursor:'pointer'}}>Nu</button>
+                                        </div>
+                                    ) : (
+                                        <span onClick={() => setConfirmRemove(c.id)} style={{color: currentTheme.text, opacity:0.5, fontWeight:'800', fontSize:'0.9rem', cursor:'pointer'}}>×</span>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -196,7 +201,6 @@ const TeamsManager = () => {
                                 padding:'8px 18px', borderRadius:'10px', fontWeight:'800', fontSize:'0.88rem', border:'none',
                                 background: isDouble ? 'linear-gradient(135deg, #f59e0b, #d97706)' : 'var(--bg-primary)',
                                 color: isDouble ? 'white' : 'var(--text-secondary)',
-                                border: isDouble ? 'none' : '1px solid var(--border-color)',
                                 boxShadow: isDouble ? '0 4px 12px rgba(245,158,11,0.4)' : 'none',
                                 transition:'all 0.18s'
                             }}>
@@ -254,7 +258,6 @@ const TeamsManager = () => {
                                             borderRadius:'14px', padding:'14px', transition:'all 0.15s'
                                         }}>
                                             <div style={{fontWeight:'800', textTransform:'uppercase', color: th.text, marginBottom:'8px', fontSize:'0.9rem'}}>{t}</div>
-                                            {/* Preseturi rapide */}
                                             <div style={{display:'flex', gap:'5px', marginBottom:'8px', flexWrap:'wrap'}}>
                                                 {[500, 1000, 2000].map(preset => (
                                                     <button key={preset} onClick={() => { setManualTeam(t); setManualPoints(String(preset)); }} style={{
