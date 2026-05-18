@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-
-const API_URL = 'http://awana.betania-tm.ro/api';
+import { API_URL } from './config';
 
 const AdminDashboard = ({ currentUser }) => {
     const [isUnlocked, setIsUnlocked] = useState(false);
