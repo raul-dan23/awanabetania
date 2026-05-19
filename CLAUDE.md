@@ -132,7 +132,6 @@ Fisierele relevante pentru referinta comenzilor APDU: `AWANAcard.cs`, `CardInfo.
 - **Fișier:** Toți controllerii
 - **Problemă:** `@CrossOrigin(origins = "*")` + niciun token de sesiune. Oricine știe URL-urile poate modifica date.
 - **Fix:** Spring Security + JWT (task mare, de planificat separat)
-
 ---
 
 ---

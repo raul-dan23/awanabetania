@@ -47,7 +47,41 @@ public class AdminController {
         return ResponseEntity.ok(response);
     }
 
-    // 2. DECRIPTARE PAROLA — necesita PIN in header
+    // 2. ASOCIAZA CARD NFC — necesita PIN in header
+    @PostMapping("/nfc-register")
+    public ResponseEntity<?> adminRegisterNfc(
+            @RequestHeader("X-Admin-Pin") String pin,
+            @RequestBody Map<String, Object> body) {
+        if (!isPinValid(pin)) return ResponseEntity.status(401).body("PIN incorect");
+        Integer childId = (Integer) body.get("childId");
+        String uid = (String) body.get("uid");
+        if (childId == null || uid == null || uid.isBlank())
+            return ResponseEntity.badRequest().body("childId si uid sunt obligatorii.");
+        childRepository.findByNfcUid(uid).ifPresent(existing -> {
+            if (!existing.getId().equals(childId)) { existing.setNfcUid(null); childRepository.save(existing); }
+        });
+        Child child = childRepository.findById(childId).orElse(null);
+        if (child == null) return ResponseEntity.notFound().build();
+        child.setNfcUid(uid);
+        childRepository.save(child);
+        return ResponseEntity.ok(Map.of("message", "Card asociat.", "childId", child.getId(),
+                "name", child.getName() + " " + child.getSurname(), "uid", uid));
+    }
+
+    // 3. STERGE CARD NFC — necesita PIN in header
+    @DeleteMapping("/nfc-remove/{childId}")
+    public ResponseEntity<?> adminRemoveNfc(
+            @PathVariable Integer childId,
+            @RequestHeader("X-Admin-Pin") String pin) {
+        if (!isPinValid(pin)) return ResponseEntity.status(401).body("PIN incorect");
+        Child child = childRepository.findById(childId).orElse(null);
+        if (child == null) return ResponseEntity.notFound().build();
+        child.setNfcUid(null);
+        childRepository.save(child);
+        return ResponseEntity.ok(Map.of("message", "Card dezasociat."));
+    }
+
+    // 4. DECRIPTARE PAROLA — necesita PIN in header
     @PostMapping("/decrypt-password")
     public ResponseEntity<?> decryptPassword(
             @RequestHeader(value = "X-Admin-Pin", required = false) String pin,

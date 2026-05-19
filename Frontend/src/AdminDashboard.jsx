@@ -11,6 +11,11 @@ const AdminDashboard = ({ currentUser }) => {
     const [sortBy, setSortBy] = useState('name');
     const [visiblePasswords, setVisiblePasswords] = useState({});
 
+    // NFC state
+    const [nfcAssigning, setNfcAssigning] = useState(null);
+    const [nfcUidInput, setNfcUidInput] = useState('');
+    const [nfcScanning, setNfcScanning] = useState(false);
+
     useEffect(() => {
         if (isUnlocked) fetchData();
     }, [isUnlocked]);
@@ -36,6 +41,47 @@ const AdminDashboard = ({ currentUser }) => {
                 else { toast.error("PIN Incorect!"); setPin(''); }
             })
             .catch(() => { toast.error("Eroare conexiune server."); setPin(''); });
+    };
+
+    const assignNfc = (childId) => {
+        if (!nfcUidInput.trim()) { toast.error('Introdu UID-ul cardului.'); return; }
+        fetch(`${API_URL}/admin/nfc-register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': pin },
+            body: JSON.stringify({ childId, uid: nfcUidInput.trim().toUpperCase() })
+        })
+        .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t)))
+        .then(() => { toast.success('Card asociat!'); setNfcAssigning(null); setNfcUidInput(''); fetchData(); })
+        .catch(err => toast.error(typeof err === 'string' ? err : 'Eroare.'));
+    };
+
+    const removeNfc = (childId) => {
+        if (!window.confirm('Sigur elimini cardul acestui copil?')) return;
+        fetch(`${API_URL}/admin/nfc-remove/${childId}`, {
+            method: 'DELETE',
+            headers: { 'X-Admin-Pin': pin }
+        })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(() => { toast.success('Card eliminat.'); fetchData(); })
+        .catch(() => toast.error('Eroare.'));
+    };
+
+    const startNfcScan = async () => {
+        if (!('NDEFReader' in window)) { toast.error('Web NFC nu e disponibil pe acest dispozitiv.'); return; }
+        try {
+            setNfcScanning(true);
+            const ndef = new window.NDEFReader();
+            await ndef.scan();
+            ndef.addEventListener('reading', ({ serialNumber }) => {
+                const uid = serialNumber.replace(/:/g, '').toUpperCase();
+                setNfcUidInput(uid);
+                setNfcScanning(false);
+                toast.success(`Card detectat: ${uid}`);
+            }, { once: true });
+        } catch {
+            setNfcScanning(false);
+            toast.error('Eroare la citire NFC.');
+        }
     };
 
     const revealPassword = (id, encryptedPass) => {
@@ -142,48 +188,122 @@ const AdminDashboard = ({ currentUser }) => {
                 }}>Iesi</button>
             </div>
 
-            {/* Tabs Lideri / Copii */}
+            {/* Tabs Lideri / Copii / NFC */}
             <div style={{display:'flex', gap:'8px', marginBottom:'14px', background:'#f4f7fe', padding:'4px', borderRadius:'14px'}}>
                 <button onClick={() => { setViewMode('LEADERS'); setSortBy('name'); }} style={{
                     flex:1, padding:'10px', border:'none', cursor:'pointer', borderRadius:'10px',
-                    fontWeight:'800', fontSize:'0.9rem', transition:'all 0.18s',
+                    fontWeight:'800', fontSize:'0.85rem', transition:'all 0.18s',
                     background: viewMode==='LEADERS' ? 'white' : 'transparent',
                     color: viewMode==='LEADERS' ? '#0284c7' : '#64748b',
                     boxShadow: viewMode==='LEADERS' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
                 }}>Lideri ({data.leaders.length})</button>
                 <button onClick={() => { setViewMode('CHILDREN'); setSortBy('name'); }} style={{
                     flex:1, padding:'10px', border:'none', cursor:'pointer', borderRadius:'10px',
-                    fontWeight:'800', fontSize:'0.9rem', transition:'all 0.18s',
+                    fontWeight:'800', fontSize:'0.85rem', transition:'all 0.18s',
                     background: viewMode==='CHILDREN' ? 'white' : 'transparent',
                     color: viewMode==='CHILDREN' ? '#16a34a' : '#64748b',
                     boxShadow: viewMode==='CHILDREN' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
                 }}>Copii ({data.children.length})</button>
+                <button onClick={() => { setViewMode('NFC'); setSearchTerm(''); }} style={{
+                    flex:1, padding:'10px', border:'none', cursor:'pointer', borderRadius:'10px',
+                    fontWeight:'800', fontSize:'0.85rem', transition:'all 0.18s',
+                    background: viewMode==='NFC' ? 'white' : 'transparent',
+                    color: viewMode==='NFC' ? '#7c3aed' : '#64748b',
+                    boxShadow: viewMode==='NFC' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
+                }}>Carduri NFC</button>
             </div>
 
-            {/* Search */}
-            <input
+            {/* ── VIEW NFC ── */}
+            {viewMode === 'NFC' && (
+                <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                    <input
+                        className="login-input"
+                        placeholder="Caută copil după nume..."
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                        style={{marginBottom:'6px'}}
+                    />
+                    {data.children
+                        .filter(c => !searchTerm || `${c.name} ${c.surname}`.toLowerCase().includes(searchTerm.toLowerCase()))
+                        .sort((a, b) => (a.nfcUid ? 1 : 0) - (b.nfcUid ? 1 : 0) || a.name.localeCompare(b.name))
+                        .map(c => (
+                        <div key={c.id} style={{background:'white', borderRadius:'14px', overflow:'hidden', boxShadow:'0 2px 8px rgba(0,0,0,0.06)', border:'1px solid #e2e8f0', borderLeft:`4px solid ${c.nfcUid ? '#7c3aed' : '#e2e8f0'}`}}>
+                            <div style={{padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px'}}>
+                                <div style={{flex:1, minWidth:0}}>
+                                    <div style={{fontWeight:'900', color:'#1e293b'}}>{c.name} {c.surname}</div>
+                                    <div style={{fontSize:'0.78rem', color:'#64748b', marginTop:'2px'}}>
+                                        {c.nfcUid
+                                            ? <span style={{fontFamily:'monospace', color:'#7c3aed', fontWeight:'800'}}>{c.nfcUid}</span>
+                                            : <span style={{color:'#94a3b8'}}>Fără card</span>
+                                        }
+                                        {' · '}<span style={{color:'#f59e0b', fontWeight:'700'}}>{c.seasonPoints || 0} pct</span>
+                                    </div>
+                                </div>
+                                <div style={{display:'flex', gap:'6px', flexShrink:0}}>
+                                    {c.nfcUid && (
+                                        <button onClick={() => removeNfc(c.id)} style={{padding:'6px 11px', border:'1px solid #fecaca', borderRadius:'8px', background:'#fff5f5', cursor:'pointer', fontWeight:'700', fontSize:'0.78rem', color:'#dc2626'}}>
+                                            Elimină
+                                        </button>
+                                    )}
+                                    <button onClick={() => { setNfcAssigning(nfcAssigning === c.id ? null : c.id); setNfcUidInput(''); }} style={{padding:'6px 11px', border:'1px solid #e9d5ff', borderRadius:'8px', background:nfcAssigning === c.id ? '#f5f3ff' : 'white', cursor:'pointer', fontWeight:'700', fontSize:'0.78rem', color:'#7c3aed'}}>
+                                        {c.nfcUid ? 'Schimbă' : 'Asociază'}
+                                    </button>
+                                </div>
+                            </div>
+                            {nfcAssigning === c.id && (
+                                <div style={{padding:'12px 18px', borderTop:'1px solid #f1f5f9', background:'#faf5ff', display:'flex', gap:'8px', flexWrap:'wrap', alignItems:'center'}}>
+                                    <input
+                                        placeholder="UID card (ex: A1B2C3D4)"
+                                        value={nfcUidInput}
+                                        onChange={e => setNfcUidInput(e.target.value.toUpperCase())}
+                                        onKeyDown={e => e.key === 'Enter' && assignNfc(c.id)}
+                                        style={{flex:1, minWidth:'140px', padding:'9px 13px', borderRadius:'9px', border:'2px solid #e9d5ff', fontFamily:'monospace', fontWeight:'700', outline:'none', fontSize:'0.9rem'}}
+                                        autoFocus
+                                    />
+                                    {'NDEFReader' in window && (
+                                        <button onClick={startNfcScan} disabled={nfcScanning} style={{padding:'9px 14px', border:'1px solid #e9d5ff', borderRadius:'9px', background:'white', cursor:'pointer', fontWeight:'700', fontSize:'0.82rem', color:'#7c3aed', opacity: nfcScanning ? 0.6 : 1}}>
+                                            {nfcScanning ? '📡 Scanează...' : '📡 Scan NFC'}
+                                        </button>
+                                    )}
+                                    <button onClick={() => assignNfc(c.id)} style={{padding:'9px 16px', border:'none', borderRadius:'9px', background:'#7c3aed', color:'white', fontWeight:'800', cursor:'pointer', fontSize:'0.85rem'}}>
+                                        Salvează
+                                    </button>
+                                    <button onClick={() => setNfcAssigning(null)} style={{padding:'9px 13px', border:'1px solid #e2e8f0', borderRadius:'9px', background:'white', cursor:'pointer', fontWeight:'700', fontSize:'0.82rem', color:'#64748b'}}>
+                                        Anulează
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Search (Lideri / Copii) */}
+            {viewMode !== 'NFC' && <input
                 className="login-input"
                 placeholder={`Cauta ${viewMode === 'LEADERS' ? 'lider' : 'copil'} dupa nume...`}
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 style={{marginBottom:'10px'}}
-            />
+            />}
 
-            {/* Sort pills */}
-            <div style={{display:'flex', gap:'6px', marginBottom:'20px', background:'#f4f7fe', padding:'4px', borderRadius:'14px'}}>
-                {sortOpts.map(opt => (
-                    <button key={opt.key} onClick={() => setSortBy(opt.key)} style={{
-                        flex:1, padding:'7px 6px', border:'none', cursor:'pointer', borderRadius:'10px',
-                        fontWeight:'700', fontSize:'0.78rem', transition:'all 0.18s',
-                        background: sortBy === opt.key ? 'white' : 'transparent',
-                        color: sortBy === opt.key ? '#4318ff' : '#64748b',
-                        boxShadow: sortBy === opt.key ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
-                    }}>{opt.label}</button>
-                ))}
-            </div>
+            {/* Sort pills (Lideri / Copii) */}
+            {viewMode !== 'NFC' && (
+                <div style={{display:'flex', gap:'6px', marginBottom:'20px', background:'#f4f7fe', padding:'4px', borderRadius:'14px'}}>
+                    {sortOpts.map(opt => (
+                        <button key={opt.key} onClick={() => setSortBy(opt.key)} style={{
+                            flex:1, padding:'7px 6px', border:'none', cursor:'pointer', borderRadius:'10px',
+                            fontWeight:'700', fontSize:'0.78rem', transition:'all 0.18s',
+                            background: sortBy === opt.key ? 'white' : 'transparent',
+                            color: sortBy === opt.key ? '#4318ff' : '#64748b',
+                            boxShadow: sortBy === opt.key ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
+                        }}>{opt.label}</button>
+                    ))}
+                </div>
+            )}
 
-            {/* Cards */}
-            <div style={{display:'flex', flexDirection:'column', gap:'14px'}}>
+            {/* Cards (Lideri / Copii) */}
+            {viewMode !== 'NFC' && <div style={{display:'flex', flexDirection:'column', gap:'14px'}}>
                 {displayList.map(user => {
                     const initials = `${user.name?.charAt(0)||''}${user.surname?.charAt(0)||''}`;
                     const isLeaderView = viewMode === 'LEADERS';
@@ -326,7 +446,7 @@ const AdminDashboard = ({ currentUser }) => {
                 {displayList.length === 0 && (
                     <div style={{textAlign:'center', color:'#94a3b8', padding:'40px', fontStyle:'italic'}}>Nu am gasit niciun rezultat.</div>
                 )}
-            </div>
+            </div>}
         </div>
     );
 };
