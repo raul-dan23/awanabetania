@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { API_URL } from './config';
+import { useNfcBridge } from './hooks/useNfcBridge';
 
 const AdminDashboard = ({ currentUser }) => {
     const [isUnlocked, setIsUnlocked] = useState(false);
@@ -15,6 +16,13 @@ const AdminDashboard = ({ currentUser }) => {
     const [nfcAssigning, setNfcAssigning] = useState(null);
     const [nfcUidInput, setNfcUidInput] = useState('');
     const [nfcScanning, setNfcScanning] = useState(false);
+
+    const nfcBridgeConnected = useNfcBridge((uid) => {
+        if (nfcAssigning !== null) {
+            setNfcUidInput(uid);
+            toast.success('Card detectat: ' + uid);
+        }
+    });
 
     useEffect(() => {
         if (isUnlocked) fetchData();
@@ -216,6 +224,13 @@ const AdminDashboard = ({ currentUser }) => {
             {/* ── VIEW NFC ── */}
             {viewMode === 'NFC' && (
                 <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
+                    {/* Status bridge */}
+                    <div style={{display:'flex', alignItems:'center', gap:'8px', padding:'10px 14px', borderRadius:'10px', background: nfcBridgeConnected ? '#f0fdf4' : '#f8fafc', border:`1px solid ${nfcBridgeConnected ? '#86efac' : '#e2e8f0'}`, marginBottom:'4px'}}>
+                        <div style={{width:'8px', height:'8px', borderRadius:'50%', background: nfcBridgeConnected ? '#16a34a' : '#94a3b8', flexShrink:0}}/>
+                        <span style={{fontSize:'0.82rem', fontWeight:'700', color: nfcBridgeConnected ? '#15803d' : '#64748b'}}>
+                            {nfcBridgeConnected ? 'NFC Bridge conectat — pune cardul pe cititor' : 'NFC Bridge deconectat — porneste nfc-bridge.jar'}
+                        </span>
+                    </div>
                     <input
                         className="login-input"
                         placeholder="Caută copil după nume..."

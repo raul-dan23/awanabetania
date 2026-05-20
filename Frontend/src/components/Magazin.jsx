@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { API_URL } from '../config';
+import { useNfcBridge } from '../hooks/useNfcBridge';
 
 const Magazin = ({ user }) => {
     const isDirector = user?.role === 'DIRECTOR' || user?.role === 'COORDONATOR';
@@ -23,11 +24,21 @@ const Magazin = ({ user }) => {
     const [pendingBons, setPendingBons] = useState([]);
     const [allBons, setAllBons] = useState([]);
     const [contabilTab, setContabilTab] = useState('pending');
+    const [nfcChild, setNfcChild] = useState(null);
 
-    useEffect(() => { fetchProducts(); }, []);
+    const nfcBridgeConnected = useNfcBridge((uid) => {
+        const found = children.find(c => c.nfcUid === uid);
+        if (found) {
+            setNfcChild(found);
+            toast.success(`Card: ${found.name} ${found.surname}`);
+        } else {
+            toast.error('Card necunoscut sau neînregistrat.');
+        }
+    });
+
+    useEffect(() => { fetchProducts(); fetchChildren(); }, []);
 
     useEffect(() => {
-        if (tab === 'bon') fetchChildren();
         if (tab === 'contabil') {
             fetchPendingBons();
             const iv = setInterval(fetchPendingBons, 3000);
@@ -390,17 +401,47 @@ const Magazin = ({ user }) => {
                         ))}
                     </div>
 
+                    {/* Status NFC Bridge */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '10px', background: nfcBridgeConnected ? '#f0fdf4' : '#f8fafc', border: `1px solid ${nfcBridgeConnected ? '#86efac' : '#e2e8f0'}`, marginBottom: '8px' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: nfcBridgeConnected ? '#16a34a' : '#94a3b8', flexShrink: 0 }} />
+                        <span style={{ fontSize: '0.82rem', fontWeight: '700', color: nfcBridgeConnected ? '#15803d' : '#64748b', flex: 1 }}>
+                            {nfcBridgeConnected ? 'NFC activ — pune cardul pe cititor pentru identificare' : 'NFC Bridge deconectat — porneste nfc-bridge.jar'}
+                        </span>
+                        {nfcChild && (
+                            <button onClick={() => setNfcChild(null)} style={{ padding: '3px 10px', border: '1px solid #86efac', borderRadius: '6px', background: 'white', cursor: 'pointer', fontSize: '0.75rem', fontWeight: '700', color: '#15803d', flexShrink: 0 }}>
+                                Sterge filtru
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Banner copil identificat prin NFC */}
+                    {nfcChild && contabilTab === 'pending' && (
+                        <div style={{ padding: '14px 18px', borderRadius: '14px', background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', border: '2px solid #86efac', marginBottom: '4px' }}>
+                            <div style={{ fontWeight: '900', color: '#15803d', fontSize: '1.05rem' }}>
+                                {nfcChild.name} {nfcChild.surname}
+                            </div>
+                            <div style={{ fontSize: '0.82rem', color: '#16a34a', fontWeight: '700', marginTop: '2px' }}>
+                                {nfcChild.seasonPoints || 0} puncte disponibile · se afișează doar bonurile acestui copil
+                            </div>
+                        </div>
+                    )}
+
                     {/* Bonuri în așteptare */}
                     {contabilTab === 'pending' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {pendingBons.length === 0 && (
+                            {pendingBons.filter(b => !nfcChild || b.childId === nfcChild.id).length === 0 && pendingBons.length === 0 && (
                                 <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8' }}>
                                     <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>✓</div>
                                     <div style={{ fontWeight: '700' }}>Niciun bon în așteptare.</div>
                                     <div style={{ fontSize: '0.85rem', marginTop: '4px' }}>Se actualizează automat.</div>
                                 </div>
                             )}
-                            {pendingBons.map(bon => {
+                            {nfcChild && pendingBons.filter(b => b.childId === nfcChild.id).length === 0 && (
+                                <div style={{ textAlign: 'center', padding: '30px 20px', color: '#94a3b8' }}>
+                                    <div style={{ fontWeight: '700' }}>Niciun bon în așteptare pentru {nfcChild.name}.</div>
+                                </div>
+                            )}
+                            {pendingBons.filter(b => !nfcChild || b.childId === nfcChild.id).map(bon => {
                                 const items = (() => { try { return JSON.parse(bon.items || '[]'); } catch { return []; } })();
                                 return (
                                     <div key={bon.id} style={{ background: 'white', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1px solid #e2e8f0', borderLeft: '4px solid #f59e0b' }}>
