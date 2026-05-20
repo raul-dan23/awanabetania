@@ -22,105 +22,91 @@ src/main/java/com/awanabetania/awanabetania/
 
 ---
 
-## FEATURE DE IMPLEMENTAT: Sistem NFC pentru Targul de Final de Sezon
+## SISTEM NFC TÂRG FINAL DE SEZON — IMPLEMENTAT ✅
 
-### Contextul complet
-La final de sezon, copiii primesc **carduri NFC fizice** legate de contul lor din aplicatie.
-Merg la **"tarabe"** (standuri cu recompense) si isi cumpara lucruri cu punctele acumulate peste sezon.
-La taraba, copilul tasteaza cardul pe un cititor NFC USB → punctele se scad din baza de date.
+### Principiu cheie — cardul stochează DOAR UID-ul
+Nu scriem nimic pe card. Fiecare card NFC are un UID hardware unic din fabrică (ex: `A1B2C3D4`).
+Citim UID-ul și îl mapăm la copil în BD. Toate punctele rămân în BD, nu pe card.
 
-### Principiu cheie — cardul stocheaza DOAR UID-ul
-Nu scriem nimic pe card. Fiecare card NFC are un UID hardware unic din fabrica (ex: `A1B2C3D4`).
-Citim acest UID si il mapam la copil in BD. Toate punctele raman in BD, nu pe card.
-Daca cardul se pierde, adminul poate atribui un card nou aceluiasi copil.
-
-### Arhitectura
+### Arhitectura finală
 ```
-[Card NFC fizic] → [Cititor USB ACS ACR1251 la taraba]
-                          │
-                   [Laptop la taraba]
-                   (JAR Java local - proiect separat)
-                          │ HTTP REST
-                   [Ubuntu Server - Spring Boot]
-                          │
-                   [BD - scade punctele din Child.seasonPoints]
+[Card NFC fizic]
+       │
+[Cititor USB NFC - PC/SC]
+       │ javax.smartcardio
+[nfc-bridge.jar — rulează local]  ←── java -jar nfc-bridge.jar
+       │ WebSocket ws://localhost:7000
+[Browser React - aplicația web]
+       │ HTTP REST
+[Ubuntu Server - Spring Boot]
+       │
+[MySQL — scade punctele din Child.seasonPoints]
 ```
+
+### Flux la târg
+1. **Înainte de târg** — Admin deschide Control Center → tab "Carduri NFC", pune cardul pe cititor → UID se completează automat, apasă Asociază
+2. **La târg — Lider vânzător** (telefon) → Magazin → Bon Nou → caută copil → bifează produse → Generează bon
+3. **La târg — Lider contabil** (laptop cu cititor NFC) → Magazin → Contabil → pune cardul copilului → se filtrează bonul lui → Aprobă → puncte scăzute
 
 ---
 
-## PLAN DE IMPLEMENTARE
+## CE ESTE IMPLEMENTAT
 
-### PASUL 1 — Camp `nfcUid` in Child (backend)
-**Fisier:** `src/main/java/com/awanabetania/awanabetania/Model/Child.java`
+### Backend
+| Fișier | Descriere |
+|---|---|
+| `Model/Child.java` | Câmp `nfc_uid` (unique) |
+| `Controller/NfcController.java` | `POST /api/nfc/register`, `GET /api/nfc/{uid}`, `POST /api/nfc/{uid}/spend` — protejate cu `X-NFC-Token` |
+| `Model/Product.java` | Produse magazin: `name`, `pointPrice`, `category`, `available` |
+| `Model/Bon.java` | Bon de cumpărături: `child`, `leaderName`, `items` (JSON), `totalPoints`, `status` |
+| `Controller/ProductController.java` | CRUD produse — GET public, POST/PUT/DELETE cu `X-Admin-Pin` |
+| `Controller/BonController.java` | `POST /api/bons`, `GET /api/bons/pending`, `GET /api/bons/all`, `POST /api/bons/{id}/approve`, `POST /api/bons/{id}/reject` |
+| `Controller/AdminController.java` | `POST /api/admin/nfc-register`, `DELETE /api/admin/nfc-remove/{childId}` — cu `X-Admin-Pin` |
+| `Repository/ProductRepository.java` | Acces BD produse |
+| `Repository/BonRepository.java` | `findByStatusOrderByCreatedAtDesc`, `findAllByOrderByCreatedAtDesc` |
 
-Adauga:
-```java
-@Column(name = "nfc_uid", unique = true)
-private String nfcUid;
+**application.properties:** `ddl-auto=update` (creează automat tabelele `products` și `bons`)
+
+### Frontend
+| Fișier | Descriere |
+|---|---|
+| `Frontend/src/components/Magazin.jsx` | Secțiune nouă în sidebar cu 3 tab-uri: Produse / Bon Nou / Contabil |
+| `Frontend/src/hooks/useNfcBridge.js` | Hook WebSocket cu reconectare automată la 3s |
+| `Frontend/src/AdminDashboard.jsx` | Tab nou "Carduri NFC" — asociere/eliminare card per copil, status bridge live |
+| `Frontend/src/App.jsx` | "Magazin Târg" în sidebar pentru toți liderii |
+
+**Acces pe roluri:**
+- Copii: nu văd Magazin
+- Lideri: Bon Nou + Contabil
+- Director/Coordonator: + tab Produse (cu admin PIN)
+- User ID=1: + Control Center → Carduri NFC
+
+### NFC Bridge (proiect separat)
+**Locație:** `nfc-bridge/` — Maven project, JAR executabil
+
+```bash
+# Build
+cd nfc-bridge && mvn package
+
+# Rulare normală (cu cititor fizic)
+java -jar nfc-bridge/target/nfc-bridge.jar
+
+# Rulare în mod test (fără hardware — trimiți UID-uri manual din terminal)
+java -jar nfc-bridge/target/nfc-bridge.jar --test
 ```
 
-### PASUL 2 — NfcController (backend)
-**Fisier nou:** `src/main/java/com/awanabetania/awanabetania/Controller/NfcController.java`
-
-Trei endpoint-uri:
-```
-POST /api/nfc/register
-     body: { "childId": 5, "uid": "A1B2C3D4" }
-     → leaga un card de un copil (folosit de admin la inceput de sezon)
-
-GET  /api/nfc/{uid}
-     → returneaza datele copilului + punctele curente
-     → folosit de JAR-ul de la taraba dupa scanare
-
-POST /api/nfc/{uid}/spend
-     body: { "amount": 50 }
-     → scade punctele din Child.seasonPoints
-     → returneaza noul sold
-```
-
-Protejeaza endpoint-urile cu un header secret simplu:
-```
-X-NFC-Token: <token configurat in application.properties>
-```
-
-### PASUL 3 — Pagina admin in React pentru inregistrare carduri
-**In `Frontend/src/`** — pagina noua accesibila doar adminului:
-- Input pentru ID-ul copilului
-- Buton "Asteapta card" → apeleaza un endpoint care citeste UID-ul urmatorului card scanat
-- La scanare, UID-ul se salveaza automat in BD
-
-### PASUL 4 — JAR local pentru tarabe (proiect Java separat)
-Un proiect Java simplu (Swing) care ruleaza pe laptopul de la taraba:
-- Foloseste `javax.smartcardio` (built-in in Java, zero dependente externe)
-- Polling la 500ms — asteapta un card
-- La detectie: citeste UID cu comanda APDU `FF CA 00 00 00`
-- Apeleaza `GET /api/nfc/{uid}` → afiseaza numele copilului si punctele
-- Operatorul introduce suma produsului → apeleaza `POST /api/nfc/{uid}/spend`
-- Afiseaza noul sold si confirmare
-
-**Comanda APDU pentru citire UID (functioneaza pe orice card NFC, fara autentificare):**
-```java
-byte[] GET_UID = new byte[]{ (byte)0xFF, (byte)0xCA, 0x00, 0x00, 0x00 };
-```
-
-### PASUL 5 — (Optional, mai tarziu) Telefon Android ca si card
-Android HCE (Host Card Emulation) — aplicatie Android separata.
-Nu implementa acum.
+**Cum funcționează:**
+- Polling PC/SC la 300ms (javax.smartcardio — built-in în Java)
+- APDU pentru UID: `FF CA 00 00 00`
+- WebSocket server pe `ws://localhost:7000`
+- Trimite `{"uid":"A1B2C3D4"}` la toate browserele conectate
+- Browserul auto-completează UID-ul în formularul activ
 
 ---
 
-## Referinta: proiectul Awana-2 (C# WinForms)
-Locatie: `~/Downloads/Awana-2/`
-Acelasi concept dar mai vechi: stoca punctele PE CARD (nu in BD) si folosea cititorul ACS ACR1251.
-Fisierele relevante pentru referinta comenzilor APDU: `AWANAcard.cs`, `CardInfo.cs`.
-
----
-
-## Ordinea de lucru recomandata
-1. Incepe cu **Pasul 1 + Pasul 2** (backend pur, nu necesita hardware)
-2. Testeaza endpoint-urile cu Postman/curl (simuleaza un UID hardcodat)
-3. Fa **Pasul 3** (pagina admin React)
-4. Fa **Pasul 4** (JAR taraba) — necesita cititorul NFC fizic pentru testare finala
+## Referință: proiectul Awana-2 (C# WinForms)
+Locație: `~/Downloads/Awana-2/`
+Același concept dar mai vechi: stoca punctele PE CARD. Fișiere relevante pentru APDU: `AWANAcard.cs`, `CardInfo.cs`.
 
 ---
 

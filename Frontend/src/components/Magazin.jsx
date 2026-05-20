@@ -367,7 +367,7 @@ const Magazin = ({ user }) => {
                                         <div style={{ fontWeight: '900', fontSize: '1.6rem', color: '#4318ff', lineHeight: 1.1 }}>{getTotalPoints()} <span style={{ fontSize: '0.9rem' }}>pct</span></div>
                                         {getTotalPoints() > (selectedChild.seasonPoints || 0) && (
                                             <div style={{ color: '#dc2626', fontWeight: '700', fontSize: '0.75rem', marginTop: '2px' }}>
-                                                ⚠ Depășește soldul ({selectedChild.seasonPoints || 0} disponibile)
+                                                Depășește soldul ({selectedChild.seasonPoints || 0} disponibile)
                                             </div>
                                         )}
                                     </div>
@@ -431,7 +431,7 @@ const Magazin = ({ user }) => {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                             {pendingBons.filter(b => !nfcChild || b.childId === nfcChild.id).length === 0 && pendingBons.length === 0 && (
                                 <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8' }}>
-                                    <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>✓</div>
+                                    <div style={{ fontSize: '2.5rem', marginBottom: '8px', color: '#86efac' }}>—</div>
                                     <div style={{ fontWeight: '700' }}>Niciun bon în așteptare.</div>
                                     <div style={{ fontSize: '0.85rem', marginTop: '4px' }}>Se actualizează automat.</div>
                                 </div>
@@ -467,10 +467,10 @@ const Magazin = ({ user }) => {
                                         </div>
                                         <div style={{ padding: '12px 18px', display: 'flex', gap: '8px' }}>
                                             <button onClick={() => approveBon(bon.id)} style={{ flex: 1, padding: '13px', border: 'none', borderRadius: '10px', background: 'linear-gradient(135deg, #16a34a, #4ade80)', color: 'white', fontWeight: '900', cursor: 'pointer', fontSize: '1rem' }}>
-                                                ✓ Aprobă
+                                                Aprobă
                                             </button>
                                             <button onClick={() => rejectBon(bon.id)} style={{ padding: '13px 20px', border: '1px solid #fecaca', borderRadius: '10px', background: 'white', cursor: 'pointer', fontWeight: '800', fontSize: '0.9rem', color: '#dc2626' }}>
-                                                ✗ Respinge
+                                                Respinge
                                             </button>
                                         </div>
                                     </div>

@@ -75,7 +75,10 @@ const AdminDashboard = ({ currentUser }) => {
     };
 
     const startNfcScan = async () => {
-        if (!('NDEFReader' in window)) { toast.error('Web NFC nu e disponibil pe acest dispozitiv.'); return; }
+        if (!('NDEFReader' in window)) {
+            toast.error('Web NFC nu e suportat. Necesita Chrome pe Android cu NFC activ, sau introdu UID-ul manual.');
+            return;
+        }
         try {
             setNfcScanning(true);
             const ndef = new window.NDEFReader();
@@ -275,11 +278,9 @@ const AdminDashboard = ({ currentUser }) => {
                                         style={{flex:1, minWidth:'140px', padding:'9px 13px', borderRadius:'9px', border:'2px solid #e9d5ff', fontFamily:'monospace', fontWeight:'700', outline:'none', fontSize:'0.9rem'}}
                                         autoFocus
                                     />
-                                    {'NDEFReader' in window && (
-                                        <button onClick={startNfcScan} disabled={nfcScanning} style={{padding:'9px 14px', border:'1px solid #e9d5ff', borderRadius:'9px', background:'white', cursor:'pointer', fontWeight:'700', fontSize:'0.82rem', color:'#7c3aed', opacity: nfcScanning ? 0.6 : 1}}>
-                                            {nfcScanning ? '📡 Scanează...' : '📡 Scan NFC'}
-                                        </button>
-                                    )}
+                                                    <button onClick={startNfcScan} disabled={nfcScanning} style={{padding:'9px 14px', border:'1px solid #e9d5ff', borderRadius:'9px', background:'white', cursor:'pointer', fontWeight:'700', fontSize:'0.82rem', color:'#7c3aed', opacity: nfcScanning ? 0.6 : 1}}>
+                                        {nfcScanning ? 'Scanează...' : 'Scan NFC'}
+                                    </button>
                                     <button onClick={() => assignNfc(c.id)} style={{padding:'9px 16px', border:'none', borderRadius:'9px', background:'#7c3aed', color:'white', fontWeight:'800', cursor:'pointer', fontSize:'0.85rem'}}>
                                         Salvează
                                     </button>
