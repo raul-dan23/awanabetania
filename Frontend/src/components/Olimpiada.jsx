@@ -618,14 +618,14 @@ export default function Olimpiada({ user, guestArbiter, onExitGuest }) {
         { id: 'comparatie', label: 'Comparatie', color: '#7c3aed' },
     ];
 
-    const SessionCodePicker = ({ onJoin }) => (
+    const codePickerJsx = (
         <div>
             <p className="db-section-title" style={{ marginBottom: 10 }}>Alege sesiunea</p>
             <div style={{ display: 'flex', gap: 8 }}>
                 <input placeholder="Cod sesiune (ex: OLM26)" value={codeInput}
                     onChange={e => setCodeInput(e.target.value.toUpperCase())}
                     className="login-input" style={{ flex: 1, marginBottom: 0 }} />
-                <button onClick={() => { joinSession(); if (onJoin) onJoin(); }} disabled={loadingSession} className="btn-primary"
+                <button onClick={joinSession} disabled={loadingSession} className="btn-primary"
                     style={{ padding: '10px 18px', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                     {loadingSession ? '...' : 'Intra'}
                 </button>
@@ -683,7 +683,7 @@ export default function Olimpiada({ user, guestArbiter, onExitGuest }) {
             {/* TAB SCORARE */}
             {tab === 'scorare' && (
                 !activeSession ? (
-                    <div className="card"><SessionCodePicker /></div>
+                    <div className="card">{codePickerJsx}</div>
                 ) : (
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
@@ -702,7 +702,7 @@ export default function Olimpiada({ user, guestArbiter, onExitGuest }) {
             {/* TAB COMPARATIE */}
             {tab === 'comparatie' && (
                 !activeSession ? (
-                    <div className="card"><SessionCodePicker /></div>
+                    <div className="card">{codePickerJsx}</div>
                 ) : (
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
