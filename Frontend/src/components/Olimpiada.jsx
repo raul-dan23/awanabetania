@@ -11,14 +11,13 @@ const TEAM_COLORS = {
     VERDE:    { bg: '#f0fff4', border: '#38a169', text: '#22623e', dot: '#38a169' },
 };
 
-const PLACE_LABELS = { 1: 'Locul 1', 2: 'Locul 2', 3: 'Locul 3', 4: 'Locul 4' };
-const PLACE_POINTS = { 1: 4, 2: 3, 3: 2, 4: 1 };
+const PLACE_POINTS = { 1: 1000, 2: 500, 3: 300, 4: 100 };
 
 function ScoringTab({ arbiterName, sessionCode }) {
-    const [placements, setPlacements] = useState({}); // { ROSU: 1, GALBEN: 2, ... }
+    const [placements, setPlacements] = useState({});
     const [round, setRound] = useState(1);
     const [submitting, setSubmitting] = useState(false);
-    const [history, setHistory] = useState([]); // submitted rounds this session
+    const [history, setHistory] = useState([]);
 
     const assignedPlaces = new Set(Object.values(placements));
     const allAssigned = TEAMS.every(t => placements[t] != null);
@@ -26,10 +25,8 @@ function ScoringTab({ arbiterName, sessionCode }) {
     const togglePlace = (team, place) => {
         setPlacements(prev => {
             const next = { ...prev };
-            // Daca o alta echipa are deja acest loc, il scoatem
             const existingTeam = Object.keys(next).find(t => next[t] === place && t !== team);
             if (existingTeam) delete next[existingTeam];
-            // Toggle
             if (next[team] === place) delete next[team];
             else next[team] = place;
             return next;
@@ -57,117 +54,102 @@ function ScoringTab({ arbiterName, sessionCode }) {
     };
 
     const teamLabel = t => t.charAt(0) + t.slice(1).toLowerCase();
+    const totalEchipa = (team) => placements[team] ? PLACE_POINTS[placements[team]] : 0;
+    const totalGeneral = TEAMS.reduce((s, t) => s + totalEchipa(t), 0);
 
     return (
         <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            {/* Header runda */}
+            <div className="card" style={{ marginBottom: 16, borderLeft: '4px solid var(--accent)', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                    <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>Runda {round}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.82rem', marginTop: 2 }}>Arbitru: {arbiterName}</div>
+                    <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--text-primary)' }}>Runda {round}</div>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: 2 }}>Arbitru: {arbiterName}</div>
                 </div>
                 {history.length > 0 && (
-                    <div style={{ fontSize: '0.8rem', color: '#6b7280', background: '#f3f4f6', borderRadius: 8, padding: '4px 10px' }}>
-                        {history.length} runde trimise
+                    <div style={{ textAlign: 'right', color: 'var(--accent)', fontWeight: 900, fontSize: '1.4rem', lineHeight: 1 }}>
+                        {history.length}
+                        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>runde</div>
                     </div>
                 )}
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {TEAMS.map(team => {
-                    const c = TEAM_COLORS[team];
-                    const selectedPlace = placements[team];
-                    return (
-                        <div key={team} style={{
-                            background: c.bg,
-                            border: `1.5px solid ${c.border}`,
-                            borderRadius: 12,
-                            padding: '12px 14px',
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                                <div style={{ width: 12, height: 12, borderRadius: '50%', background: c.dot }} />
-                                <span style={{ fontWeight: 600, color: c.text, fontSize: '0.95rem' }}>
+            {/* O echipa = un card cu 4 butoane loc */}
+            <div className="card" style={{ marginBottom: 16 }}>
+                <p className="db-section-title" style={{ marginBottom: 14 }}>Acorda locurile</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {TEAMS.map(team => {
+                        const c = TEAM_COLORS[team];
+                        const selectedPlace = placements[team];
+                        return (
+                            <div key={team}>
+                                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: c.text, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: c.dot }} />
                                     Echipa {teamLabel(team)}
-                                </span>
-                                {selectedPlace && (
-                                    <span style={{
-                                        marginLeft: 'auto', fontSize: '0.78rem', fontWeight: 600,
-                                        background: c.border, color: '#fff',
-                                        borderRadius: 20, padding: '2px 10px'
-                                    }}>
-                                        {PLACE_LABELS[selectedPlace]} ({PLACE_POINTS[selectedPlace]}p)
-                                    </span>
-                                )}
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
+                                    {[1, 2, 3, 4].map(place => {
+                                        const isSelected = selectedPlace === place;
+                                        const takenByOther = !isSelected && assignedPlaces.has(place);
+                                        return (
+                                            <div
+                                                key={place}
+                                                onClick={() => !takenByOther && togglePlace(team, place)}
+                                                style={{
+                                                    padding: '14px 8px', borderRadius: 14, cursor: takenByOther ? 'not-allowed' : 'pointer',
+                                                    border: `2px solid ${isSelected ? c.border : takenByOther ? 'var(--border-color)' : c.border}`,
+                                                    background: isSelected ? c.border : takenByOther ? '#f3f4f6' : 'white',
+                                                    color: isSelected ? 'white' : takenByOther ? '#9ca3af' : c.text,
+                                                    transition: 'all 0.15s',
+                                                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+                                                    opacity: takenByOther ? 0.45 : 1,
+                                                }}
+                                            >
+                                                <span style={{ fontWeight: 800, fontSize: '1rem' }}>Loc {place}</span>
+                                                <span style={{ fontSize: '0.72rem', fontWeight: 700, opacity: 0.8 }}>
+                                                    +{PLACE_POINTS[place].toLocaleString()}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                {[1, 2, 3, 4].map(place => {
-                                    const isSelected = selectedPlace === place;
-                                    const takenByOther = !isSelected && assignedPlaces.has(place);
-                                    return (
-                                        <button
-                                            key={place}
-                                            onClick={() => togglePlace(team, place)}
-                                            disabled={takenByOther}
-                                            style={{
-                                                flex: 1,
-                                                padding: '8px 0',
-                                                borderRadius: 8,
-                                                border: isSelected ? `2px solid ${c.border}` : '2px solid transparent',
-                                                background: isSelected ? c.border : takenByOther ? '#e5e7eb' : '#fff',
-                                                color: isSelected ? '#fff' : takenByOther ? '#9ca3af' : c.text,
-                                                fontWeight: isSelected ? 700 : 500,
-                                                fontSize: '0.85rem',
-                                                cursor: takenByOther ? 'not-allowed' : 'pointer',
-                                                transition: 'all 0.12s',
-                                            }}>
-                                            {place}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    );
-                })}
+                        );
+                    })}
+                </div>
             </div>
 
+            {/* Buton trimite */}
             <button
                 onClick={submitRound}
                 disabled={!allAssigned || submitting}
                 style={{
-                    marginTop: 20,
-                    width: '100%',
-                    padding: '13px',
-                    borderRadius: 10,
-                    border: 'none',
-                    background: allAssigned ? '#4f46e5' : '#d1d5db',
-                    color: allAssigned ? '#fff' : '#9ca3af',
-                    fontWeight: 700,
-                    fontSize: '1rem',
-                    cursor: allAssigned ? 'pointer' : 'not-allowed',
+                    width: '100%', padding: 16, background: allAssigned ? '#15803d' : '#d1d5db',
+                    color: allAssigned ? 'white' : '#9ca3af', border: 'none', borderRadius: 14,
+                    fontWeight: 800, fontSize: '1rem', cursor: allAssigned ? 'pointer' : 'not-allowed',
+                    boxShadow: allAssigned ? '0 4px 14px rgba(21,128,61,0.3)' : 'none',
+                    marginBottom: 16,
                 }}>
-                {submitting ? 'Se salveaza...' : `Trimite Runda ${round}`}
+                {submitting ? 'Se salveaza...' : `Salveaza Runda ${round}`}
             </button>
 
+            {/* Istoric runde */}
             {history.length > 0 && (
-                <div style={{ marginTop: 20 }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#374151', marginBottom: 8 }}>
-                        Runde trimise
-                    </div>
+                <div className="card">
+                    <p className="db-section-title" style={{ marginBottom: 10 }}>Runde trimise</p>
                     {history.map(h => (
                         <div key={h.round} style={{
-                            background: '#f9fafb', border: '1px solid #e5e7eb',
-                            borderRadius: 8, padding: '8px 12px', marginBottom: 6,
-                            fontSize: '0.83rem', color: '#4b5563',
-                            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap'
+                            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                            padding: '8px 0', borderBottom: '1px solid var(--border-color)',
+                            fontSize: '0.83rem'
                         }}>
-                            <span style={{ fontWeight: 600, color: '#111827' }}>Runda {h.round}:</span>
+                            <span style={{ fontWeight: 800, color: 'var(--text-primary)', minWidth: 60 }}>Runda {h.round}</span>
                             {TEAMS.map(t => (
                                 <span key={t} style={{
-                                    background: TEAM_COLORS[t].bg,
-                                    border: `1px solid ${TEAM_COLORS[t].border}`,
-                                    borderRadius: 6, padding: '1px 8px',
-                                    color: TEAM_COLORS[t].text, fontWeight: 500
+                                    background: TEAM_COLORS[t].bg, border: `1px solid ${TEAM_COLORS[t].border}`,
+                                    borderRadius: 8, padding: '2px 10px',
+                                    color: TEAM_COLORS[t].text, fontWeight: 600
                                 }}>
-                                    {t.charAt(0) + t.slice(1).toLowerCase()} — loc {h.placements[t]}
+                                    {t.charAt(0) + t.slice(1).toLowerCase()} — loc {h.placements[t]} ({PLACE_POINTS[h.placements[t]].toLocaleString()}p)
                                 </span>
                             ))}
                         </div>
@@ -493,9 +475,9 @@ export default function Olimpiada({ user, guestArbiter, onExitGuest }) {
     };
 
     const tabs = [
-        ...(!isGuest ? [{ id: 'sesiuni', label: 'Sesiuni' }] : []),
-        { id: 'scorare', label: 'Scorare' },
-        { id: 'comparatie', label: 'Comparatie' },
+        ...(!isGuest ? [{ id: 'sesiuni', label: 'Sesiuni', color: '#0284c7' }] : []),
+        { id: 'scorare', label: 'Scorare', color: '#16a34a' },
+        { id: 'comparatie', label: 'Comparatie', color: '#7c3aed' },
     ];
 
     return (
@@ -521,14 +503,14 @@ export default function Olimpiada({ user, guestArbiter, onExitGuest }) {
             </div>
 
             {/* Tabs */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20, background: '#f4f7fe', padding: 4, borderRadius: 14 }}>
                 {tabs.map(t => (
                     <button key={t.id} onClick={() => setTab(t.id)} style={{
-                        padding: '7px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                        background: tab === t.id ? '#4f46e5' : '#f3f4f6',
-                        color: tab === t.id ? '#fff' : '#374151',
-                        fontWeight: tab === t.id ? 600 : 400,
-                        fontSize: '0.88rem'
+                        flex: 1, padding: '10px', border: 'none', cursor: 'pointer', borderRadius: 10,
+                        fontWeight: 800, fontSize: '0.85rem', transition: 'all 0.18s',
+                        background: tab === t.id ? 'white' : 'transparent',
+                        color: tab === t.id ? t.color : '#64748b',
+                        boxShadow: tab === t.id ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
                     }}>
                         {t.label}
                     </button>

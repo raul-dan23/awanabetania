@@ -127,7 +127,8 @@ public class OlimpiadaController {
             score.setArbiterName(arbiterName);
             Integer place = (Integer) s.get("place");
             score.setPlace(place);
-            score.setPoints(5 - place); // 1st=4, 2nd=3, 3rd=2, 4th=1
+            int points = place == 1 ? 1000 : place == 2 ? 500 : place == 3 ? 300 : 100;
+            score.setPoints(points);
             saved.add(scoreRepo.save(score));
         }
 
