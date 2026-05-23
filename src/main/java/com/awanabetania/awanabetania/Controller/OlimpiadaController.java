@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 public class OlimpiadaController {
 
     private static final List<String> TEAMS = List.of("ROSU", "GALBEN", "ALBASTRU", "VERDE");
+    private static final Map<Integer, Integer> BASE_POINTS = Map.of(1, 1500, 2, 1000, 3, 500, 4, 300);
 
     @Autowired private OlimpiadaSessionRepository sessionRepo;
     @Autowired private OlimpiadaScoreRepository scoreRepo;
@@ -41,7 +42,6 @@ public class OlimpiadaController {
             return ResponseEntity.badRequest().body("Numele si codul sunt obligatorii");
         if (sessionRepo.findByCode(code.toUpperCase()).isPresent())
             return ResponseEntity.badRequest().body("Codul exista deja");
-
         OlimpiadaSession session = new OlimpiadaSession();
         session.setName(name.trim());
         session.setCode(code.toUpperCase().trim());
@@ -70,7 +70,7 @@ public class OlimpiadaController {
         if (!isPinValid(pin)) return ResponseEntity.status(401).body("PIN incorect");
         OlimpiadaSession session = sessionRepo.findById(id).orElse(null);
         if (session == null) return ResponseEntity.notFound().build();
-        scoreRepo.findBySessionId(id).forEach(s -> scoreRepo.delete(s));
+        scoreRepo.findBySessionId(id).forEach(scoreRepo::delete);
         sessionRepo.delete(session);
         return ResponseEntity.ok("Stearsa");
     }
@@ -84,7 +84,6 @@ public class OlimpiadaController {
         return ResponseEntity.ok(session);
     }
 
-    // Verifica daca un arbitru a introdus deja un anumit tur
     @GetMapping("/session/{code}/round-status")
     public ResponseEntity<?> roundStatus(@PathVariable String code,
                                          @RequestParam String arbiterName,
@@ -95,7 +94,7 @@ public class OlimpiadaController {
         return ResponseEntity.ok(Map.of("submitted", exists));
     }
 
-    // Trimite scorurile unui tur (4 echipe, locurile 1-4)
+    // Trimite scorurile unui tur (4 echipe + optional double points)
     @PostMapping("/session/{code}/score")
     public ResponseEntity<?> submitScore(@PathVariable String code,
                                          @RequestBody Map<String, Object> body) {
@@ -106,6 +105,7 @@ public class OlimpiadaController {
 
         String arbiterName = (String) body.get("arbiterName");
         Integer roundNumber = (Integer) body.get("roundNumber");
+        boolean isDouble = Boolean.TRUE.equals(body.get("isDouble"));
 
         if (arbiterName == null || arbiterName.isBlank() || roundNumber == null)
             return ResponseEntity.badRequest().body("Arbitru si runda sunt obligatorii");
@@ -126,10 +126,8 @@ public class OlimpiadaController {
             if (!teams.add(team)) return ResponseEntity.badRequest().body("Echipele trebuie sa fie unice");
         }
 
-        // Sterge scorurile existente pentru acest tur+arbitru (override)
         scoreRepo.deleteBySessionIdAndRoundNumberAndArbiterName(session.getId(), roundNumber, arbiterName);
 
-        List<OlimpiadaScore> saved = new ArrayList<>();
         for (Map<String, Object> s : scores) {
             OlimpiadaScore score = new OlimpiadaScore();
             score.setSessionId(session.getId());
@@ -138,15 +136,51 @@ public class OlimpiadaController {
             score.setArbiterName(arbiterName);
             Integer place = (Integer) s.get("place");
             score.setPlace(place);
-            int points = place == 1 ? 1000 : place == 2 ? 500 : place == 3 ? 300 : 100;
-            score.setPoints(points);
-            saved.add(scoreRepo.save(score));
+            int pts = BASE_POINTS.get(place);
+            score.setPoints(isDouble ? pts * 2 : pts);
+            score.setIsDouble(isDouble);
+            scoreRepo.save(score);
         }
 
-        return ResponseEntity.ok(Map.of("saved", saved.size(), "round", roundNumber));
+        return ResponseEntity.ok(Map.of("saved", 4, "round", roundNumber, "isDouble", isDouble));
     }
 
-    // Sterge un tur al unui arbitru (undo)
+    // Puncte extra (fara plasament, pentru echipa specifica)
+    @PostMapping("/session/{code}/extra")
+    public ResponseEntity<?> submitExtra(@PathVariable String code,
+                                         @RequestBody Map<String, Object> body) {
+        OlimpiadaSession session = sessionRepo.findByCode(code.toUpperCase()).orElse(null);
+        if (session == null) return ResponseEntity.status(404).body("Sesiunea nu exista");
+        if ("CLOSED".equals(session.getStatus()))
+            return ResponseEntity.badRequest().body("Sesiunea este inchisa");
+
+        String arbiterName = (String) body.get("arbiterName");
+        String team = (String) body.get("team");
+        Integer points = (Integer) body.get("points");
+        String note = (String) body.getOrDefault("note", "");
+
+        if (arbiterName == null || arbiterName.isBlank())
+            return ResponseEntity.badRequest().body("Arbitrul este obligatoriu");
+        if (!TEAMS.contains(team))
+            return ResponseEntity.badRequest().body("Echipa invalida");
+        if (points == null || points <= 0)
+            return ResponseEntity.badRequest().body("Punctele trebuie sa fie pozitive");
+
+        OlimpiadaScore score = new OlimpiadaScore();
+        score.setSessionId(session.getId());
+        score.setRoundNumber(0); // 0 = extra points
+        score.setTeam(team);
+        score.setArbiterName(arbiterName);
+        score.setPlace(0); // 0 = extra, not a placement
+        score.setPoints(points);
+        score.setIsDouble(false);
+        score.setNote(note.isBlank() ? null : note.trim());
+        scoreRepo.save(score);
+
+        return ResponseEntity.ok(Map.of("saved", true));
+    }
+
+    // Sterge un tur al unui arbitru
     @DeleteMapping("/session/{code}/round/{round}/arbiter/{arbiterName}")
     public ResponseEntity<?> deleteRound(@PathVariable String code,
                                          @PathVariable Integer round,
@@ -159,7 +193,7 @@ public class OlimpiadaController {
         return ResponseEntity.ok("Stears");
     }
 
-    // Comparatie totale per echipa per arbitru
+    // Comparatie — N leaderboard-uri separate per arbitru + dosare cu runde
     @GetMapping("/session/{code}/compare")
     public ResponseEntity<?> compare(@PathVariable String code) {
         OlimpiadaSession session = sessionRepo.findByCode(code.toUpperCase()).orElse(null);
@@ -167,36 +201,76 @@ public class OlimpiadaController {
 
         List<OlimpiadaScore> allScores = scoreRepo.findBySessionId(session.getId());
 
-        // Colecteaza arbitrii unici
         List<String> arbiters = allScores.stream()
                 .map(OlimpiadaScore::getArbiterName)
-                .distinct()
-                .sorted()
-                .collect(Collectors.toList());
+                .distinct().sorted().collect(Collectors.toList());
 
-        // Totaluri per echipa per arbitru
-        Map<String, Map<String, Integer>> totals = new LinkedHashMap<>();
-        for (String team : TEAMS) {
-            Map<String, Integer> arbiterTotals = new LinkedHashMap<>();
-            for (String arbiter : arbiters) {
-                int total = allScores.stream()
-                        .filter(s -> s.getTeam().equals(team) && s.getArbiterName().equals(arbiter))
+        // Per arbitru: leaderboard + runde + extra
+        Map<String, Object> arbiterData = new LinkedHashMap<>();
+        for (String arbiter : arbiters) {
+            List<OlimpiadaScore> arbScores = allScores.stream()
+                    .filter(s -> s.getArbiterName().equals(arbiter))
+                    .collect(Collectors.toList());
+
+            // Leaderboard: totaluri per echipa (doar scoruri cu place > 0)
+            Map<String, Integer> leaderboard = new LinkedHashMap<>();
+            for (String team : TEAMS) {
+                int total = arbScores.stream()
+                        .filter(s -> s.getTeam().equals(team))
                         .mapToInt(OlimpiadaScore::getPoints)
                         .sum();
-                arbiterTotals.put(arbiter, total);
+                leaderboard.put(team, total);
             }
-            totals.put(team, arbiterTotals);
-        }
+            List<Map<String, Object>> leaderboardSorted = leaderboard.entrySet().stream()
+                    .sorted((a, b) -> b.getValue() - a.getValue())
+                    .map(e -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("team", e.getKey());
+                        m.put("total", e.getValue());
+                        return m;
+                    }).collect(Collectors.toList());
 
-        // Numarul de tururi per arbitru
-        Map<String, Long> roundCounts = new LinkedHashMap<>();
-        for (String arbiter : arbiters) {
-            long count = allScores.stream()
-                    .filter(s -> s.getArbiterName().equals(arbiter))
-                    .map(OlimpiadaScore::getRoundNumber)
-                    .distinct()
-                    .count();
-            roundCounts.put(arbiter, count);
+            // Runde (place > 0), grupate pe roundNumber
+            Map<Integer, List<OlimpiadaScore>> byRound = arbScores.stream()
+                    .filter(s -> s.getPlace() > 0)
+                    .collect(Collectors.groupingBy(OlimpiadaScore::getRoundNumber));
+
+            List<Map<String, Object>> rounds = byRound.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .map(e -> {
+                        Map<String, Object> r = new LinkedHashMap<>();
+                        r.put("round", e.getKey());
+                        boolean dbl = e.getValue().stream().anyMatch(s -> Boolean.TRUE.equals(s.getIsDouble()));
+                        r.put("isDouble", dbl);
+                        Map<String, Object> scores = new LinkedHashMap<>();
+                        for (OlimpiadaScore s : e.getValue()) {
+                            Map<String, Object> sc = new LinkedHashMap<>();
+                            sc.put("place", s.getPlace());
+                            sc.put("points", s.getPoints());
+                            scores.put(s.getTeam(), sc);
+                        }
+                        r.put("scores", scores);
+                        return r;
+                    }).collect(Collectors.toList());
+
+            // Extra (place == 0)
+            List<Map<String, Object>> extras = arbScores.stream()
+                    .filter(s -> s.getPlace() == 0)
+                    .map(s -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("team", s.getTeam());
+                        m.put("points", s.getPoints());
+                        m.put("note", s.getNote() != null ? s.getNote() : "");
+                        m.put("createdAt", s.getCreatedAt());
+                        return m;
+                    }).collect(Collectors.toList());
+
+            Map<String, Object> ad = new LinkedHashMap<>();
+            ad.put("leaderboard", leaderboardSorted);
+            ad.put("rounds", rounds);
+            ad.put("extras", extras);
+            ad.put("roundCount", byRound.size());
+            arbiterData.put(arbiter, ad);
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -205,8 +279,7 @@ public class OlimpiadaController {
         result.put("sessionCode", session.getCode());
         result.put("status", session.getStatus());
         result.put("arbiters", arbiters);
-        result.put("totals", totals);
-        result.put("roundCounts", roundCounts);
+        result.put("arbiterData", arbiterData);
         result.put("teams", TEAMS);
 
         return ResponseEntity.ok(result);

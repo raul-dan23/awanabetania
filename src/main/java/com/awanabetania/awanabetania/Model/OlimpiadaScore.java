@@ -31,6 +31,11 @@ public class OlimpiadaScore {
 
     private Integer points;
 
+    @Column(name = "is_double")
+    private Boolean isDouble = false;
+
+    private String note;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 }
