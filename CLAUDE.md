@@ -104,6 +104,74 @@ java -jar nfc-bridge/target/nfc-bridge.jar --test
 
 ---
 
+## OLIMPIADA AWANA — IMPLEMENTAT ✅
+
+### Principiu
+Sistem de arbitraj independent pentru competitia anuala a clubului. 2 arbitri scoreaza aceleasi 4 echipe independent (ca doi arbitri), la final se compara totalurile. Complet izolat de datele clubului (nu atinge Child, Leader, Score etc.).
+
+### Echipe fixe
+Mereu exact 4: `ROSU`, `GALBEN`, `ALBASTRU`, `VERDE`
+
+### Punctaj per loc
+- Locul 1 = **1000 pct**
+- Locul 2 = **500 pct**
+- Locul 3 = **300 pct**
+- Locul 4 = **100 pct**
+
+### Flux utilizare
+1. **Director** → Olimpiada → Sesiuni → PIN admin → creeaza sesiune cu cod scurt (ex: `OLM26`)
+2. **Arbitru cu cont** → Olimpiada → Scorare → introduce codul → scoreaza runde
+3. **Arbitru fara cont** → Login → "Intru ca arbitru" → cod sesiune + numele sau → scoreaza runde
+4. **Director** → Olimpiada → Comparatie → vede totaluri per echipa per arbitru, diferentele marcate rosu, clasament final
+
+### Backend — fisiere noi
+| Fisier | Descriere |
+|---|---|
+| `Model/OlimpiadaSession.java` | Sesiune: `name`, `code` (unique, max 10 car), `status` (ACTIVE/CLOSED), `createdAt` |
+| `Model/OlimpiadaScore.java` | Scor: `sessionId`, `roundNumber`, `team`, `arbiterName`, `place` (1-4), `points` |
+| `Repository/OlimpiadaSessionRepository.java` | `findByCode`, `findAllByOrderByCreatedAtDesc` |
+| `Repository/OlimpiadaScoreRepository.java` | `findBySessionId`, `deleteBySessionIdAndRoundNumberAndArbiterName`, `existsBySessionIdAndRoundNumberAndArbiterName` |
+| `Controller/OlimpiadaController.java` | Toate endpoint-urile Olimpiada |
+
+**Endpoint-uri:**
+- `POST /api/olimpiada/sessions` (X-Admin-Pin) — creeaza sesiune
+- `GET /api/olimpiada/sessions` (X-Admin-Pin) — lista sesiuni
+- `POST /api/olimpiada/sessions/{id}/close` (X-Admin-Pin) — inchide sesiunea
+- `GET /api/olimpiada/session/{code}` — info sesiune (public)
+- `GET /api/olimpiada/session/{code}/round-status` — verifica daca arbitrul a trimis deja un tur
+- `POST /api/olimpiada/session/{code}/score` — trimite scorurile unui tur (public)
+- `GET /api/olimpiada/session/{code}/compare` — totaluri + clasament (public)
+- `DELETE /api/olimpiada/session/{code}/round/{round}/arbiter/{name}` (X-Admin-Pin) — sterge un tur
+
+**Tabele noi create automat:** `olimpiada_sessions`, `olimpiada_scores`
+
+### Frontend — fisiere noi/modificate
+| Fisier | Descriere |
+|---|---|
+| `Frontend/src/components/Olimpiada.jsx` | Componenta principala cu 3 taburi |
+| `Frontend/src/components/Login.jsx` | Buton "Intru ca arbitru" cu form cod+nume |
+| `Frontend/src/App.jsx` | `olimpiadaGuest` state, buton Olimpiada in sidebar, routing |
+
+**Tab-uri Olimpiada.jsx:**
+- **Sesiuni** — necesita PIN admin; creeaza/inchide sesiuni
+- **Scorare** — introduce cod sesiune, apoi 4 carduri echipa cu butoane Loc 1/2/3/4 (stil identic cu ScoringWidget), submit per runda
+- **Comparatie** — tabel totaluri per echipa per arbitru, diferente marcate rosu, clasament final cu medalii
+
+**Acces pe roluri:**
+- Arbitru guest (fara cont): doar tabul Scorare
+- Lideri/Directori cu cont: toate 3 taburile (Sesiuni necesita PIN)
+
+### Deploy
+Procesul corect (frontend e bunduit in JAR):
+```bash
+cd Frontend && npm run build
+cp -r dist/* ../src/main/resources/static/
+cd .. && mvn package -DskipTests
+# Uploadeaza target/*.jar pe server si restartezi Spring Boot
+```
+
+---
+
 ## Referință: proiectul Awana-2 (C# WinForms)
 Locație: `~/Downloads/Awana-2/`
 Același concept dar mai vechi: stoca punctele PE CARD. Fișiere relevante pentru APDU: `AWANAcard.cs`, `CardInfo.cs`.
