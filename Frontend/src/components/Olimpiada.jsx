@@ -360,6 +360,16 @@ function SessionsTab({ adminPin }) {
         if (r.ok) { toast.success('Sesiune inchisa'); load(); }
     };
 
+    const deleteSession = async (id, name) => {
+        if (!window.confirm(`Stergi sesiunea "${name}"? Se sterg si toate scorurile.`)) return;
+        const r = await fetch(`${API_URL}/olimpiada/sessions/${id}`, {
+            method: 'DELETE',
+            headers: { 'X-Admin-Pin': adminPin }
+        });
+        if (r.ok) { toast.success('Sesiune stearsa'); load(); }
+        else toast.error(await r.text());
+    };
+
     return (
         <div>
             <form onSubmit={create} style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: 16, marginBottom: 20 }}>
@@ -421,6 +431,12 @@ function SessionsTab({ adminPin }) {
                                 Inchide
                             </button>
                         )}
+                        <button onClick={() => deleteSession(s.id, s.name)} style={{
+                            padding: '5px 12px', background: '#fef2f2', color: '#dc2626',
+                            border: '1px solid #fecaca', borderRadius: 8, cursor: 'pointer', fontSize: '0.8rem'
+                        }}>
+                            Sterge
+                        </button>
                     </div>
                 ))
             )}

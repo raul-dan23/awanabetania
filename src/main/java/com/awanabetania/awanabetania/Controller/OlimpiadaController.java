@@ -64,6 +64,17 @@ public class OlimpiadaController {
         return ResponseEntity.ok(sessionRepo.save(session));
     }
 
+    @DeleteMapping("/sessions/{id}")
+    public ResponseEntity<?> deleteSession(@PathVariable Integer id,
+                                           @RequestHeader(value = "X-Admin-Pin", required = false) String pin) {
+        if (!isPinValid(pin)) return ResponseEntity.status(401).body("PIN incorect");
+        OlimpiadaSession session = sessionRepo.findById(id).orElse(null);
+        if (session == null) return ResponseEntity.notFound().build();
+        scoreRepo.findBySessionId(id).forEach(s -> scoreRepo.delete(s));
+        sessionRepo.delete(session);
+        return ResponseEntity.ok("Stearsa");
+    }
+
     // --- Acces public prin cod ---
 
     @GetMapping("/session/{code}")
