@@ -2,10 +2,14 @@ import React, { useState } from 'react';
 import { API_URL } from '../config';
 import AwanaLogo from '../AwanaLogo';
 
-const Login = ({ onLogin, onSwitchToRegister }) => {
+const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
     const [form, setForm] = useState({ username:'', pass:'', role: 'LEADER' });
     const [err, setErr] = useState('');
     const [loading, setLoading] = useState(false);
+    const [guestMode, setGuestMode] = useState(false);
+    const [guestForm, setGuestForm] = useState({ code: '', name: '' });
+    const [guestErr, setGuestErr] = useState('');
+    const [guestLoading, setGuestLoading] = useState(false);
 
     const doLogin = (e) => {
         e.preventDefault();
@@ -36,6 +40,27 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
                 else setErr('Server offline sau eroare de conexiune.');
             })
             .finally(() => setLoading(false));
+    };
+
+    const enterAsGuest = async (e) => {
+        e.preventDefault();
+        if (!guestForm.code.trim() || !guestForm.name.trim()) return;
+        setGuestLoading(true);
+        setGuestErr('');
+        try {
+            const r = await fetch(`${API_URL}/olimpiada/session/${guestForm.code.trim().toUpperCase()}`);
+            if (r.ok) {
+                const s = await r.json();
+                if (s.status === 'CLOSED') { setGuestErr('Aceasta sesiune este inchisa.'); return; }
+                onGuestArbiter({ code: s.code, name: guestForm.name.trim(), sessionName: s.name });
+            } else {
+                setGuestErr('Codul sesiunii nu a fost gasit.');
+            }
+        } catch {
+            setGuestErr('Eroare de conexiune.');
+        } finally {
+            setGuestLoading(false);
+        }
     };
 
     const roles = [
@@ -117,6 +142,53 @@ const Login = ({ onLogin, onSwitchToRegister }) => {
                     <p className="auth-switch" onClick={onSwitchToRegister}>
                         Nu ai cont? <strong>Inregistreaza-te</strong>
                     </p>
+
+                    <div style={{ marginTop: 16, borderTop: '1px solid #e5e7eb', paddingTop: 14 }}>
+                        {!guestMode ? (
+                            <button type="button" onClick={() => setGuestMode(true)} style={{
+                                width: '100%', padding: '10px', borderRadius: 8,
+                                border: '1.5px solid #e5e7eb', background: '#f9fafb',
+                                color: '#374151', fontWeight: 500, cursor: 'pointer', fontSize: '0.9rem'
+                            }}>
+                                Intru ca arbitru (Olimpiada)
+                            </button>
+                        ) : (
+                            <form onSubmit={enterAsGuest} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                <div style={{ fontWeight: 600, fontSize: '0.88rem', color: '#374151' }}>Arbitru invitat</div>
+                                <input
+                                    placeholder="Cod sesiune (ex: OLM26)"
+                                    value={guestForm.code}
+                                    onChange={e => setGuestForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+                                    required
+                                    style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: '0.9rem' }}
+                                />
+                                <input
+                                    placeholder="Numele tau (ex: Raul)"
+                                    value={guestForm.name}
+                                    onChange={e => setGuestForm(f => ({ ...f, name: e.target.value }))}
+                                    required
+                                    style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: '0.9rem' }}
+                                />
+                                {guestErr && <div style={{ color: '#dc2626', fontSize: '0.82rem' }}>{guestErr}</div>}
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button type="button" onClick={() => setGuestMode(false)} style={{
+                                        flex: 1, padding: '9px', borderRadius: 8,
+                                        border: '1px solid #e5e7eb', background: '#f3f4f6',
+                                        cursor: 'pointer', fontSize: '0.88rem'
+                                    }}>
+                                        Inapoi
+                                    </button>
+                                    <button type="submit" disabled={guestLoading} style={{
+                                        flex: 2, padding: '9px', borderRadius: 8,
+                                        border: 'none', background: '#4f46e5', color: '#fff',
+                                        fontWeight: 600, cursor: 'pointer', fontSize: '0.88rem'
+                                    }}>
+                                        {guestLoading ? 'Se verifica...' : 'Intra'}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

@@ -13,6 +13,7 @@ import LeadersRegistry from './components/LeadersRegistry';
 import Register from './components/Register';
 import Login from './components/Login';
 import Magazin from './components/Magazin';
+import Olimpiada from './components/Olimpiada';
 
 // ==========================================
 // 1. SPLASH SCREEN
@@ -40,6 +41,7 @@ function App() {
     });
 
     const [register, setRegister] = useState(false);
+    const [olimpiadaGuest, setOlimpiadaGuest] = useState(null);
 
     // 3. PAGINA: Tine minte unde erai inainte de refresh (Registru, Dashboard, etc.)
     const [page, setPage] = useState(() => {
@@ -90,7 +92,18 @@ function App() {
 
     if (loading) return <SplashScreen />;
 
-    if (!user) return register ? <Register onSwitchToLogin={() => setRegister(false)} /> : <Login onLogin={setUser} onSwitchToRegister={() => setRegister(true)} />;
+    if (olimpiadaGuest) {
+        return (
+            <div style={{ minHeight: '100vh', background: '#f9fafb' }}>
+                <Toaster richColors position="top-center" />
+                <Olimpiada guestArbiter={olimpiadaGuest} onExitGuest={() => setOlimpiadaGuest(null)} />
+            </div>
+        );
+    }
+
+    if (!user) return register
+        ? <Register onSwitchToLogin={() => setRegister(false)} />
+        : <Login onLogin={setUser} onSwitchToRegister={() => setRegister(true)} onGuestArbiter={setOlimpiadaGuest} />;
 
     const isChild = !user.role;
     const isDirector = user.role === 'DIRECTOR' || user.role === 'COORDONATOR';
@@ -187,6 +200,13 @@ function App() {
 
                             {/* Albume Stickere — ascuns temporar */}
 
+                            <button className={`sb-btn ${page==='olimpiada'?'active':''}`} onClick={()=>navigateTo('olimpiada')}>
+                                <svg className="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/>
+                                </svg>
+                                <span className="sb-btn-text">Olimpiada</span>
+                            </button>
+
                             <button className={`sb-btn ${page==='magazin'?'active':''}`} onClick={()=>navigateTo('magazin')}>
                                 <svg className="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
@@ -248,6 +268,7 @@ function App() {
                 {!isChild && page === 'departments' && <DepartmentsList user={user} />}
                 {!isChild && page === 'registry' && <Registry user={user} />}
                 {!isChild && page === 'leaders' && isDirector && <LeadersRegistry />}
+                {!isChild && page === 'olimpiada' && <Olimpiada user={user} />}
                 {!isChild && page === 'magazin' && <Magazin user={user} />}
 
                 {/* 👇 LINIA NOUA PENTRU ADMIN 👇 */}
