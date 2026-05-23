@@ -76,7 +76,7 @@ const AdminDashboard = ({ currentUser }) => {
 
     const startNfcScan = async () => {
         if (!('NDEFReader' in window)) {
-            toast.error('Web NFC nu e suportat. Necesita Chrome pe Android cu NFC activ, sau introdu UID-ul manual.');
+            toast.error('Web NFC indisponibil. Conditii: Chrome 89+ pe Android, site pe HTTPS, Chrome deschis direct (nu din WhatsApp/Gmail).');
             return;
         }
         try {
@@ -87,11 +87,11 @@ const AdminDashboard = ({ currentUser }) => {
                 const uid = serialNumber.replace(/:/g, '').toUpperCase();
                 setNfcUidInput(uid);
                 setNfcScanning(false);
-                toast.success(`Card detectat: ${uid}`);
+                toast.success('Card detectat: ' + uid);
             }, { once: true });
-        } catch {
+        } catch (err) {
             setNfcScanning(false);
-            toast.error('Eroare la citire NFC.');
+            toast.error('Eroare NFC: ' + (err.message || 'permisiune refuzata sau NFC indisponibil'));
         }
     };
 
