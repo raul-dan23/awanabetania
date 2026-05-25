@@ -7,7 +7,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Aceasta clasa se ocupa de Echipe si Jocuri.
@@ -31,14 +30,7 @@ public class TeamController {
      */
     @GetMapping("/available")
     public List<Child> getAvailableChildren() {
-        return childRepository.findAll().stream()
-                // Conditia 1: Sa nu aiba echipa setata pe ziua de azi
-                .filter(c -> c.getCurrentTeam() == null || c.getCurrentTeam().isEmpty())
-                // Conditia 2: Sa nu fie suspendati
-                .filter(c -> !Boolean.TRUE.equals(c.getIsSuspended()))
-                // Ordonare alfabetica
-                .sorted(Comparator.comparing(Child::getName))
-                .collect(Collectors.toList());
+        return childRepository.findAvailableChildren();
     }
 
     /**
@@ -73,9 +65,7 @@ public class TeamController {
         Meeting activeMeeting = getActiveMeeting();
 
         // Pasul A: Gasim membrii echipei (cautam in tabelul de copii cine are echipa asta)
-        List<Child> members = childRepository.findAll().stream()
-                .filter(c -> c.getCurrentTeam() != null && c.getCurrentTeam().equalsIgnoreCase(color))
-                .toList();
+        List<Child> members = childRepository.findByCurrentTeamIgnoreCase(color);
 
         // Pasul B: Calculam suma punctelor lor ZILNICE (individuale)
         // Nu mai cautam in ScoreRepository, ci direct in dailyPoints care se reseteaza seara
@@ -158,10 +148,8 @@ public class TeamController {
      * Gaseste prima intalnire din calendar care este pornita si nefinalizata.
      */
     private Meeting getActiveMeeting() {
-        return meetingRepository.findAll().stream()
-                .filter(m -> m.getIsCompleted() == null || !m.getIsCompleted())
-                .findFirst()
-                .orElse(null);
+        return meetingRepository.findByIsCompletedFalseOrderByDateAsc()
+                .stream().findFirst().orElse(null);
     }
     /**
      * Endpoint NOU: Adaugă puncte manuale unei echipe.

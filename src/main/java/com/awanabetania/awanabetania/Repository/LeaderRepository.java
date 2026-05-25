@@ -31,5 +31,9 @@ public interface LeaderRepository extends JpaRepository<Leader, Integer> {
 
     Optional<Leader> findByName(String name);
 
+    Optional<Leader> findByNameIgnoreCase(String name);
+
     Optional<Leader> findByUsername(String username);
+
+    List<Leader> findByRoleIgnoreCaseIn(List<String> roles);
 }

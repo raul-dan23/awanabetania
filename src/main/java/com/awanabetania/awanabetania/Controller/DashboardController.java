@@ -29,9 +29,7 @@ public class DashboardController {
         stats.put("kidsCount", childRepository.count());
         stats.put("leadersCount", leaderRepository.count());
 
-        List<Leader> directors = leaderRepository.findAll().stream()
-                .filter(l -> l.getRole() != null && (l.getRole().equalsIgnoreCase("DIRECTOR") || l.getRole().equalsIgnoreCase("COORDONATOR")))
-                .collect(Collectors.toList());
+        List<Leader> directors = leaderRepository.findByRoleIgnoreCaseIn(List.of("director", "coordonator"));
         stats.put("directors", directors);
 
         if (leaderId != null) {

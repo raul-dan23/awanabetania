@@ -23,6 +23,7 @@ public interface WarningRepository extends JpaRepository<Warning, Integer> {
     @Query("SELECT w FROM Warning w WHERE w.child.id = :childId ORDER BY w.id DESC")
     List<Warning> findByChildIdOrderByIdDesc(@Param("childId") Integer childId);
 
+    List<Warning> findBySuspensionTrueAndRemainingMeetingsGreaterThan(int count);
 
     @Modifying
     @Query("DELETE FROM Warning w WHERE w.child.id = ?1")

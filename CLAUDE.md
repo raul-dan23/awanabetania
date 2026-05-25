@@ -113,10 +113,12 @@ Sistem de arbitraj independent pentru competitia anuala a clubului. 2 arbitri sc
 Mereu exact 4: `ROSU`, `GALBEN`, `ALBASTRU`, `VERDE`
 
 ### Punctaj per loc
-- Locul 1 = **1000 pct**
-- Locul 2 = **500 pct**
-- Locul 3 = **300 pct**
-- Locul 4 = **100 pct**
+- Locul 1 = **1500 pct**
+- Locul 2 = **1000 pct**
+- Locul 3 = **500 pct**
+- Locul 4 = **300 pct**
+
+_(valori definite în `OlimpiadaController.BASE_POINTS`)_
 
 ### Flux utilizare
 1. **Director** → Olimpiada → Sesiuni → PIN admin → creeaza sesiune cu cod scurt (ex: `OLM26`)
@@ -180,13 +182,29 @@ Același concept dar mai vechi: stoca punctele PE CARD. Fișiere relevante pentr
 
 ## Probleme de îmbunătățit
 
-### 🔴 CRITIC (de rezolvat urgent)
+### ✅ REZOLVATE
+
+#### Query-uri de performanță (findAll → query direct)
+Toate `findAll()` + stream filter din controlleri au fost înlocuite cu query-uri JPA directe:
+
+| Controller | Fix aplicat |
+|---|---|
+| `ScoreController` | `findByChildIdAndMeetingId` + `findByChildIdOrderByMeeting_DateDesc` |
+| `MeetingController` | `findByMeetingId` + `findBySuspensionTrueAndRemainingMeetingsGreaterThan(0)` |
+| `AuthController` | `findByNameIgnoreCase` (child + leader) în loc de `findAll().stream().filter()` |
+| `DashboardController` | `findByRoleIgnoreCaseIn(List.of("director","coordonator"))` |
+| `TeamController` | `findAvailableChildren()` + `findByCurrentTeamIgnoreCase()` + `findByIsCompletedFalseOrderByDateAsc()` |
+
+Repository-uri noi adăugate: `ScoreRepository.findByMeetingId`, `WarningRepository.findBySuspensionTrueAndRemainingMeetingsGreaterThan`, `LeaderRepository.findByNameIgnoreCase` + `findByRoleIgnoreCaseIn`, `ChildRepository.findByNameIgnoreCase` + `findByCurrentTeamIgnoreCase` + `findAvailableChildren`.
+
+---
+
+### 🔴 CRITIC (de rezolvat ulterior)
 
 #### 1. Nicio autentificare pe endpoint-uri
 - **Fișier:** Toți controllerii
 - **Problemă:** `@CrossOrigin(origins = "*")` + niciun token de sesiune. Oricine știe URL-urile poate modifica date.
 - **Fix:** Spring Security + JWT (task mare, de planificat separat)
----
 
 ---
 
@@ -194,7 +212,7 @@ Același concept dar mai vechi: stoca punctele PE CARD. Fișiere relevante pentr
 
 #### Prioritate înaltă
 - **JWT / Autentificare reală** — userul complet în `localStorage` e vulnerabil la impersonare. Token JWT cu expirare.
-- **HTTPS forțat** — obligatoriu pentru producție (legat de #3).
+- **HTTPS forțat** — obligatoriu pentru producție.
 
 #### Prioritate medie
 - **React Router** — navigare pe URL; suportă butonul Back și link-uri directe.

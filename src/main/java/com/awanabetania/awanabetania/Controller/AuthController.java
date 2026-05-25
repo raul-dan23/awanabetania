@@ -53,9 +53,7 @@ public class AuthController {
             Optional<Child> childOpt = childRepository.findByUsername(inputUsername);
             // Fallback: cauta dupa nume pentru conturile vechi nemigrate
             if (childOpt.isEmpty()) {
-                childOpt = childRepository.findAll().stream()
-                        .filter(c -> c.getName() != null && c.getName().toLowerCase().equals(inputUsername))
-                        .findFirst();
+                childOpt = childRepository.findByNameIgnoreCase(inputUsername);
             }
             if (childOpt.isPresent()) {
                 Child child = childOpt.get();
@@ -74,9 +72,7 @@ public class AuthController {
             Optional<Leader> leaderOpt = leaderRepository.findByUsername(inputUsername);
             // Fallback: cauta dupa nume pentru conturile vechi nemigrate
             if (leaderOpt.isEmpty()) {
-                leaderOpt = leaderRepository.findAll().stream()
-                        .filter(l -> l.getName() != null && l.getName().toLowerCase().equals(inputUsername))
-                        .findFirst();
+                leaderOpt = leaderRepository.findByNameIgnoreCase(inputUsername);
             }
             if (leaderOpt.isPresent()) {
                 Leader leader = leaderOpt.get();

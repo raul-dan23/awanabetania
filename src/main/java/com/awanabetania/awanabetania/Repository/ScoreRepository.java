@@ -38,6 +38,8 @@ public interface ScoreRepository extends JpaRepository<Score, Integer> {
      */
     Optional<Score> findByChildIdAndMeetingId(Integer childId, Integer meetingId);
 
+    List<Score> findByMeetingId(Integer meetingId);
+
     @Modifying
     @Query("DELETE FROM Score s WHERE s.child.id = ?1")
     void deleteByChildId(Integer childId);

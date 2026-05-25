@@ -26,6 +26,15 @@ public interface ChildRepository extends JpaRepository<Child, Integer> {
     /** Cauta un copil dupa username-ul unic de login */
     Optional<Child> findByUsername(String username);
 
+    Optional<Child> findByNameIgnoreCase(String name);
+
     /** Cauta un copil dupa UID-ul cardului NFC */
     Optional<Child> findByNfcUid(String nfcUid);
+
+    List<Child> findByCurrentTeamIgnoreCase(String team);
+
+    @org.springframework.data.jpa.repository.Query(
+        "SELECT c FROM Child c WHERE (c.currentTeam IS NULL OR c.currentTeam = '') AND (c.isSuspended IS NULL OR c.isSuspended = false) ORDER BY c.name"
+    )
+    List<Child> findAvailableChildren();
 }

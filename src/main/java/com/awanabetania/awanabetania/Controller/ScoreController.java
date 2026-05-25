@@ -40,8 +40,7 @@ public class ScoreController {
         Child child = childRepository.findById(request.getChildId()).orElse(null);
         if (child == null) return ResponseEntity.badRequest().body("Copil invalid");
 
-        boolean alreadyScored = scoreRepository.findAll().stream()
-                .anyMatch(s -> s.getChild().getId().equals(child.getId()) && s.getMeeting().getId().equals(meeting.getId()));
+        boolean alreadyScored = scoreRepository.findByChildIdAndMeetingId(child.getId(), meeting.getId()).isPresent();
 
         if (alreadyScored) return ResponseEntity.badRequest().body("Copilul a fost deja punctat azi!");
 
@@ -120,10 +119,7 @@ public class ScoreController {
 
     @GetMapping("/child/{childId}")
     public List<Score> getScoresByChild(@PathVariable Integer childId) {
-        return scoreRepository.findAll().stream()
-                .filter(s -> s.getChild().getId().equals(childId))
-                .sorted((a, b) -> b.getMeeting().getDate().compareTo(a.getMeeting().getDate()))
-                .toList();
+        return scoreRepository.findByChildIdOrderByMeeting_DateDesc(childId);
     }
 
     private int calculatePoints(Score s) {

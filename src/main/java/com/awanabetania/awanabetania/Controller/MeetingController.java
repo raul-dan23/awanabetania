@@ -85,9 +85,9 @@ public class MeetingController {
         meetingRepository.save(meeting);
 
         // 1. Gestionare Pedepse (doar pentru cei prezenti la jocuri/intalnire)
-        List<Score> scoresToday = scoreRepository.findAll().stream().filter(s -> s.getMeeting().getId().equals(id)).toList();
+        List<Score> scoresToday = scoreRepository.findByMeetingId(id);
         List<Integer> presentChildIds = scoresToday.stream().map(s -> s.getChild().getId()).distinct().toList();
-        List<Warning> activeWarnings = warningRepository.findAll().stream().filter(w -> Boolean.TRUE.equals(w.getSuspension()) && w.getRemainingMeetings() > 0).toList();
+        List<Warning> activeWarnings = warningRepository.findBySuspensionTrueAndRemainingMeetingsGreaterThan(0);
 
         for (Warning w : activeWarnings) {
             if (presentChildIds.contains(w.getChild().getId())) {
