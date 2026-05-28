@@ -54,5 +54,8 @@ build/
 # VS Code
 .vscode/
 
+# Claude Code local settings and worktrees
+.claude/
+
 # macOS
 .DS_Store
