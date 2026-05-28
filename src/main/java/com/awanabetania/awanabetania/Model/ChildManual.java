@@ -6,10 +6,11 @@ import lombok.*;
 import java.time.LocalDate;
 
 /**
- * Reprezintă istoricul unui manual primit de un copil.
- * <br>
- * Rol: Informativ și statistic. Ne ajută să știm ce cărți a parcurs copilul.
- * NU conține progresul lecțiilor (acela e în ChildProgress).
+ * Records an instance of a manual (handbook) issued to a child.
+ * A child can have multiple manuals over time (one per season or level).
+ * Status transitions: ACTIVE (currently in use) → COMPLETED (finished) or LOST.
+ * This entity serves informational and statistical purposes only;
+ * per-lesson progress is tracked separately in {@link ChildProgress}.
  */
 @Entity
 @Table(name = "child_manual")
@@ -22,24 +23,24 @@ public class ChildManual {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    /** Copilul care a primit manualul */
+    /** The child who received this manual. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "child_id")
     @JsonIgnore
     @ToString.Exclude
     private Child child;
 
-    /** Numele manualului (ex: "Manual 1") */
+    /** Display name of the manual (e.g. "Manual 1"). */
     private String name;
 
-    /** Status: ACTIVE (în lucru) sau COMPLETED (terminat) */
+    /** Current status: ACTIVE, COMPLETED, or LOST. See {@link ManualStatus}. */
     private String status;
 
-    /** Data primirii */
+    /** Date the manual was issued to the child. */
     @Column(name = "start_date")
     private LocalDate startDate;
 
-    /** Data finalizării */
+    /** Date the manual was completed; {@code null} while still active. */
     @Column(name = "end_date")
     private LocalDate endDate;
 }

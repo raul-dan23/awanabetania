@@ -9,8 +9,10 @@ import lombok.Setter;
 import java.time.LocalDate;
 
 /**
- * Aceasta clasa reprezinta un avertisment sau o pedeapsa.
- * Aici tinem minte daca un copil a facut ceva gresit si daca este suspendat.
+ * Represents a disciplinary record (warning or suspension) issued to a child.
+ * If {@code suspension} is {@code true}, the child is immediately marked suspended
+ * and cannot be picked for teams. The suspension lifts automatically after
+ * {@code remainingMeetings} attended meetings have elapsed (decremented on meeting close).
  */
 @Entity
 @Table(name = "warnings")
@@ -19,30 +21,29 @@ import java.time.LocalDate;
 @NoArgsConstructor
 public class Warning {
 
-    /** ID unic al avertismentului */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    /** Motivul pentru care a fost pedepsit (descrierea faptei) */
+    /** Description of the incident that led to this warning. */
     @Column(name = "description")
     private String description;
 
-    /** Ne spune daca este suspendat (nu are voie sa joace) sau e doar o atentionare */
+    /** {@code true} if this warning carries a suspension; {@code false} for a simple note. */
     @Column(name = "suspension")
     private Boolean suspension;
 
-    /** Cate intalniri mai are de stat pe bara pana ii trece pedeapsa */
+    /** Number of meetings the child must still attend before the suspension is lifted. */
     @Column(name = "remaining_meetings")
     private Integer remainingMeetings;
 
-    /** Data cand s-a intamplat incidentul */
+    /** Calendar date when the incident occurred. */
     @Column(name = "date")
     private LocalDate date;
 
     /**
-     * Legatura catre copilul care a gresit.
-     * JsonIgnore e necesar ca sa nu se blocheze aplicatia.
+     * The child this warning belongs to.
+     * Loaded lazily; excluded from JSON serialization to prevent circular references.
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "child_id")
@@ -50,8 +51,9 @@ public class Warning {
     private Child child;
 
     /**
-     * Un camp ajutator ca sa primim ID-ul copilului direct de pe site.
-     * Transient inseamna ca nu se salveaza in baza de date.
+     * Transient helper field used to receive the child's ID from the request body.
+     * Not stored in the database; the controller resolves the full {@link Child} entity
+     * from this ID before saving.
      */
     @Transient
     private Integer childId;

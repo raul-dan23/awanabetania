@@ -5,46 +5,47 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Aceasta clasa este formularul de inregistrare (Sign Up).
- * Primeste toate datele necesare cand cineva vrea sa isi faca un cont nou.
- * Functioneaza atat pentru Copii cat si pentru Lideri.
+ * DTO carrying new-account data from the registration form to {@code AuthController}.
+ * Used for both Child and Leader registrations; role-specific fields are populated
+ * only when {@code role} matches the corresponding type.
  */
 @Data
 public class RegisterRequest {
 
-    // --- Campuri pentru lideiri si copii ---
-
-    /** Numele utilizatorului */
+    /** First name (used for both children and leaders). */
     private String name;
 
-    /** Prenumele utilizatorului */
+    /** Last name (used for both children and leaders). */
     private String surname;
 
-    /** Parola aleasa pentru cont */
+    /** Plain-text password chosen by the user (AES-encrypted before storage). */
     private String password;
 
-    /** Ce fel de cont este: CHILD (Copil) sau LEADER (Lider) */
+    /**
+     * Account type being created: "CHILD" or "LEADER".
+     * For leaders, this value is also stored as the {@code role} field on the entity.
+     */
     private String role;
 
-    // --- Doar pentru lideiri ---
+    // --- Leader-only fields ---
 
-    /** Numarul de telefon al liderului */
+    /** Leader's contact phone number. */
     private String phoneNumber;
 
-    /** Lista cu departamentele unde vrea sa slujeasca (bifate in formular) */
+    /** IDs of departments the new leader wishes to join. */
     private List<Integer> departmentIds;
 
-    /** Codul secret (din fisierul codes.txt) ca sa nu se inregistreze oricine ca sef */
+    /** Registration code required for leader sign-up (validated against a hard-coded list). */
     private String registrationCode;
 
-    // --- Doar pentru copii ---
+    // --- Child-only fields ---
 
-    /** Data nasterii copilului */
+    /** Child's date of birth (used to calculate age). */
     private LocalDate birthDate;
 
-    /** Numele parintelui */
+    /** Full name of the child's parent or guardian. */
     private String parentName;
 
-    /** Telefonul parintelui */
+    /** Contact phone number for the parent or guardian. */
     private String parentPhone;
 }

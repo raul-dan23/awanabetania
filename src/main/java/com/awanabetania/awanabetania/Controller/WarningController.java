@@ -12,15 +12,17 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * Aceasta clasa se ocupa de disciplina si pedepse.
- * Aici dam avertismente si suspendam copiii care au incalcat regulile.
+ * Handles disciplinary records (warnings and suspensions) for children.
+ * When a suspension is created, the child's {@code isSuspended} flag is set immediately
+ * so the team-selection screen reflects the change in real time.
+ * Suspensions are automatically lifted by {@code MeetingController} when the
+ * {@code remainingMeetings} counter reaches zero.
  */
 @RestController
 @RequestMapping("/api/warnings")
 @CrossOrigin(origins = "*")
 public class WarningController {
 
-    // Avem nevoie de acces la tabelele de Avertismente si Copii
     @Autowired
     private WarningRepository warningRepository;
 
@@ -28,8 +30,10 @@ public class WarningController {
     private ChildRepository childRepository;
 
     /**
-     * Arata lista cu toate pedepsele primite de un copil in trecut.
-     * Folosita in pagina de profil ca sa vedem istoricul disciplinar.
+     * Returns all warnings for a given child, ordered newest first.
+     *
+     * @param childId the child's primary key
+     * @return list of {@link Warning} records
      */
     @GetMapping("/child/{childId}")
     public List<Warning> getWarnings(@PathVariable Integer childId) {
@@ -37,37 +41,32 @@ public class WarningController {
     }
 
     /**
-     * Adauga o pedeapsa noua.
-     * Aceasta metoda face doua lucruri importante:
-     * 1. Salveaza pedeapsa in istoric.
-     * 2. Daca e vorba de suspendare, blocheaza imediat copilul in sistem.
+     * Creates a new warning or suspension for a child.
+     * If {@code suspension} is {@code true}, the child's profile is immediately flagged
+     * as suspended in the database.
+     *
+     * @param warningRequest warning data including {@code childId}, {@code description},
+     *                       {@code suspension}, and {@code remainingMeetings}
+     * @return 200 on success; 400 if the child does not exist
      */
     @PostMapping("/add")
     public ResponseEntity<?> addWarning(@RequestBody Warning warningRequest) {
-
-        // Pasul 1: Cautam copilul caruia ii dam avertismentul
         Child child = childRepository.findById(warningRequest.getChildId()).orElse(null);
-        if (child == null) return ResponseEntity.badRequest().body("Copil inexistent");
+        if (child == null) return ResponseEntity.badRequest().body("Child not found.");
 
-        // Pasul 2: Cream fisa de pedeapsa si scriem motivul (de ce e pedepsit)
         Warning warning = new Warning();
         warning.setChild(child);
         warning.setDescription(warningRequest.getDescription());
         warning.setSuspension(warningRequest.getSuspension());
         warning.setRemainingMeetings(warningRequest.getRemainingMeetings());
         warning.setDate(LocalDate.now());
-
-        // Salvam pedeapsa in baza de date
         warningRepository.save(warning);
 
-        // Pasul 3: SINCRONIZARE IMPORTANTA
-        // Daca pedeapsa este "Suspendare", trebuie sa blocam copilul imediat in sistem.
-        // Astfel, el va aparea cu Rosu si nu va putea fi ales in echipe la jocuri.
         if (Boolean.TRUE.equals(warningRequest.getSuspension())) {
             child.setIsSuspended(true);
             childRepository.save(child);
         }
 
-        return ResponseEntity.ok("Sanctiune inregistrata si profil actualizat!");
+        return ResponseEntity.ok("Disciplinary record saved and profile updated.");
     }
 }

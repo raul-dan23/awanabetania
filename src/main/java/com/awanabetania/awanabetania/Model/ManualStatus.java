@@ -1,16 +1,16 @@
 package com.awanabetania.awanabetania.Model;
 
 /**
- * Definește stările posibile ale unui manual.
- * Acest fișier este necesar pentru ca ChildManual și ChildController să funcționeze.
+ * Possible lifecycle states for a {@link ChildManual}.
  */
 public enum ManualStatus {
-    /** Manualul este curent, copilul lucrează la el. */
+
+    /** The child is currently working through this manual. */
     ACTIVE,
 
-    /** Manualul a fost terminat cu succes. */
+    /** The child has finished all lessons in this manual. */
     COMPLETED,
 
-    /** Manualul a fost pierdut sau anulat. */
+    /** The manual was lost or voided; no longer in use. */
     LOST
 }

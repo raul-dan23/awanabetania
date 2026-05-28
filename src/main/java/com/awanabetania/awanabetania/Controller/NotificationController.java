@@ -9,6 +9,10 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * Provides notification management for leaders: listing their active notifications,
+ * creating manual notifications, and soft-deleting (dismissing) individual entries.
+ */
 @RestController
 @RequestMapping("/api/notifications")
 @CrossOrigin(origins = "*")
@@ -18,17 +22,23 @@ public class NotificationController {
     private NotificationRepository notificationRepository;
 
     /**
-     * Returnează notificările active pentru un anumit lider + cele publice ("ALL").
-     * Folosește metoda 'findMyActiveNotifications' definită în Repository.
+     * Returns all active notifications visible to the specified leader,
+     * including public ("ALL") and personal (leader's own ID) entries.
+     *
+     * @param leaderId the string representation of the leader's ID
+     * @return list of active {@link Notification} records
      */
     @GetMapping
     public List<Notification> getMyNotifications(@RequestParam String leaderId) {
-        // Apelăm metoda cu parametrii String, String
         return notificationRepository.findMyActiveNotifications(leaderId, "ALL");
     }
 
     /**
-     * Adaugă o notificare manuală (dacă e nevoie vreodată din Postman/Frontend).
+     * Creates a manual notification. Used for testing or direct injection from the frontend.
+     * The date is always set to today; {@code isVisible} defaults to {@code true}.
+     *
+     * @param notification notification data from the request body
+     * @return the saved {@link Notification} entity
      */
     @PostMapping("/add")
     public Notification addNotification(@RequestBody Notification notification) {
@@ -38,14 +48,17 @@ public class NotificationController {
     }
 
     /**
-     * Ștergere logică (Soft Delete).
-     * Când apeși X în Dashboard, se apelează asta.
+     * Soft-deletes a notification by setting {@code isVisible=false}.
+     * The notification remains in the database but no longer appears in the feed.
+     *
+     * @param id the notification's primary key
+     * @return 200 on success; 404 if not found
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteNotification(@PathVariable Integer id) {
         return notificationRepository.findById(id)
                 .map(notification -> {
-                    notification.setIsVisible(false); // Nu o ștergem fizic, doar o ascundem
+                    notification.setIsVisible(false);
                     notificationRepository.save(notification);
                     return ResponseEntity.ok().build();
                 })

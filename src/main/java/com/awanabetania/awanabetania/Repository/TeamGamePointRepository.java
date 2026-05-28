@@ -7,19 +7,17 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 /**
- * Aceasta interfata ne ajuta sa lucram cu baza de date pentru Punctele de Joc.
- * Varianta ACTUALIZATA: Cauta punctele in functie de Intalnire (Meeting), nu de data calendaristica.
+ * Data access interface for {@link TeamGamePoint} entities.
  */
 @Repository
 public interface TeamGamePointRepository extends JpaRepository<TeamGamePoint, Integer> {
 
     /**
-     * Aceasta este metoda pe care o cauta TeamController.
-     * * Cum functioneaza numele metodei:
-     * 1. findBy... -> Cauta
-     * 2. MeetingId -> ...in campul 'meeting' dupa ID-ul lui
-     * 3. And... -> ...SI
-     * 4. TeamColor -> ...in campul 'teamColor' (chiar daca in DB e 'team_name', aici folosim numele variabilei din Java)
+     * Returns all game-point entries for a given team during a specific meeting.
+     * The sum of the returned entries' {@code points} fields is the team's game score for that evening.
+     *
+     * @param meetingId  the meeting to query
+     * @param teamColor  the team color identifier (e.g. "red")
      */
     List<TeamGamePoint> findByMeetingIdAndTeamColor(Integer meetingId, String teamColor);
 }

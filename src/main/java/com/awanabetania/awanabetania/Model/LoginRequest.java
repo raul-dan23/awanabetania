@@ -3,19 +3,23 @@ package com.awanabetania.awanabetania.Model;
 import lombok.Data;
 
 /**
- * Aceasta clasa este ca un pachet simplu de date.
- * O folosim cand cineva incearca sa se logheze in aplicatie.
- * Ea primeste datele din formularul de pe site (React) si le aduce in Java.
+ * DTO carrying login credentials from the React frontend to {@code AuthController}.
+ * The {@code username} field accepts either the generated username or the legacy
+ * plain name (for backward compatibility). The {@code role} field determines
+ * which user table (Child or Leader) is searched.
  */
 @Data
 public class LoginRequest {
 
-    /** Numele sau userul cu care vrea sa intre in cont */
+    /** Username or display name entered in the login form. */
     private String username;
 
-    /** Parola secreta introdusa */
+    /** Plain-text password entered by the user. */
     private String password;
 
-    /** Rolul selectat (Lider, Director sau Copil) pentru a sti unde sa il trimitem */
+    /**
+     * Role selected on the login screen.
+     * Accepted values: "CHILD", "LEADER", "DIRECTOR".
+     */
     private String role;
 }

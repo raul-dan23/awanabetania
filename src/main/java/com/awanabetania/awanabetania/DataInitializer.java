@@ -1,6 +1,6 @@
 package com.awanabetania.awanabetania;
 
-import com.awanabetania.awanabetania.Model.Child; // Import nou pentru copii
+import com.awanabetania.awanabetania.Model.Child;
 import com.awanabetania.awanabetania.Model.Department;
 import com.awanabetania.awanabetania.Model.Leader;
 import com.awanabetania.awanabetania.Model.Sticker;
@@ -15,10 +15,10 @@ import org.springframework.stereotype.Component;
 import java.util.Optional;
 
 /**
- * Această clasă se execută o singură dată, la pornirea aplicației.
- * Rolul ei este să populeze baza de date cu datele inițiale necesare (Seed Data),
- * cum ar fi: Departamentele, Contul de Admin și Stickerele pentru joc.
- * DE ASEMENEA: Curăță și generează username-uri pentru utilizatorii vechi.
+ * Seeds the database with required initial data on every application startup.
+ * Creates default departments, the admin leader account, and the ranked sticker catalog.
+ * Also performs a one-time migration to generate usernames for legacy accounts
+ * that were created before username generation was introduced.
  */
 @Component
 public class DataInitializer implements CommandLineRunner {
@@ -33,28 +33,30 @@ public class DataInitializer implements CommandLineRunner {
     private StickerRepository stickerRepository;
 
     /**
-     * Metoda principală care rulează la start-up.
+     * Runs all seed and migration tasks at startup.
+     * Each section is idempotent — it checks before inserting to avoid duplicates.
+     *
+     * @param args command-line arguments (unused)
+     * @throws Exception if any repository operation fails unexpectedly
      */
     @Override
     public void run(String... args) throws Exception {
-        System.out.println("⏳ Inițializare date...");
+        System.out.println("Starting data initialization...");
 
-        // 1. DEPARTAMENTE (Daca nu exista, le cream)
-        createDept("Lecție", 1, 3);
+        // 1. Seed departments
+        createDept("Lectie", 1, 3);
         createDept("Jocuri", 2, 6);
         createDept("Media", 1, 2);
         createDept("Social Media", 1, 2);
-        createDept("Sală", 2, 4);
+        createDept("Sala", 2, 4);
         createDept("Materiale", 1, 2);
         createDept("Secretariat", 1, 3);
-        createDept("Agapă", 2, 5);
+        createDept("Agapa", 2, 5);
 
-        // 2. LIDERI (User: Admin / Pass: 1234)
+        // 2. Seed admin leader account (default password "1234")
         createLeader("Raul", "Macovei", "DIRECTOR", "0774650819", null);
 
-        // 3. STICKERE (GAMIFICATION)
-        // MODIFICARE: Verificăm dacă primul sticker are calea setată.
-        // Dacă nu o are (e null), ștergem tot și regenerăm.
+        // 3. Seed stickers — regenerate the full set if imagePath is missing on any entry
         boolean needRegeneration = false;
         if (stickerRepository.count() > 0) {
             Sticker first = stickerRepository.findAll().get(0);
@@ -66,28 +68,21 @@ public class DataInitializer implements CommandLineRunner {
         }
 
         if (needRegeneration) {
-            System.out.println("🔄 Regenerare Stickere cu imagini...");
-            stickerRepository.deleteAll(); // Ștergem vechiturile
-
+            System.out.println("Regenerating stickers with image paths...");
+            stickerRepository.deleteAll();
             for (int i = 1; i <= 30; i++) {
                 Sticker s = new Sticker();
                 s.setName("Rank " + i);
-
-                // Aici setăm calea corectă
                 s.setImagePath("/stickers/" + i + ".png");
-
                 stickerRepository.save(s);
             }
         }
 
-        // ==========================================
-        // 4. REPARARE COPII VECHI (Generare Username)
-        // ==========================================
-        System.out.println("🔧 Verificare username-uri copii...");
+        // 4. Backfill usernames for children created before username generation
+        System.out.println("Checking child usernames...");
         for (Child c : childRepository.findAll()) {
             if (c.getUsername() == null || c.getUsername().isEmpty()) {
                 String baseUsername = generateCleanUsername(c.getName(), c.getSurname());
-                // Daca mai exista cineva cu exact acelasi username, ii adaugam ID-ul la final ca sa fie unic
                 if (childRepository.findByUsername(baseUsername).isPresent()) {
                     baseUsername += c.getId();
                 }
@@ -96,10 +91,8 @@ public class DataInitializer implements CommandLineRunner {
             }
         }
 
-        // ==========================================
-        // 5. REPARARE LIDERI VECHI (Generare Username)
-        // ==========================================
-        System.out.println("🔧 Verificare username-uri lideri...");
+        // 5. Backfill usernames for leaders created before username generation
+        System.out.println("Checking leader usernames...");
         for (Leader l : leaderRepository.findAll()) {
             if (l.getUsername() == null || l.getUsername().isEmpty()) {
                 String baseUsername = generateCleanUsername(l.getName(), l.getSurname());
@@ -111,14 +104,15 @@ public class DataInitializer implements CommandLineRunner {
             }
         }
 
-        System.out.println("✅ Datele sunt gata!");
+        System.out.println("Data initialization complete.");
     }
 
     /**
-     * Creează un departament doar dacă nu există deja unul cu același nume.
-     * @param name Numele departamentului (ex: "Jocuri")
-     * @param min Numărul minim de lideri
-     * @param max Numărul maxim de lideri
+     * Creates a department only if one with the given name does not already exist.
+     *
+     * @param name       display name (e.g. "Jocuri")
+     * @param min        minimum number of assigned leaders
+     * @param max        maximum number of assigned leaders
      */
     private void createDept(String name, int min, int max) {
         if (departmentRepository.findByName(name).isEmpty()) {
@@ -127,12 +121,13 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     /**
-     * Creează un lider (sau Admin) doar dacă nu există deja.
-     * @param name Prenume
-     * @param surname Nume
-     * @param role Rol (DIRECTOR, LEADER, COORDONATOR)
-     * @param phone Telefon
-     * @param deptName (Opțional) Numele departamentului unde să fie asignat
+     * Creates a leader account only if one with the same name and surname does not already exist.
+     *
+     * @param name     first name
+     * @param surname  last name
+     * @param role     role string (e.g. "DIRECTOR", "LEADER")
+     * @param phone    phone number
+     * @param deptName optional department name to assign on creation; {@code null} for none
      */
     private void createLeader(String name, String surname, String role, String phone, String deptName) {
         if (leaderRepository.findByNameAndSurname(name, surname).isEmpty()) {
@@ -146,19 +141,20 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     /**
-     * Funcția care curăță numele pentru a genera un username sigur:
-     * Ex: "David Ștefan" + "Popescu" -> "davidstefanpopescu"
-     * * @param name Prenumele utilizatorului
-     * @param surname Numele de familie
-     * @return String curățat, fără spații și diacritice, cu litere mici
+     * Produces a safe login username from a first and last name by lowercasing,
+     * stripping whitespace, and replacing Romanian diacritics with ASCII equivalents.
+     * Example: "David Stefan" + "Popescu" → "davidstefanpopescu".
+     *
+     * @param name    first name (may be {@code null})
+     * @param surname last name (may be {@code null})
+     * @return normalized ASCII username, lower-case, no spaces
      */
     public static String generateCleanUsername(String name, String surname) {
         if (name == null) name = "";
         if (surname == null) surname = "";
         String raw = (name + surname).replaceAll("\\s+", "").toLowerCase();
-
-        // Scoatem diacriticele romanesti
-        return raw.replace("ă", "a").replace("â", "a").replace("î", "i")
+        return raw
+                .replace("ă", "a").replace("â", "a").replace("î", "i")
                 .replace("ș", "s").replace("ț", "t")
                 .replace("ş", "s").replace("ţ", "t");
     }

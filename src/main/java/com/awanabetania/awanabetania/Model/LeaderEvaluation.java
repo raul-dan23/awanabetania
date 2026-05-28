@@ -8,8 +8,11 @@ import lombok.Setter;
 import java.time.LocalDate;
 
 /**
- * Aceasta clasa reprezinta o nota sau evaluare primita de un lider.
- * UPDATE: Suporta stergerea logica (Soft Delete) prin campul isVisible.
+ * Represents a performance evaluation given to a leader after a club meeting.
+ * Evaluations support soft deletion: setting {@code isVisible} to {@code false}
+ * hides the record without removing it from the database. The leader's average
+ * {@code rating} is recalculated each time an evaluation is saved or soft-deleted,
+ * counting only visible evaluations.
  */
 @Entity
 @Table(name = "leader_evaluations")
@@ -22,13 +25,16 @@ public class LeaderEvaluation {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
+    /** The leader who received this evaluation. */
     @ManyToOne
     @JoinColumn(name = "leader_id")
     private Leader leader;
 
+    /** ID of the leader (typically the director) who submitted this evaluation. */
     @Column(name = "evaluated_by")
     private Integer evaluatedBy;
 
+    /** Numeric score given in this evaluation. */
     private Integer rating;
 
     @Column(columnDefinition = "TEXT")
@@ -37,8 +43,8 @@ public class LeaderEvaluation {
     private LocalDate date;
 
     /**
-     * Daca este TRUE, evaluarea apare in lista.
-     * Daca este FALSE, inseamna ca a fost stearsa de director (dar ramane in baza de date).
+     * Visibility flag for soft deletion.
+     * {@code true} while the evaluation is active; {@code false} after the director hides it.
      */
     @Column(name = "is_visible")
     private Boolean isVisible = true;

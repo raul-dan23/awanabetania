@@ -9,7 +9,6 @@ import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.MeetingRepository;
 import com.awanabetania.awanabetania.Repository.NotificationRepository;
 import com.awanabetania.awanabetania.Repository.ScoreRepository;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,6 +16,23 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * Handles scoring for children at each club meeting.
+ * A score is recorded once per child per active meeting; duplicate submissions are rejected.
+ * Points are accumulated into both {@code seasonPoints} (cumulative) and {@code dailyPoints}
+ * (reset on meeting close). Attendance milestones trigger director notifications.
+ *
+ * <p>Point values per criterion:
+ * <ul>
+ *   <li>Attended: 1 000</li>
+ *   <li>Bible: 500</li>
+ *   <li>Handbook: 500</li>
+ *   <li>Lesson: 1 000</li>
+ *   <li>Friend: 1 000</li>
+ *   <li>Uniform: 10 000</li>
+ *   <li>Extra: as specified</li>
+ * </ul>
+ */
 @RestController
 @RequestMapping("/api/scores")
 @CrossOrigin(origins = "*")
@@ -27,24 +43,26 @@ public class ScoreController {
     @Autowired private MeetingRepository meetingRepository;
     @Autowired private NotificationRepository notificationRepository;
 
+    /**
+     * Records a score for a child at the current active meeting.
+     * Finds the earliest open meeting, checks for duplicate entries, computes the point total,
+     * updates the child's season and daily point counters, and triggers milestone notifications.
+     *
+     * @param request scoring form data (child ID and per-criterion booleans)
+     * @return 200 with the total points on success; 400 if no active session, unknown child, or duplicate
+     */
     @PostMapping("/add")
     public ResponseEntity<?> addScore(@RequestBody ScoreRequest request) {
-
-        // 1. Validări standard (Sesiune activă, Copil valid, Dubluri)
-        // Luam sedinta nesfinalizata cu cea mai APROPIATA data (nu prima din findAll care e nesortata)
         Meeting meeting = meetingRepository.findByIsCompletedFalseOrderByDateAsc()
                 .stream().findFirst().orElse(null);
-
-        if (meeting == null) return ResponseEntity.badRequest().body("Nu există sesiune activă!");
+        if (meeting == null) return ResponseEntity.badRequest().body("No active session exists.");
 
         Child child = childRepository.findById(request.getChildId()).orElse(null);
-        if (child == null) return ResponseEntity.badRequest().body("Copil invalid");
+        if (child == null) return ResponseEntity.badRequest().body("Invalid child.");
 
         boolean alreadyScored = scoreRepository.findByChildIdAndMeetingId(child.getId(), meeting.getId()).isPresent();
+        if (alreadyScored) return ResponseEntity.badRequest().body("This child has already been scored today.");
 
-        if (alreadyScored) return ResponseEntity.badRequest().body("Copilul a fost deja punctat azi!");
-
-        // 2. Creare Score
         Score score = new Score();
         score.setChild(child);
         score.setMeeting(meeting);
@@ -62,66 +80,75 @@ public class ScoreController {
         score.setTotal(points);
         score.setDetails(generateDetailsString(score));
 
-        // Update puncte
         child.setSeasonPoints((child.getSeasonPoints() == null ? 0 : child.getSeasonPoints()) + points);
         child.setDailyPoints((child.getDailyPoints() == null ? 0 : child.getDailyPoints()) + points);
 
-        // =================================================================================
-        // 3. LOGICA DE PREZENȚĂ ȘI PREMII
-        // =================================================================================
         if (Boolean.TRUE.equals(request.getAttended())) {
-
-            // A. Incrementăm Streak-ul
             int currentStreak = (child.getAttendanceStreak() == null) ? 0 : child.getAttendanceStreak();
             int newStreak = currentStreak + 1;
             child.setAttendanceStreak(newStreak);
 
-            // B. Setam data SEDINTEI (nu LocalDate.now()) ca sa fie consistent cu logica de streak la inchidere
+            // Use the meeting's date (not today) so streak logic stays correct if the director
+            // closes the meeting on a different calendar day than it occurred.
             child.setLastAttendanceDate(meeting.getDate());
 
-            // C. Totaluri și Lecții
             child.setTotalAttendance((child.getTotalAttendance() == null ? 0 : child.getTotalAttendance()) + 1);
-            if(Boolean.TRUE.equals(request.getLesson())) {
+            if (Boolean.TRUE.equals(request.getLesson())) {
                 child.setLessonsCompleted((child.getLessonsCompleted() == null ? 0 : child.getLessonsCompleted()) + 1);
             }
 
-            // Liniile care dădeau automat tricoul și manualul au fost șterse de aici.
-
-            // D. Verificare Premii (Notificări)
             checkRewards(child, newStreak);
         }
 
         scoreRepository.save(score);
         childRepository.save(child);
 
-        return ResponseEntity.ok("Puncte salvate! Total: " + points);
+        return ResponseEntity.ok("Points saved. Total: " + points);
     }
 
-    // Helper verificare premii
-    private void checkRewards(Child child, int streak) {
-        if (streak == 5 && (child.getHasShirt() == null || !child.getHasShirt())) {
-            createNotification(child, "SHIRT_ELIGIBLE", "🎁 DIRECTOR! " + child.getName() + " așteaptă TRICOUL (5 prezențe)!");
-        }
-        if (streak == 10 && (child.getHasHat() == null || !child.getHasHat())) {
-            createNotification(child, "HAT_ELIGIBLE", "🎁 DIRECTOR! " + child.getName() + " așteaptă CĂCIULA (10 prezențe)!");
-        }
-    }
-
-    private void createNotification(Child child, String type, String msg) {
-        // Evităm duplicatele active
-        List<Notification> existing = notificationRepository.findActiveByChildAndType(child.getId(), type);
-        if (existing.isEmpty()) {
-            Notification n = new Notification();
-            n.setMessage(msg); n.setType(type); n.setVisibleTo("DIRECTOR"); n.setDate(LocalDate.now()); n.setIsVisible(true); n.setChildId(child.getId());
-            notificationRepository.save(n);
-        }
-    }
-
+    /**
+     * Returns the full scoring history for a child, newest meeting first.
+     *
+     * @param childId the child's primary key
+     * @return list of {@link Score} records
+     */
     @GetMapping("/child/{childId}")
     public List<Score> getScoresByChild(@PathVariable Integer childId) {
         return scoreRepository.findByChildIdOrderByMeeting_DateDesc(childId);
     }
 
+    /**
+     * Creates reward notifications for the director at attendance milestones (5 and 10 meetings).
+     * Skips notification creation if the reward has already been given or if a notification
+     * for this reward type is already visible.
+     */
+    private void checkRewards(Child child, int streak) {
+        if (streak == 5 && (child.getHasShirt() == null || !child.getHasShirt())) {
+            createNotification(child, "SHIRT_ELIGIBLE",
+                    "DIRECTOR! " + child.getName() + " is eligible for their SHIRT (5 attendances).");
+        }
+        if (streak == 10 && (child.getHasHat() == null || !child.getHasHat())) {
+            createNotification(child, "HAT_ELIGIBLE",
+                    "DIRECTOR! " + child.getName() + " is eligible for their HAT (10 attendances).");
+        }
+    }
+
+    /** Creates a director notification only if no active notification of the same type exists for the child. */
+    private void createNotification(Child child, String type, String msg) {
+        List<Notification> existing = notificationRepository.findActiveByChildAndType(child.getId(), type);
+        if (existing.isEmpty()) {
+            Notification n = new Notification();
+            n.setMessage(msg);
+            n.setType(type);
+            n.setVisibleTo("DIRECTOR");
+            n.setDate(LocalDate.now());
+            n.setIsVisible(true);
+            n.setChildId(child.getId());
+            notificationRepository.save(n);
+        }
+    }
+
+    /** Calculates the total points for a score based on which criteria were fulfilled. */
     private int calculatePoints(Score s) {
         int total = 0;
         if (Boolean.TRUE.equals(s.getAttended())) total += 1000;
@@ -134,6 +161,7 @@ public class ScoreController {
         return total;
     }
 
+    /** Builds the comma-separated human-readable details string for a score. */
     private String generateDetailsString(Score s) {
         StringBuilder sb = new StringBuilder();
         if (Boolean.TRUE.equals(s.getAttended())) sb.append("Prezenta, ");
@@ -143,6 +171,6 @@ public class ScoreController {
         if (Boolean.TRUE.equals(s.getFriend())) sb.append("Prieten, ");
         if (Boolean.TRUE.equals(s.getHasUniform())) sb.append("Uniforma, ");
         if (s.getExtraPoints() != null && s.getExtraPoints() > 0) sb.append("Extra (+").append(s.getExtraPoints()).append("), ");
-        return sb.length() > 2 ? sb.substring(0, sb.length() - 2) : "Puncte acordate";
+        return sb.length() > 2 ? sb.substring(0, sb.length() - 2) : "Points awarded";
     }
 }

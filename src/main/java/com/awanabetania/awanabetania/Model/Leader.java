@@ -9,8 +9,10 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Entitatea Leader (Lider).
- * Reprezintă un utilizator cu drepturi de administrare sau voluntar.
+ * Represents a leader (volunteer or director) of the Awana club.
+ * Leaders can belong to one or more departments, hold different roles
+ * (LEADER, COORDONATOR, DIRECTOR), and receive evaluations from directors.
+ * Passwords are stored AES-encrypted.
  */
 @Entity
 @Table(name = "leaders")
@@ -38,8 +40,8 @@ public class Leader {
     private String role;
 
     /**
-     * Departamentele asignate.
-     * Am păstrat EAGER pentru login, dar am asigurat integritatea relației.
+     * Departments this leader belongs to.
+     * Fetched eagerly so department data is available during login without an extra query.
      */
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
@@ -49,6 +51,7 @@ public class Leader {
     )
     private Set<Department> departments = new HashSet<>();
 
+    /** Average rating computed from visible evaluations; updated after every feedback save. */
     private Float rating = 0.0f;
 
     @Column(columnDefinition = "TEXT")
@@ -56,9 +59,19 @@ public class Leader {
 
     private String password;
 
+    /** Short deletion-confirmation code generated on demand; must match to allow account removal. */
     @Column(name = "deletion_code")
     private String deletionCode;
 
+    /**
+     * Convenience constructor used by {@code DataInitializer} for seeding the admin account.
+     *
+     * @param name        first name
+     * @param surname     last name
+     * @param role        role string (e.g. "DIRECTOR")
+     * @param password    plain-text password (will be stored as-is during seeding)
+     * @param phoneNumber contact phone number
+     */
     public Leader(String name, String surname, String role, String password, String phoneNumber) {
         this.name = name;
         this.surname = surname;

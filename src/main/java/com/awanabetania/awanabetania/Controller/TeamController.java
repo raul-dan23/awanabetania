@@ -9,11 +9,12 @@ import org.springframework.web.bind.annotation.*;
 import java.util.*;
 
 /**
- * Aceasta clasa se ocupa de Echipe si Jocuri.
- * Varianta SIMPLIFICATA:
- * 1. Echipele sunt stocate direct pe copil (Child.currentTeam).
- * 2. Punctele individuale sunt luate din Child.dailyPoints.
- * 3. Punctele de joc sunt luate din TeamGamePoint.
+ * Manages team selection and real-time scoring during the games portion of each meeting.
+ * Teams are stored directly on the {@link Child} entity via {@code currentTeam}.
+ * Individual scores are read from {@code Child.dailyPoints} (reset when the meeting closes).
+ * Game-round scores are stored separately as {@link TeamGamePoint} records linked to the meeting.
+ *
+ * <p>Team color identifiers are free-form strings (e.g. "red", "blue", "green", "yellow").</p>
  */
 @RestController
 @RequestMapping("/api/teams")
@@ -21,12 +22,14 @@ import java.util.*;
 public class TeamController {
 
     @Autowired private ChildRepository childRepository;
-    @Autowired private TeamGamePointRepository teamGamePointRepository; // Punctele de la jocuri
+    @Autowired private TeamGamePointRepository teamGamePointRepository;
     @Autowired private MeetingRepository meetingRepository;
 
     /**
-     * Lista cu copiii care stau pe banca si asteapta sa fie alesi.
-     * Sunt afisati doar cei care NU au campul 'currentTeam' setat si nu sunt suspendati.
+     * Returns all children who are not currently assigned to a team and are not suspended,
+     * ordered alphabetically.
+     *
+     * @return list of available (bench) children
      */
     @GetMapping("/available")
     public List<Child> getAvailableChildren() {
@@ -34,53 +37,53 @@ public class TeamController {
     }
 
     /**
-     * Scoate un copil din echipa curentă și îl trimite înapoi la "Disponibili".
+     * Removes a child from their current team, placing them back on the bench.
+     *
+     * @param payload JSON with key "childId" (as a string)
+     * @return 200 with the team name the child was removed from; 400 on invalid ID or error
      */
     @PostMapping("/remove")
     public ResponseEntity<?> removeChildFromTeam(@RequestBody Map<String, String> payload) {
         try {
             Integer childId = Integer.parseInt(payload.get("childId"));
             Child child = childRepository.findById(childId).orElse(null);
+            if (child == null) return ResponseEntity.badRequest().body("Invalid child.");
 
-            if (child == null) return ResponseEntity.badRequest().body("Copil invalid");
-
-            // Îl scoatem din echipă (setăm null)
             String oldTeam = child.getCurrentTeam();
             child.setCurrentTeam(null);
             childRepository.save(child);
 
-            return ResponseEntity.ok("Sters din echipa " + oldTeam);
+            return ResponseEntity.ok("Removed from team " + oldTeam);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Eroare: " + e.getMessage());
+            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
         }
     }
 
     /**
-     * Calculeaza scorul total al unei echipe in timp real.
-     * Formula: Suma(dailyPoints ale copiilor din echipa) + Suma(TeamGamePoints ale echipei).
+     * Returns the current real-time score breakdown for a team.
+     * Total score = sum of members' daily points + sum of game-round points for the active meeting.
+     *
+     * @param color team color identifier (case-insensitive)
+     * @return map with keys "members", "individualScore", "gameScore", "totalScore"
      */
     @GetMapping("/status/{color}")
     public Map<String, Object> getTeamStatus(@PathVariable String color) {
         Map<String, Object> response = new HashMap<>();
         Meeting activeMeeting = getActiveMeeting();
 
-        // Pasul A: Gasim membrii echipei (cautam in tabelul de copii cine are echipa asta)
         List<Child> members = childRepository.findByCurrentTeamIgnoreCase(color);
 
-        // Pasul B: Calculam suma punctelor lor ZILNICE (individuale)
-        // Nu mai cautam in ScoreRepository, ci direct in dailyPoints care se reseteaza seara
         int individualSum = members.stream()
                 .mapToInt(c -> c.getDailyPoints() != null ? c.getDailyPoints() : 0)
                 .sum();
 
-        // Pasul C: Calculam punctele de la JOCURI (doar daca e o sesiune activa)
         int gameSum = 0;
         if (activeMeeting != null) {
-            List<TeamGamePoint> gamePoints = teamGamePointRepository.findByMeetingIdAndTeamColor(activeMeeting.getId(), color);
+            List<TeamGamePoint> gamePoints = teamGamePointRepository
+                    .findByMeetingIdAndTeamColor(activeMeeting.getId(), color);
             gameSum = gamePoints.stream().mapToInt(TeamGamePoint::getPoints).sum();
         }
 
-        // Impachetam rezultatele
         response.put("members", members);
         response.put("individualScore", individualSum);
         response.put("gameScore", gameSum);
@@ -90,47 +93,51 @@ public class TeamController {
     }
 
     /**
-     * Alege un copil si il baga intr-o echipa.
-     * Actualizeaza direct campul 'currentTeam' al copilului.
+     * Assigns a child to a team.
+     *
+     * @param payload JSON with keys "childId" (string) and "teamColor" (string)
+     * @return 200 on success; 400 on invalid child ID or parse error
      */
     @PostMapping("/pick")
     public ResponseEntity<?> pickChild(@RequestBody Map<String, String> payload) {
         try {
             Integer childId = Integer.parseInt(payload.get("childId"));
-            String teamColor = payload.get("teamColor"); // ex: "red"
+            String teamColor = payload.get("teamColor");
 
             Child child = childRepository.findById(childId).orElse(null);
-            if (child == null) return ResponseEntity.badRequest().body("Copil invalid");
+            if (child == null) return ResponseEntity.badRequest().body("Invalid child.");
 
-            // Il asignam in echipa
             child.setCurrentTeam(teamColor);
             childRepository.save(child);
 
-            return ResponseEntity.ok("Adaugat in " + teamColor);
+            return ResponseEntity.ok("Added to " + teamColor);
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Eroare: " + e.getMessage());
+            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
         }
     }
 
     /**
-     * Salveaza rezultatul unei runde de joc (ex: Trasul Franghiei).
-     * Creeaza un TeamGamePoint legat de intalnirea de azi.
+     * Records the results of a game round. Saves one {@link TeamGamePoint} entry per team.
+     * Points are based on finishing position (1st: 1000, 2nd: 500, 3rd: 300, 4th: 100)
+     * and are doubled if the round is marked as a double-points round.
+     *
+     * @param payload JSON with "ranking" (ordered list of team colors, winner first) and "isDouble" (boolean)
+     * @return 200 on success; 400 if no active session exists
      */
     @PostMapping("/game-round")
     public ResponseEntity<?> saveGameRound(@RequestBody Map<String, Object> payload) {
         Meeting activeMeeting = getActiveMeeting();
-        if (activeMeeting == null) return ResponseEntity.badRequest().body("Nu exista o sesiune activa!");
+        if (activeMeeting == null) return ResponseEntity.badRequest().body("No active session exists.");
 
-        List<String> ranking = (List<String>) payload.get("ranking"); // ex: ["red", "blue", "green", "yellow"]
+        @SuppressWarnings("unchecked")
+        List<String> ranking = (List<String>) payload.get("ranking");
         Boolean isDouble = (Boolean) payload.get("isDouble");
 
-        int[] standardPoints = {1000, 500, 300, 100}; // Locul 1, 2, 3, 4
+        int[] standardPoints = {1000, 500, 300, 100};
 
         for (int i = 0; i < ranking.size(); i++) {
             String color = ranking.get(i);
             int pts = (i < standardPoints.length) ? standardPoints[i] : 0;
-
-            // Daca e runda dubla, punctele se inmultesc cu 2
             if (Boolean.TRUE.equals(isDouble)) pts *= 2;
 
             TeamGamePoint tp = new TeamGamePoint();
@@ -140,20 +147,15 @@ public class TeamController {
             teamGamePointRepository.save(tp);
         }
 
-        return ResponseEntity.ok("Joc salvat!");
+        return ResponseEntity.ok("Game round saved.");
     }
 
     /**
-     * Metoda ajutatoare.
-     * Gaseste prima intalnire din calendar care este pornita si nefinalizata.
-     */
-    private Meeting getActiveMeeting() {
-        return meetingRepository.findByIsCompletedFalseOrderByDateAsc()
-                .stream().findFirst().orElse(null);
-    }
-    /**
-     * Endpoint NOU: Adaugă puncte manuale unei echipe.
-     * Exemplu JSON: { "teamColor": "red", "points": 3200 }
+     * Adds a manually specified number of points to a team without a game-round ranking.
+     * Useful for bonus points or corrections by the director.
+     *
+     * @param payload JSON with "teamColor" (string) and "points" (integer)
+     * @return 200 on success; 400 if team color or points are missing
      */
     @PostMapping("/add-manual-points")
     public ResponseEntity<?> addManualPoints(@RequestBody Map<String, Object> payload) {
@@ -161,18 +163,23 @@ public class TeamController {
         Integer points = (Integer) payload.get("points");
 
         if (color == null || points == null) {
-            return ResponseEntity.badRequest().body("Eroare: Lipseste culoarea sau punctajul!");
+            return ResponseEntity.badRequest().body("Team color and points are required.");
         }
 
-        // Salvăm în baza de date ca o intrare de tip "Joc"
         TeamGamePoint log = new TeamGamePoint();
         log.setTeamColor(color.toLowerCase());
         log.setPoints(points);
-        log.setMeeting(getActiveMeeting()); // Legam de intalnirea activa daca exista
-        // Daca nu ai Meeting in constructor, poti comenta linia de mai sus sau seta null
-
+        log.setMeeting(getActiveMeeting());
         teamGamePointRepository.save(log);
 
-        return ResponseEntity.ok("S-au adăugat " + points + " puncte la echipa " + color.toUpperCase());
+        return ResponseEntity.ok("Added " + points + " points to team " + color.toUpperCase());
+    }
+
+    /**
+     * Returns the first open meeting ordered by date, or {@code null} if none exists.
+     */
+    private Meeting getActiveMeeting() {
+        return meetingRepository.findByIsCompletedFalseOrderByDateAsc()
+                .stream().findFirst().orElse(null);
     }
 }

@@ -7,17 +7,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 /**
- * Interfață care ne ajută să salvăm și să citim progresul ("Save Game"-ul) din baza de date.
- * Spring Boot implementează automat metodele precum save(), findById(), etc.
+ * Data access interface for {@link ChildProgress} entities.
+ * The progress record is typically accessed via the {@code Child.progress} relationship,
+ * but this repository is used for bulk cleanup when a child account is deleted.
  */
 @Repository
 public interface ChildProgressRepository extends JpaRepository<ChildProgress, Integer> {
-    // Putem adăuga metode custom aici dacă avem nevoie pe viitor.
-    // De exemplu: Caută progresul după ID-ul copilului
-    // ChildProgress findByChildId(Integer childId);
-    // (Dar momentan avem relația directă în Child, deci nu e obligatoriu)
 
-
+    /** Deletes the progress record belonging to a specific child. */
     @Modifying
     @Query("DELETE FROM ChildProgress cp WHERE cp.child.id = ?1")
     void deleteByChildId(Integer childId);

@@ -7,24 +7,20 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 /**
- * Aceasta interfata ne ajuta sa lucram cu baza de date pentru Intalniri (Seri de Club).
- * Aici cautam serile active sau istoricul.
+ * Data access interface for {@link Meeting} entities.
  */
 @Repository
 public interface MeetingRepository extends JpaRepository<Meeting, Integer> {
 
     /**
-     * Gaseste intalnirile care inca nu s-au terminat (active).
-     * Le pune in ordine cronologica (cea mai veche prima).
+     * Returns all meetings that have not yet been closed, ordered by date ascending.
+     * The first result is the current (or next) active meeting.
      */
     List<Meeting> findByIsCompletedFalseOrderByDateAsc();
 
-    /**
-     * Lista cu tot istoricul serilor de club (si cele terminate, si cele active).
-     * Le pune pe cele mai recente primele (ca sa vezi ultima seara sus).
-     */
+    /** Returns all meetings ordered by date descending (most recent first). */
     List<Meeting> findAllByOrderByDateDesc();
 
-
+    /** Returns all meetings where the given leader is assigned as director-of-the-day. */
     List<Meeting> findByDirectorDayId(Integer directorDayId);
 }

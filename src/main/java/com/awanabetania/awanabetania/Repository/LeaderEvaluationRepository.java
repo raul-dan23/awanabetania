@@ -7,18 +7,21 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * Data access interface for {@link LeaderEvaluation} entities.
+ */
 @Repository
 public interface LeaderEvaluationRepository extends JpaRepository<LeaderEvaluation, Integer> {
 
-    /** * Gaseste evaluarile dintr-o data, DAR doar pe cele care nu au fost sterse.
-     */
+    /** Returns all visible evaluations recorded on a given date. */
     List<LeaderEvaluation> findByDateAndIsVisibleTrue(LocalDate date);
 
-    /**
-     * Gaseste istoricul vizibil al unui lider.
-     */
+    /** Returns all visible evaluations for a given leader, newest first. */
     List<LeaderEvaluation> findByLeaderIdAndIsVisibleTrueOrderByDateDesc(Integer leaderId);
 
+    /** Deletes all evaluations associated with a given leader (used before deleting the leader). */
     void deleteByLeaderId(Integer leaderId);
+
+    /** Deletes all evaluations submitted by a given evaluator (used before deleting the evaluator). */
     void deleteByEvaluatedBy(Integer evaluatedBy);
 }

@@ -8,8 +8,10 @@ import lombok.Setter;
 import java.time.LocalDate;
 
 /**
- * Aceasta clasa reprezinta o seara de club sau o intalnire.
- * Aici tinem minte data, cine a fost director si cum a decurs totul.
+ * Represents a single club evening (meeting).
+ * Tracks the date, whether the meeting has been closed, an optional director-of-the-day,
+ * a general rating/feedback entered at the end of the evening, and a PIN that is
+ * auto-generated when a secretariat leader is assigned — used to gate the scoring screen.
  */
 @Entity
 @Table(name = "meetings")
@@ -18,35 +20,33 @@ import java.time.LocalDate;
 @NoArgsConstructor
 public class Meeting {
 
-    /** ID unic al intalnirii */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    /** Data cand are loc intalnirea */
     private LocalDate date;
 
-    /** O scurta descriere a ce facem in acea seara */
     private String description;
 
-    /** Daca seara s-a terminat sau inca e in desfasurare */
+    /** {@code false} while the meeting is in progress; {@code true} after it has been closed. */
     @Column(name = "is_completed")
     private Boolean isCompleted = false;
 
-    /** O nota generala pentru cum a mers toata seara */
     @Column(name = "general_rating")
     private Integer generalRating;
 
-    /** Pareri scrise despre cum a fost atmosfera */
     @Column(name = "general_feedback", columnDefinition = "TEXT")
     private String generalFeedback;
 
-    /** Cine este liderul responsabil (directorul de zi) pentru aceasta data */
+    /** The leader responsible for running this particular evening. */
     @ManyToOne
     @JoinColumn(name = "director_day_id")
     private Leader directorDay;
 
-    /** PIN generat cu SecureRandom la prima asignare de secretariat — nu se recalculeaza */
+    /**
+     * 4-digit PIN generated with {@link java.security.SecureRandom} when the first secretariat
+     * assignment is created. Not regenerated on subsequent secretariat assignments for the same meeting.
+     */
     @Column(name = "meeting_pin")
     private String meetingPin;
 }

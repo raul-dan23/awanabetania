@@ -1,19 +1,21 @@
 package com.awanabetania.awanabetania.Controller;
 
-import com.awanabetania.awanabetania.DataInitializer; // Import pentru username
+import com.awanabetania.awanabetania.DataInitializer;
 import com.awanabetania.awanabetania.Model.Child;
-import com.awanabetania.awanabetania.Model.ChildManual;
-import com.awanabetania.awanabetania.Model.ChildProgress;
-import com.awanabetania.awanabetania.Model.Notification;
 import com.awanabetania.awanabetania.Repository.*;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * Manages child member records: listing, profile updates, reward assignment, and account deletion.
+ * Account deletion requires a pre-generated deletion code for confirmation.
+ * Related records (scores, notifications, warnings) are cleaned up manually in addition to
+ * the cascade deletes configured on the {@link Child} entity.
+ */
 @RestController
 @RequestMapping("/api/children")
 @CrossOrigin(origins = "*")
@@ -26,14 +28,33 @@ public class ChildController {
     @Autowired private ScoreRepository scoreRepository;
     @Autowired private WarningRepository warningRepository;
 
+    /**
+     * Returns all children registered in the club.
+     *
+     * @return list of all {@link Child} entities
+     */
     @GetMapping
-    public List<Child> getAllChildren() { return childRepository.findAll(); }
+    public List<Child> getAllChildren() {
+        return childRepository.findAll();
+    }
 
+    /**
+     * Returns a single child by ID.
+     *
+     * @param id the child's primary key
+     * @return 200 with the child entity, or 404 if not found
+     */
     @GetMapping("/{id}")
     public ResponseEntity<Child> getChildById(@PathVariable Integer id) {
         return childRepository.findById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
     }
 
+    /**
+     * Creates a new child record. Generates a unique username from name and surname.
+     *
+     * @param child the child data from the request body
+     * @return the saved {@link Child} entity with its generated ID and username
+     */
     @PostMapping("/add")
     public Child addChild(@RequestBody Child child) {
         String baseUsername = DataInitializer.generateCleanUsername(child.getName(), child.getSurname());
@@ -44,26 +65,39 @@ public class ChildController {
         return childRepository.save(child);
     }
 
+    /**
+     * Updates an existing child's personal information.
+     * Rejects the request if the new username is already claimed by a different account.
+     *
+     * @param id           the child's primary key
+     * @param childDetails the updated fields from the request body
+     * @return 200 with the updated entity, 400 on duplicate username, or 404 if not found
+     */
     @PutMapping("/{id}")
     @Transactional
     public ResponseEntity<?> updateChild(@PathVariable Integer id, @RequestBody Child childDetails) {
         return childRepository.findById(id).map(child -> {
             var existingUser = childRepository.findByUsername(childDetails.getUsername());
             if (existingUser.isPresent() && !existingUser.get().getId().equals(id)) {
-                return ResponseEntity.badRequest().body("❌ Acest username este deja folosit de altcineva!");
+                return ResponseEntity.badRequest().body("This username is already taken by another account.");
             }
-
             child.setName(childDetails.getName());
             child.setSurname(childDetails.getSurname());
             child.setUsername(childDetails.getUsername());
             child.setBirthDate(childDetails.getBirthDate());
             child.setParentName(childDetails.getParentName());
             child.setParentPhone(childDetails.getParentPhone());
-
             return ResponseEntity.ok(childRepository.save(child));
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    /**
+     * Marks an inventory item (shirt, hat, or manual) as given to the child.
+     *
+     * @param id   the child's primary key
+     * @param type reward type: "SHIRT", "HAT", or "MANUAL"
+     * @return 200 on success, 400 for unknown type, or 404 if child not found
+     */
     @PostMapping("/{id}/give-reward")
     public ResponseEntity<?> giveReward(@PathVariable Integer id, @RequestParam String type) {
         Child child = childRepository.findById(id).orElse(null);
@@ -71,11 +105,21 @@ public class ChildController {
         if ("SHIRT".equals(type)) child.setHasShirt(true);
         else if ("HAT".equals(type)) child.setHasHat(true);
         else if ("MANUAL".equals(type)) child.setHasManual(true);
-        else return ResponseEntity.badRequest().body("❌ Tip premiu necunoscut: " + type);
+        else return ResponseEntity.badRequest().body("Unknown reward type: " + type);
         childRepository.save(child);
-        return ResponseEntity.ok("✅ Premiu acordat!");
+        return ResponseEntity.ok("Reward granted.");
     }
 
+    /**
+     * Permanently deletes a child account and all associated records.
+     * The caller must supply the deletion code previously generated by the director.
+     * Cascade deletes handle manuals and progress; scores, notifications, and warnings
+     * are removed explicitly.
+     *
+     * @param id   the child's primary key
+     * @param code the deletion-confirmation code
+     * @return 200 on success, 400 if the code is missing or incorrect, or 404 if not found
+     */
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<?> deleteChild(@PathVariable Integer id, @RequestParam(required = false) String code) {
@@ -83,21 +127,18 @@ public class ChildController {
         if (child == null) return ResponseEntity.notFound().build();
 
         if (child.getDeletionCode() == null || child.getDeletionCode().isEmpty()) {
-            return ResponseEntity.badRequest().body("❌ Contul nu are un cod de ștergere setat. Generați unul mai întâi din panoul de admin!");
+            return ResponseEntity.badRequest().body("No deletion code has been set. Generate one from the admin panel first.");
         }
         if (code == null || !code.equalsIgnoreCase(child.getDeletionCode())) {
-            return ResponseEntity.badRequest().body("❌ Codul de ștergere este incorect!");
+            return ResponseEntity.badRequest().body("Incorrect deletion code.");
         }
 
-        // Datorită CascadeType.ALL din Model, multe ștergeri se fac acum automat.
-        // Păstrăm totuși curățarea manuală pentru siguranță acolo unde nu există relații directe @OneToMany.
+        // Explicit cleanup for records not covered by CascadeType.ALL
         scoreRepository.deleteByChildId(id);
         notificationRepository.deleteByChildId(id);
         warningRepository.deleteByChildId(id);
 
         childRepository.deleteById(id);
-        return ResponseEntity.ok("✅ Cont șters cu succes!");
+        return ResponseEntity.ok("Account deleted successfully.");
     }
-
-    // ... restul metodelor raman neschimbate
 }

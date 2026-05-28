@@ -10,6 +10,12 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Handles end-of-evening feedback: a general meeting rating plus per-leader evaluations.
+ * Evaluations use soft deletion — setting {@code isVisible=false} hides them from
+ * the UI without removing the data from the database. The leader's average rating
+ * is recalculated whenever an evaluation is saved or soft-deleted.
+ */
 @RestController
 @RequestMapping("/api/feedback")
 @CrossOrigin(origins = "*")
@@ -21,15 +27,16 @@ public class FeedbackController {
     @Autowired private NotificationRepository notificationRepository;
 
     /**
-     * Citeste notele si parerile pentru o anumita seara.
-     * Aduce DOAR evaluarile care sunt vizibile (active).
+     * Returns the general rating and all visible individual evaluations for a given meeting.
+     *
+     * @param meetingId the meeting's primary key
+     * @return map with "generalRating", "generalFeedback", and "evaluations"; 400 if not found
      */
     @GetMapping("/{meetingId}")
     public ResponseEntity<?> getFeedback(@PathVariable Integer meetingId) {
         Meeting meeting = meetingRepository.findById(meetingId).orElse(null);
         if (meeting == null) return ResponseEntity.badRequest().build();
 
-        // MODIFICARE: Folosim metoda noua care filtreaza stergerile
         List<LeaderEvaluation> evals = evaluationRepository.findByDateAndIsVisibleTrue(meeting.getDate());
 
         return ResponseEntity.ok(Map.of(
@@ -40,33 +47,41 @@ public class FeedbackController {
     }
 
     /**
-     * Arata istoricul notelor unui lider (doar cele vizibile).
+     * Returns the visible evaluation history for a given leader, newest first.
+     *
+     * @param leaderId the leader's primary key
+     * @return list of visible {@link LeaderEvaluation} records
      */
     @GetMapping("/leader/{leaderId}")
     public List<LeaderEvaluation> getLeaderHistory(@PathVariable Integer leaderId) {
-        // MODIFICARE: Folosim metoda care filtreaza stergerile
         return evaluationRepository.findByLeaderIdAndIsVisibleTrueOrderByDateDesc(leaderId);
     }
 
     /**
-     * STERGE EVALUAREA (LOGIC).
-     * Nu o stergem din baza de date, doar o ascundem (is_visible = false).
+     * Soft-deletes an evaluation by setting {@code isVisible=false}.
+     * Recalculates the affected leader's average rating to exclude the hidden entry.
+     *
+     * @param id the evaluation's primary key
+     * @return 200 on success (no-op if the ID is not found)
      */
     @DeleteMapping("/delete/{id}")
     public ResponseEntity<?> deleteEvaluation(@PathVariable Integer id) {
         LeaderEvaluation eval = evaluationRepository.findById(id).orElse(null);
-        if(eval != null) {
-            eval.setIsVisible(false); // O marcam ca "invizibila"
-            evaluationRepository.save(eval); // Salvam modificarea
-
-            // Optional: Putem recalcula media liderului aici, daca vrem sa excludem nota stearsa din medie
+        if (eval != null) {
+            eval.setIsVisible(false);
+            evaluationRepository.save(eval);
             recalculateLeaderRating(eval.getLeader().getId());
         }
-        return ResponseEntity.ok("Evaluare ștearsă (ascunsă)!");
+        return ResponseEntity.ok("Evaluation hidden.");
     }
 
     /**
-     * Salveaza tot raportul serii.
+     * Saves the full feedback report for a meeting: general rating + individual evaluations.
+     * Each evaluation triggers a notification to the evaluated leader and a rating recalculation.
+     *
+     * @param payload JSON with "meetingId", "directorId", "generalRating", "generalFeedback",
+     *                and "evaluations" (list of {leaderId, rating, comment})
+     * @return 200 on success; 400 if the meeting is not found
      */
     @PostMapping("/save")
     public ResponseEntity<?> saveFeedback(@RequestBody Map<String, Object> payload) {
@@ -74,14 +89,13 @@ public class FeedbackController {
         Integer directorId = (Integer) payload.get("directorId");
 
         Meeting meeting = meetingRepository.findById(meetingId).orElse(null);
-        if (meeting == null) return ResponseEntity.badRequest().body("Meeting not found");
+        if (meeting == null) return ResponseEntity.badRequest().body("Meeting not found.");
 
-        // 1. Salvam general
         meeting.setGeneralRating((Integer) payload.get("generalRating"));
         meeting.setGeneralFeedback((String) payload.get("generalFeedback"));
         meetingRepository.save(meeting);
 
-        // 2. Salvam individual
+        @SuppressWarnings("unchecked")
         List<Map<String, Object>> evals = (List<Map<String, Object>>) payload.get("evaluations");
 
         for (Map<String, Object> evalData : evals) {
@@ -89,37 +103,40 @@ public class FeedbackController {
             Integer rating = (Integer) evalData.get("rating");
             String comment = (String) evalData.get("comment");
 
-            LeaderEvaluation le = new LeaderEvaluation();
-            le.setDate(meeting.getDate());
-            le.setEvaluatedBy(directorId);
-            le.setRating(rating);
-            le.setComment(comment);
-            le.setIsVisible(true); // Implicit vizibil
-
             Leader l = leaderRepository.findById(leaderId).orElse(null);
-
             if (l != null) {
+                LeaderEvaluation le = new LeaderEvaluation();
+                le.setDate(meeting.getDate());
+                le.setEvaluatedBy(directorId);
+                le.setRating(rating);
+                le.setComment(comment);
+                le.setIsVisible(true);
                 le.setLeader(l);
                 evaluationRepository.save(le);
                 recalculateLeaderRating(leaderId);
 
-                // Notificare
-                String notifMessage = String.format("📅 %s\nNota: ★%d\nFeedback: %s", meeting.getDate(), rating, comment);
-                Notification n = new Notification(notifMessage, "FEEDBACK", String.valueOf(leaderId), LocalDate.now());
-                notificationRepository.save(n);
+                String notifMessage = String.format("%s\nRating: %d stars\nFeedback: %s",
+                        meeting.getDate(), rating, comment);
+                notificationRepository.save(
+                        new Notification(notifMessage, "FEEDBACK", String.valueOf(leaderId), LocalDate.now()));
             }
         }
-        return ResponseEntity.ok("Feedback salvat!");
+
+        return ResponseEntity.ok("Feedback saved.");
     }
 
+    /**
+     * Recomputes the leader's average {@code rating} from all currently visible evaluations.
+     * Sets the rating to 0.0 if there are no visible evaluations.
+     * The result is rounded to one decimal place.
+     */
     private void recalculateLeaderRating(Integer leaderId) {
         Leader leader = leaderRepository.findById(leaderId).orElse(null);
-        if(leader != null) {
-            // Calculam media DOAR din notele vizibile (cele sterse nu mai conteaza la medie)
-            List<LeaderEvaluation> allEvals = evaluationRepository.findByLeaderIdAndIsVisibleTrueOrderByDateDesc(leaderId);
-
-            if (!allEvals.isEmpty()) {
-                double average = allEvals.stream().mapToInt(LeaderEvaluation::getRating).average().orElse(0.0);
+        if (leader != null) {
+            List<LeaderEvaluation> visibleEvals =
+                    evaluationRepository.findByLeaderIdAndIsVisibleTrueOrderByDateDesc(leaderId);
+            if (!visibleEvals.isEmpty()) {
+                double average = visibleEvals.stream().mapToInt(LeaderEvaluation::getRating).average().orElse(0.0);
                 float roundedAvg = (float) (Math.round(average * 10.0) / 10.0);
                 leader.setRating(roundedAvg);
             } else {

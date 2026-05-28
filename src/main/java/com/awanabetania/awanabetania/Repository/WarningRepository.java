@@ -10,25 +10,25 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 /**
- * Aceasta interfata ne ajuta sa lucram cu baza de date pentru Avertismente (Pedepse).
- * Aici cautam sanctiunile primite de un copil.
+ * Data access interface for {@link Warning} entities.
  */
 @Repository
 public interface WarningRepository extends JpaRepository<Warning, Integer> {
 
-    /**
-     * Aceasta comanda speciala (Query) cauta toate pedepsele unui anumit copil.
-     * Le afiseaza de la cea mai recenta la cea mai veche.
-     */
+    /** Returns all warnings for a given child, ordered newest first. */
     @Query("SELECT w FROM Warning w WHERE w.child.id = :childId ORDER BY w.id DESC")
     List<Warning> findByChildIdOrderByIdDesc(@Param("childId") Integer childId);
 
+    /**
+     * Returns all active suspensions (suspension=true) where the countdown has not yet
+     * reached zero. Used during meeting close to decrement remaining meetings.
+     *
+     * @param count threshold — only records with {@code remainingMeetings > count} are returned
+     */
     List<Warning> findBySuspensionTrueAndRemainingMeetingsGreaterThan(int count);
 
+    /** Deletes all warnings belonging to a specific child. */
     @Modifying
     @Query("DELETE FROM Warning w WHERE w.child.id = ?1")
     void deleteByChildId(Integer childId);
-
-
 }
-

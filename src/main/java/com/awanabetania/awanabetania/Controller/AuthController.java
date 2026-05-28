@@ -1,26 +1,24 @@
 package com.awanabetania.awanabetania.Controller;
 
-import com.awanabetania.awanabetania.DataInitializer; // Import pentru a folosi functia de generare username
+import com.awanabetania.awanabetania.DataInitializer;
 import com.awanabetania.awanabetania.Model.*;
 import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.DepartmentRepository;
 import com.awanabetania.awanabetania.Repository.LeaderRepository;
-import com.awanabetania.awanabetania.Model.AESUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.Optional;
+import java.util.Set;
 
 /**
- * Acest Controller este partea de autentificare a aplicatiei.
- * Se ocupa strict de:
- * 1. Login (Verifica credențialele).
- * 2. Register (Creeaza conturi noi).
- * * NOTA: Stergerea conturilor s-a mutat in LeaderController.
+ * Handles authentication (login) and account registration for both children and leaders.
+ * Passwords are AES-128 encrypted before storage. Login accepts either a generated username
+ * or the legacy plain name to support accounts created before the username migration.
+ * Plain-text passwords found during login are transparently upgraded to encrypted form.
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -36,22 +34,25 @@ public class AuthController {
     @Autowired
     private DepartmentRepository departmentRepository;
 
+    /**
+     * Authenticates a user and returns their full entity on success.
+     * The lookup order is: username (indexed) → name fallback (for legacy accounts).
+     * Passwords are compared against the encrypted form; a plain-text match triggers
+     * an in-place upgrade to encrypted storage.
+     * For the DIRECTOR role, only leaders with role "Director" or "Coordonator" are accepted.
+     *
+     * @param request login payload containing username, password, and role
+     * @return 200 with the Child or Leader entity on success; 401 on invalid credentials
+     */
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
         String role = request.getRole();
-        // Aici tratam 'username' ca fiind ceea ce introduce userul in campul de login.
-        // Poate fi username-ul curatat SAU numele real (pentru compatibilitate in tranzitie).
         String inputUsername = request.getUsername().toLowerCase().trim();
-        String rawPassword = request.getPassword(); // Parola scrisa de user (ex: "popescu123")
-
-        // 1. Calculam varianta criptata
+        String rawPassword = request.getPassword();
         String encryptedPassword = AESUtil.encrypt(rawPassword);
 
-        // CAZUL 1: COPIL
         if ("CHILD".equalsIgnoreCase(role)) {
-            // Cauta mai intai dupa username (O(1) — query indexat)
             Optional<Child> childOpt = childRepository.findByUsername(inputUsername);
-            // Fallback: cauta dupa nume pentru conturile vechi nemigrate
             if (childOpt.isEmpty()) {
                 childOpt = childRepository.findByNameIgnoreCase(inputUsername);
             }
@@ -60,17 +61,14 @@ public class AuthController {
                 if (child.getPassword() != null && child.getPassword().equals(encryptedPassword)) {
                     return ResponseEntity.ok(child);
                 } else if (child.getPassword() != null && child.getPassword().equals(rawPassword)) {
+                    // Upgrade plain-text password to encrypted
                     child.setPassword(encryptedPassword);
                     childRepository.save(child);
                     return ResponseEntity.ok(child);
                 }
             }
-        }
-        // CAZUL 2: LIDER / DIRECTOR
-        else {
-            // Cauta mai intai dupa username (O(1) — query indexat)
+        } else {
             Optional<Leader> leaderOpt = leaderRepository.findByUsername(inputUsername);
-            // Fallback: cauta dupa nume pentru conturile vechi nemigrate
             if (leaderOpt.isEmpty()) {
                 leaderOpt = leaderRepository.findByNameIgnoreCase(inputUsername);
             }
@@ -80,13 +78,17 @@ public class AuthController {
                 if (leader.getPassword() != null && leader.getPassword().equals(encryptedPassword)) {
                     passwordMatch = true;
                 } else if (leader.getPassword() != null && leader.getPassword().equals(rawPassword)) {
+                    // Upgrade plain-text password to encrypted
                     leader.setPassword(encryptedPassword);
                     leaderRepository.save(leader);
                     passwordMatch = true;
                 }
                 if (passwordMatch) {
                     if ("DIRECTOR".equalsIgnoreCase(role)) {
-                        if (leader.getRole() != null && (leader.getRole().equalsIgnoreCase("Coordonator") || leader.getRole().equalsIgnoreCase("Director"))) {
+                        // Only directors and coordinators may log in with the director role
+                        if (leader.getRole() != null &&
+                                (leader.getRole().equalsIgnoreCase("Coordonator") ||
+                                 leader.getRole().equalsIgnoreCase("Director"))) {
                             return ResponseEntity.ok(leader);
                         }
                     } else {
@@ -95,87 +97,72 @@ public class AuthController {
                 }
             }
         }
-        return ResponseEntity.status(401).body("Date incorecte!");
+
+        return ResponseEntity.status(401).body("Invalid credentials.");
     }
 
     /**
-     * Metoda de INREGISTRARE (Sign Up).
-     * Creeaza un cont nou (Copil sau Lider) in baza de date.
+     * Creates a new Child or Leader account.
+     * A unique username is generated from the name and surname. If the base username is
+     * already taken, a random 3-digit suffix is appended.
+     * Leaders must supply a valid registration code; the password is AES-encrypted before storage.
+     *
+     * @param request registration payload (role, name, surname, password, plus role-specific fields)
+     * @return 200 with a confirmation message and generated username on success;
+     *         400 if validation fails (duplicate leader, invalid code)
      */
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
 
-        // CAZUL 1: Inregistrare COPIL
         if ("CHILD".equalsIgnoreCase(request.getRole())) {
             Child newChild = new Child();
-
-            // Date personale
             newChild.setName(request.getName());
             newChild.setSurname(request.getSurname());
 
-            // --- GENERARE USERNAME SIGUR ---
             String baseUsername = DataInitializer.generateCleanUsername(request.getName(), request.getSurname());
             if (childRepository.findByUsername(baseUsername).isPresent()) {
-                baseUsername += new java.util.Random().nextInt(1000); // Evitam duplicatele
+                baseUsername += new java.util.Random().nextInt(1000);
             }
             newChild.setUsername(baseUsername);
-
-            // --- CRIPTARE LA INREGISTRARE ---
             newChild.setPassword(AESUtil.encrypt(request.getPassword()));
-
             newChild.setBirthDate(request.getBirthDate());
             newChild.setParentName(request.getParentName());
             newChild.setParentPhone(request.getParentPhone());
-
-            // Setam valorile de start
             newChild.setSeasonPoints(0);
             newChild.setBadgesCount(0);
 
-            // Progres
             ChildProgress initialProgress = new ChildProgress();
             initialProgress.setChild(newChild);
             initialProgress.setLastStickerId(0);
             initialProgress.setManualsCount(0);
-
             newChild.setProgress(initialProgress);
             newChild.setProgressPercent(0);
-
-            // Inventar
             newChild.setHasManual(false);
             newChild.setHasShirt(false);
             newChild.setHasHat(false);
 
             childRepository.save(newChild);
-            return ResponseEntity.ok("Cont COPIL creat! Username: " + baseUsername);
-        }
-
-        // CAZUL 2: Inregistrare LIDER
-        else {
+            return ResponseEntity.ok("Child account created! Username: " + baseUsername);
+        } else {
             if (!isValidCode(request.getRegistrationCode())) {
-                return ResponseEntity.badRequest().body("Cod de acces invalid! Cere un cod valid de la Director.");
+                return ResponseEntity.badRequest().body("Invalid registration code. Ask the director for a valid code.");
             }
 
-            // Verificam duplicat — query direct in loc de findAll()
             boolean exists = leaderRepository.findByNameAndSurname(request.getName(), request.getSurname()).isPresent();
-
             if (exists) {
-                return ResponseEntity.badRequest().body("Lider existent!");
+                return ResponseEntity.badRequest().body("A leader with this name already exists.");
             }
 
             Leader newLeader = new Leader();
             newLeader.setName(request.getName());
             newLeader.setSurname(request.getSurname());
 
-            // --- GENERARE USERNAME SIGUR ---
             String baseUsername = DataInitializer.generateCleanUsername(request.getName(), request.getSurname());
             if (leaderRepository.findByUsername(baseUsername).isPresent()) {
                 baseUsername += new java.util.Random().nextInt(1000);
             }
             newLeader.setUsername(baseUsername);
-
-            // --- CRIPTARE LA INREGISTRARE ---
             newLeader.setPassword(AESUtil.encrypt(request.getPassword()));
-
             newLeader.setRole(request.getRole());
             newLeader.setPhoneNumber(request.getPhoneNumber());
             newLeader.setRating(0.0f);
@@ -189,12 +176,15 @@ public class AuthController {
             }
 
             leaderRepository.save(newLeader);
-            return ResponseEntity.ok("Cont Lider creat cu succes! Username: " + baseUsername);
+            return ResponseEntity.ok("Leader account created! Username: " + baseUsername);
         }
     }
 
     /**
-     * Verifica daca codul introdus la inregistrare este unul permis.
+     * Validates a leader registration code against the hard-coded list of accepted codes.
+     *
+     * @param code the code submitted by the registrant
+     * @return {@code true} if the code is in the accepted list
      */
     private boolean isValidCode(String code) {
         if (code == null || code.trim().isEmpty()) return false;

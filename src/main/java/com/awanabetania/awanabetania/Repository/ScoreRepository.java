@@ -11,38 +11,31 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Aceasta interfata ne ajuta sa lucram cu baza de date pentru Punctaje (Scoruri).
- * Aici salvam si citim punctele pe care le primesc copiii in fiecare seara.
+ * Data access interface for {@link Score} entities.
  */
 @Repository
 public interface ScoreRepository extends JpaRepository<Score, Integer> {
 
-    /** Gaseste toate fisele de punctaj ale unui singur copil */
+    /** Returns all score records for a given child (unordered). */
     List<Score> findByChildId(Integer childId);
 
-    /**
-     * Gaseste tot istoricul punctelor unui copil.
-     * Le aranjeaza cronologic, de la cea mai recenta intalnire la cea mai veche.
-     * Folosit in pagina de Profil a copilului.
-     */
+    /** Returns all score records for a given child, newest meeting first. */
     List<Score> findByChildIdOrderByMeeting_DateDesc(Integer childId);
 
-    /** * Cauta punctele primite de un copil intr-o anumita zi (data calendaristica).
-     * Folosit pentru verificari rapide pe data curenta.
-     */
+    /** Returns all scores for a child on a specific calendar date. */
     List<Score> findByChildIdAndMeeting_Date(Integer childId, LocalDate date);
 
     /**
-     * Verifica daca un copil a fost deja punctat la o anumita intalnire (dupa ID).
-     * Aceasta metoda este CRITICA pentru TeamController, ca sa adune punctele la echipa.
+     * Checks whether a child has already been scored at a given meeting.
+     * Used by {@code ScoreController} to prevent duplicate entries.
      */
     Optional<Score> findByChildIdAndMeetingId(Integer childId, Integer meetingId);
 
+    /** Returns all scores recorded at a given meeting (used when closing a meeting). */
     List<Score> findByMeetingId(Integer meetingId);
 
+    /** Deletes all score records belonging to a specific child. */
     @Modifying
     @Query("DELETE FROM Score s WHERE s.child.id = ?1")
     void deleteByChildId(Integer childId);
-
 }
-

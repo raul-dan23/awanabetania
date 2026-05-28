@@ -15,6 +15,13 @@ import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Handles self-service account deletion requests.
+ * The flow is two-step: the user requests deletion here, which generates a random
+ * 6-character confirmation code stored on their account and sends a director notification.
+ * The director shares the code with the user, who then calls the delete endpoint
+ * on {@code ChildController} or {@code LeaderController} to complete the deletion.
+ */
 @RestController
 @RequestMapping("/api/account")
 @CrossOrigin(origins = "*")
@@ -25,8 +32,13 @@ public class AccountController {
     @Autowired private NotificationRepository notificationRepository;
 
     /**
-     * PASUL 1: Solicitare Ștergere Cont.
-     * Generează un cod și trimite notificare la Director.
+     * Initiates an account deletion request. Generates a deletion code, stores it on the account,
+     * and creates a director notification containing the code.
+     * The primary admin account (leader ID=1) cannot be deleted this way.
+     *
+     * @param payload JSON with "id" (Integer) and "role" ("CHILD" or "LEADER")
+     * @return 200 with a message instructing the user to contact the director;
+     *         400 if the account does not exist or is the protected admin account
      */
     @PostMapping("/request-deletion")
     @Transactional
@@ -35,37 +47,35 @@ public class AccountController {
         String role = (String) payload.get("role");
 
         if ("LEADER".equalsIgnoreCase(role) && id == 1) {
-            return ResponseEntity.badRequest().body("Administratorul principal nu poate fi șters!");
+            return ResponseEntity.badRequest().body("The primary administrator account cannot be deleted.");
         }
 
-        // Generăm un cod scurt de 6 caractere
         String code = UUID.randomUUID().toString().substring(0, 6).toUpperCase();
-        String userName = "";
+        String userName;
 
         if ("CHILD".equalsIgnoreCase(role)) {
             Child c = childRepository.findById(id).orElse(null);
-            if (c == null) return ResponseEntity.badRequest().body("Copil inexistent");
+            if (c == null) return ResponseEntity.badRequest().body("Child not found.");
             c.setDeletionCode(code);
             childRepository.save(c);
-            userName = c.getName() + " " + c.getSurname() + " (Copil)";
+            userName = c.getName() + " " + c.getSurname() + " (Child)";
         } else {
             Leader l = leaderRepository.findById(id).orElse(null);
-            if (l == null) return ResponseEntity.badRequest().body("Lider inexistent");
+            if (l == null) return ResponseEntity.badRequest().body("Leader not found.");
             l.setDeletionCode(code);
             leaderRepository.save(l);
-            userName = l.getName() + " " + l.getSurname() + " (Lider)";
+            userName = l.getName() + " " + l.getSurname() + " (Leader)";
         }
 
-        // Trimitem notificare către Director (ID 1)
-        String adminMsg = String.format("🗑️ SOLICITARE ȘTERGERE: %s. Cod de confirmare: %s", userName, code);
+        String adminMsg = String.format("DELETION REQUEST: %s. Confirmation code: %s", userName, code);
         Notification n = new Notification();
         n.setMessage(adminMsg);
         n.setType("ALERT");
-        n.setVisibleTo("DIRECTOR"); // Sau "1" depinde cum ai logica
+        n.setVisibleTo("DIRECTOR");
         n.setDate(LocalDate.now());
         n.setIsVisible(true);
         notificationRepository.save(n);
 
-        return ResponseEntity.ok("Cererea a fost trimisă. Contactează Directorul pentru codul de confirmare.");
+        return ResponseEntity.ok("Request submitted. Contact the director for the confirmation code.");
     }
 }

@@ -13,6 +13,13 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * Provides aggregate statistics and notifications for the dashboard screen.
+ * When a {@code leaderId} is supplied, notifications are assembled from three sources:
+ * public announcements ("ALL"), personal notifications (the leader's own ID), and
+ * director-level alerts (if the leader's role is DIRECTOR or COORDONATOR).
+ * Results are deduplicated, sorted newest-first, and capped at 20 entries.
+ */
 @RestController
 @RequestMapping("/api/dashboard")
 @CrossOrigin(origins = "*")
@@ -22,6 +29,14 @@ public class DashboardController {
     @Autowired private LeaderRepository leaderRepository;
     @Autowired private NotificationRepository notificationRepository;
 
+    /**
+     * Returns dashboard statistics and the notification feed for the requesting leader.
+     *
+     * @param leaderId optional ID of the currently logged-in leader;
+     *                 if absent, only a welcome message is returned
+     * @return map with keys: "clubName", "kidsCount", "leadersCount", "directors",
+     *         "notifications", "reminders"
+     */
     @GetMapping("/stats")
     public Map<String, Object> getDashboardStats(@RequestParam(required = false) Integer leaderId) {
         Map<String, Object> stats = new HashMap<>();
@@ -35,20 +50,17 @@ public class DashboardController {
         if (leaderId != null) {
             Leader currentLeader = leaderRepository.findById(leaderId).orElse(null);
 
-            // 1. Notificari publice (ALL)
             List<Notification> publicN = notificationRepository.findByVisibleTo("ALL");
-
-            // 2. Notificari personale (ID)
             List<Notification> personalN = notificationRepository.findByVisibleTo(String.valueOf(leaderId));
-
-            // 3. Notificari Director (doar daca are rolul)
             List<Notification> directorN = new ArrayList<>();
+
             if (currentLeader != null &&
-                    (currentLeader.getRole().equalsIgnoreCase("DIRECTOR") || currentLeader.getRole().equalsIgnoreCase("COORDONATOR"))) {
+                    (currentLeader.getRole().equalsIgnoreCase("DIRECTOR") ||
+                     currentLeader.getRole().equalsIgnoreCase("COORDONATOR"))) {
                 directorN = notificationRepository.findByVisibleTo("DIRECTOR");
             }
 
-            // Combinare si sortare
+            // Merge, deduplicate, sort newest-first, and cap at 20
             List<Notification> finalN = Stream.of(publicN, personalN, directorN)
                     .flatMap(Collection::stream)
                     .distinct()
@@ -58,11 +70,14 @@ public class DashboardController {
 
             stats.put("notifications", finalN);
         } else {
-            Notification w = new Notification(); w.setId(0); w.setMessage("Bine ai venit!"); w.setDate(LocalDate.now());
-            stats.put("notifications", List.of(w));
+            Notification welcome = new Notification();
+            welcome.setId(0);
+            welcome.setMessage("Welcome!");
+            welcome.setDate(LocalDate.now());
+            stats.put("notifications", List.of(welcome));
         }
 
-        stats.put("reminders", List.of("📅 18:00 - Incepere", "📅 19:30 - Premierea"));
+        stats.put("reminders", List.of("18:00 - Start", "19:30 - Awards"));
         return stats;
     }
 }

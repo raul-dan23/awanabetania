@@ -13,8 +13,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Clasa principală pentru un copil din club.
- * Conține date personale, statistici și legătura cu progresul (stickerele).
+ * Represents a child member of the Awana club.
+ * Stores personal details, attendance statistics, season/daily points,
+ * inventory flags (manual, shirt, hat), NFC card UID, and links to
+ * the child's progress record and manual history.
  */
 @Entity
 @Table(name = "children")
@@ -42,15 +44,19 @@ public class Child {
     @Column(name = "parent_phone")
     private String parentPhone;
 
+    /** Number of consecutive meetings attended without missing one. */
     @Column(name = "attendance_streak")
     private Integer attendanceStreak = 0;
 
+    /** Total number of meetings attended across all seasons. */
     @Column(name = "total_attendance")
     private Integer totalAttendance = 0;
 
+    /** Total number of lessons completed (lesson checkbox checked during scoring). */
     @Column(name = "lessons_completed")
     private Integer lessonsCompleted = 0;
 
+    /** Date of the last meeting the child attended, set to the meeting's date (not today). */
     @Column(name = "last_attendance_date")
     private LocalDate lastAttendanceDate;
 
@@ -74,12 +80,15 @@ public class Child {
     @Column(name = "badges_count")
     private Integer badgesCount = 0;
 
+    /** Cumulative points earned during the current season; used as the fair-market currency. */
     @Column(name = "season_points")
     private Integer seasonPoints = 0;
 
+    /** Points earned during the current meeting day; reset to 0 when the meeting is closed. */
     @Column(name = "daily_points")
     private Integer dailyPoints = 0;
 
+    /** Color name of the team the child is currently assigned to (e.g. "red"), or {@code null} if on the bench. */
     @Column(name = "current_team")
     private String currentTeam;
 
@@ -90,20 +99,35 @@ public class Child {
     @Column(name = "is_suspended")
     private Boolean isSuspended = false;
 
+    /** Short deletion-confirmation code generated on demand; must be supplied to the delete endpoint. */
     @Column(name = "deletion_code")
     private String deletionCode;
 
+    /** Hardware UID of the associated NFC card (unique per card, set by the admin). */
     @Column(name = "nfc_uid", unique = true)
     private String nfcUid;
 
+    /** Calculated age in years; not persisted — derived from {@code birthDate} at read time. */
     @Transient
     private Integer age;
 
+    /**
+     * Calculates and returns the child's current age in full years.
+     * Returns 0 if the birth date is not set.
+     *
+     * @return age in years, or 0 if {@code birthDate} is {@code null}
+     */
     public Integer getAge() {
         if (this.birthDate == null) return 0;
         return Period.between(this.birthDate, LocalDate.now()).getYears();
     }
 
+    /**
+     * Returns whether the child currently has an active manual.
+     * Checks the {@code manuals} collection first; falls back to the legacy {@code hasManual} flag.
+     *
+     * @return {@code true} if an ACTIVE manual exists in the collection, or if the legacy flag is set
+     */
     @JsonProperty("hasManual")
     public Boolean getHasManual() {
         if (manuals != null && !manuals.isEmpty()) {

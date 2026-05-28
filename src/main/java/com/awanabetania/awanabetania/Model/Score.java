@@ -8,8 +8,10 @@ import lombok.Setter;
 import java.time.LocalDate;
 
 /**
- * Aceasta clasa reprezinta fisa de punctaj a unui copil pentru o singura seara.
- * Folosim Lombok (@Getter, @Setter) pentru a scapa de codul repetitiv.
+ * Records the point breakdown for a single child at a single club meeting.
+ * Each scoring criterion (attendance, bible, handbook, lesson, friend, uniform, extra)
+ * is stored as a boolean or integer. The computed total is persisted in {@code total}.
+ * A human-readable summary of which criteria were met is stored in {@code details}.
  */
 @Entity
 @Table(name = "scores")
@@ -38,20 +40,21 @@ public class Score {
     private Boolean friend;
     private Integer extraPoints;
 
+    /** Points attributed to this child's individual performance (same as total for now). */
     @Column(name = "individual_points")
     private Integer individualPoints = 0;
 
+    /** Points contributed toward the child's team score for today. */
     @Column(name = "team_points")
     private Integer teamPoints = 0;
 
-    /** Totalul punctelor pe ziua respectiva */
+    /** Total points earned at this meeting (sum of all individual criteria + extra). */
     private Integer total = 0;
 
-    /** Data calendaristica */
     @Column(nullable = false)
     private LocalDate date;
 
-    /** Explicatii text (ex: "Prezenta, Uniforma") */
+    /** Comma-separated list of criteria that were fulfilled (e.g. "Prezenta, Biblie, Lectie"). */
     @Column(columnDefinition = "TEXT")
     private String details;
 }

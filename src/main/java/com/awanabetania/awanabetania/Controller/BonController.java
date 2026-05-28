@@ -14,6 +14,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Manages purchase receipts (bons) for the end-of-season fair.
+ * A selling leader creates a receipt; the cashier then approves or rejects it
+ * after scanning the child's NFC card. Approval atomically deducts points from
+ * the child's {@code seasonPoints} balance after checking that sufficient funds exist.
+ */
 @RestController
 @RequestMapping("/api/bons")
 @CrossOrigin(origins = "*")
@@ -22,6 +28,10 @@ public class BonController {
     @Autowired private BonRepository bonRepository;
     @Autowired private ChildRepository childRepository;
 
+    /**
+     * Converts a {@link Bon} entity into a flat map safe for JSON serialization.
+     * Includes live child data (current point balance) alongside the receipt fields.
+     */
     private Map<String, Object> toBonMap(Bon bon) {
         Child child = bon.getChild();
         Map<String, Object> map = new HashMap<>();
@@ -37,6 +47,12 @@ public class BonController {
         return map;
     }
 
+    /**
+     * Creates a new PENDING receipt.
+     *
+     * @param body JSON with keys "childId", "leaderName", "items" (JSON string), "totalPoints"
+     * @return 200 with the saved receipt as a flat map; 400 if required fields are missing; 404 if child not found
+     */
     @PostMapping
     public ResponseEntity<?> createBon(@RequestBody Map<String, Object> body) {
         Integer childId = (Integer) body.get("childId");
@@ -45,7 +61,7 @@ public class BonController {
         Integer totalPoints = (Integer) body.get("totalPoints");
 
         if (childId == null || items == null || totalPoints == null)
-            return ResponseEntity.badRequest().body("Date incomplete.");
+            return ResponseEntity.badRequest().body("Incomplete data.");
 
         Child child = childRepository.findById(childId).orElse(null);
         if (child == null) return ResponseEntity.notFound().build();
@@ -59,31 +75,48 @@ public class BonController {
         return ResponseEntity.ok(toBonMap(bonRepository.save(bon)));
     }
 
+    /**
+     * Returns all PENDING receipts, newest first.
+     *
+     * @return list of pending receipts as flat maps
+     */
     @GetMapping("/pending")
     public List<Map<String, Object>> getPending() {
         return bonRepository.findByStatusOrderByCreatedAtDesc("PENDING")
                 .stream().map(this::toBonMap).collect(Collectors.toList());
     }
 
+    /**
+     * Returns all receipts regardless of status, newest first.
+     *
+     * @return list of all receipts as flat maps
+     */
     @GetMapping("/all")
     public List<Map<String, Object>> getAll() {
         return bonRepository.findAllByOrderByCreatedAtDesc()
                 .stream().map(this::toBonMap).collect(Collectors.toList());
     }
 
+    /**
+     * Approves a PENDING receipt and deducts the point cost from the child's balance.
+     * Fails if the receipt is not PENDING or the child has insufficient points.
+     *
+     * @param id the receipt's primary key
+     * @return 200 with remaining points and child name on success;
+     *         400 if not pending or insufficient balance; 404 if not found
+     */
     @PostMapping("/{id}/approve")
     public ResponseEntity<?> approve(@PathVariable Integer id) {
         Bon bon = bonRepository.findById(id).orElse(null);
         if (bon == null) return ResponseEntity.notFound().build();
         if (!"PENDING".equals(bon.getStatus()))
-            return ResponseEntity.badRequest().body("Bonul nu este în așteptare.");
+            return ResponseEntity.badRequest().body("Receipt is not pending.");
 
         Child child = bon.getChild();
         int current = child.getSeasonPoints() != null ? child.getSeasonPoints() : 0;
         if (bon.getTotalPoints() > current)
             return ResponseEntity.badRequest().body(
-                "Puncte insuficiente. Sold: " + current + ", necesar: " + bon.getTotalPoints()
-            );
+                    "Insufficient points. Balance: " + current + ", required: " + bon.getTotalPoints());
 
         child.setSeasonPoints(current - bon.getTotalPoints());
         childRepository.save(child);
@@ -93,22 +126,28 @@ public class BonController {
         bonRepository.save(bon);
 
         return ResponseEntity.ok(Map.of(
-            "message", "Bon aprobat.",
-            "remainingPoints", child.getSeasonPoints(),
-            "childName", child.getName() + " " + child.getSurname()
+                "message", "Receipt approved.",
+                "remainingPoints", child.getSeasonPoints(),
+                "childName", child.getName() + " " + child.getSurname()
         ));
     }
 
+    /**
+     * Rejects a PENDING receipt without modifying the child's point balance.
+     *
+     * @param id the receipt's primary key
+     * @return 200 on success; 400 if not pending; 404 if not found
+     */
     @PostMapping("/{id}/reject")
     public ResponseEntity<?> reject(@PathVariable Integer id) {
         Bon bon = bonRepository.findById(id).orElse(null);
         if (bon == null) return ResponseEntity.notFound().build();
         if (!"PENDING".equals(bon.getStatus()))
-            return ResponseEntity.badRequest().body("Bonul nu este în așteptare.");
+            return ResponseEntity.badRequest().body("Receipt is not pending.");
 
         bon.setStatus("REJECTED");
         bonRepository.save(bon);
 
-        return ResponseEntity.ok(Map.of("message", "Bon respins."));
+        return ResponseEntity.ok(Map.of("message", "Receipt rejected."));
     }
 }

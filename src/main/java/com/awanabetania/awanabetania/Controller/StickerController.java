@@ -7,6 +7,11 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * Provides read-only access to the sticker (rank badge) catalog.
+ * The frontend uses the ordered list to render the progress map,
+ * coloring stickers up to the child's {@code lastStickerId} and greying the rest.
+ */
 @RestController
 @RequestMapping("/api/stickers")
 @CrossOrigin(origins = "*")
@@ -15,9 +20,13 @@ public class StickerController {
     @Autowired
     private StickerRepository stickerRepository;
 
+    /**
+     * Returns all stickers ordered by ID (ascending), which corresponds to ascending rank.
+     *
+     * @return list of all {@link Sticker} entities
+     */
     @GetMapping
     public List<Sticker> getAllStickers() {
-        // Le returnam ordonate dupa ID ca sa apara in ordinea corecta pe harta
         return stickerRepository.findAll();
     }
 }

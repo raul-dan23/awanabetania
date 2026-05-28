@@ -1,81 +1,67 @@
 package com.awanabetania.awanabetania.Model;
 
+/**
+ * DTO carrying the scoring form data from the secretariat screen to {@code ScoreController}.
+ * Each boolean flag corresponds to a point-eligible criterion; {@code extraPoints} allows
+ * the secretariat to award ad-hoc bonus points.
+ */
 public class ScoreRequest {
 
     private Integer childId;
-    private Boolean attended;    // Prezent
-    private Boolean hasBible;    // Manual
-    private Boolean hasHandbook; // Carte
-    private Boolean lesson;      // Tema
-    private Boolean friend;      // Prieten
-    private Boolean hasUniform;  // Uniforma
-    private Integer extraPoints; // Puncte extra
+    private Boolean attended;
+    private Boolean hasBible;
+    private Boolean hasHandbook;
+    private Boolean lesson;
+    private Boolean friend;
+    private Boolean hasUniform;
+    private Integer extraPoints;
 
-    // --- GETTERI (Asta cauta Controllerul cand scrie request.get...) ---
+    /**
+     * @return the ID of the child being scored
+     */
+    public Integer getChildId() { return childId; }
 
-    public Integer getChildId() {
-        return childId;
-    }
+    /**
+     * @return {@code true} if the child was present at the meeting
+     */
+    public Boolean getAttended() { return attended; }
 
-    public Boolean getAttended() {
-        return attended;
-    }
+    /**
+     * @return {@code true} if the child brought their Bible
+     */
+    public Boolean getHasBible() { return hasBible; }
 
-    public Boolean getHasBible() {
-        return hasBible;
-    }
+    /**
+     * @return {@code true} if the child brought their handbook
+     */
+    public Boolean getHasHandbook() { return hasHandbook; }
 
-    public Boolean getHasHandbook() {
-        return hasHandbook;
-    }
+    /**
+     * @return {@code true} if the child completed the weekly lesson
+     */
+    public Boolean getLesson() { return lesson; }
 
-    public Boolean getLesson() {
-        return lesson;
-    }
+    /**
+     * @return {@code true} if the child brought a friend to the meeting
+     */
+    public Boolean getFriend() { return friend; }
 
-    public Boolean getFriend() {
-        return friend;
-    }
+    /**
+     * @return {@code true} if the child wore their uniform
+     */
+    public Boolean getHasUniform() { return hasUniform; }
 
-    public Boolean getHasUniform() {
-        return hasUniform;
-    }
+    /**
+     * @return number of extra bonus points to award, or {@code null} if none
+     */
+    public Integer getExtraPoints() { return extraPoints; }
 
-    public Integer getExtraPoints() {
-        return extraPoints;
-    }
-
-    // --- SETTERI (Asta foloseste Java ca sa puna datele venite din site) ---
-
-    public void setChildId(Integer childId) {
-        this.childId = childId;
-    }
-
-    public void setAttended(Boolean attended) {
-        this.attended = attended;
-    }
-
-    public void setHasBible(Boolean hasBible) {
-        this.hasBible = hasBible;
-    }
-
-    public void setHasHandbook(Boolean hasHandbook) {
-        this.hasHandbook = hasHandbook;
-    }
-
-    public void setLesson(Boolean lesson) {
-        this.lesson = lesson;
-    }
-
-    public void setFriend(Boolean friend) {
-        this.friend = friend;
-    }
-
-    public void setHasUniform(Boolean hasUniform) {
-        this.hasUniform = hasUniform;
-    }
-
-    public void setExtraPoints(Integer extraPoints) {
-        this.extraPoints = extraPoints;
-    }
+    public void setChildId(Integer childId) { this.childId = childId; }
+    public void setAttended(Boolean attended) { this.attended = attended; }
+    public void setHasBible(Boolean hasBible) { this.hasBible = hasBible; }
+    public void setHasHandbook(Boolean hasHandbook) { this.hasHandbook = hasHandbook; }
+    public void setLesson(Boolean lesson) { this.lesson = lesson; }
+    public void setFriend(Boolean friend) { this.friend = friend; }
+    public void setHasUniform(Boolean hasUniform) { this.hasUniform = hasUniform; }
+    public void setExtraPoints(Integer extraPoints) { this.extraPoints = extraPoints; }
 }

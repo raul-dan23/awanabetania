@@ -1,7 +1,7 @@
 package com.awanabetania.awanabetania.Model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties; // <--- IMPORT NOU
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -11,7 +11,10 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Aceasta clasa reprezinta un departament (ex: Secretari, Jocuri).
+ * Represents a functional department within the club (e.g. Games, Secretariat, Media).
+ * Departments have a minimum and maximum leader capacity and an optional head leader.
+ * The bidirectional many-to-many relationship with {@link Leader} uses
+ * {@code @JsonIgnore} on the inverse side to prevent infinite serialization loops.
  */
 @Entity
 @Table(name = "departments")
@@ -34,20 +37,27 @@ public class Department {
     private Integer maxLeaders;
 
     /**
-     * Cine este seful acestui departament.
-     * @JsonIgnoreProperties("departments") este CRITIC aici.
-     * Ii spune serverului: "Arata-mi seful, dar nu intra in lista lui de departamente".
-     * Asta rupe bucla infinita: Leader -> Department -> HeadLeader -> Departments...
+     * The leader who heads this department.
+     * {@code @JsonIgnoreProperties} breaks the serialization cycle:
+     * Department → headLeader → departments → headLeader → …
      */
     @OneToOne
     @JoinColumn(name = "head_leader_id")
     @JsonIgnoreProperties({"departments", "password", "deletionCode", "phoneNumber", "notes"})
     private Leader headLeader;
 
+    /** All leaders who are members of this department (inverse side; not serialized). */
     @ManyToMany(mappedBy = "departments")
     @JsonIgnore
     private Set<Leader> leaders = new HashSet<>();
 
+    /**
+     * Creates a new department with capacity bounds.
+     *
+     * @param name       department name
+     * @param minLeaders minimum required leaders
+     * @param maxLeaders maximum allowed leaders
+     */
     public Department(String name, Integer minLeaders, Integer maxLeaders) {
         this.name = name;
         this.minLeaders = minLeaders;

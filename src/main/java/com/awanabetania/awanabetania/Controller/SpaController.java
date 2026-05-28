@@ -4,20 +4,21 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 /**
- * Aceasta clasa este "lipiciul" dintre Java si site-ul React.
- * Rezolva problema cand dai Refresh (F5) la pagina si apare eroare 404.
+ * Catch-all controller that enables client-side routing for the React SPA.
+ * Any request path that does not contain a dot (i.e. is not a static asset request)
+ * is forwarded to {@code index.html}, allowing React Router to handle the route.
+ * Without this, a hard refresh (F5) on a React route would return a 404 from Spring.
  */
 @Controller
 public class SpaController {
 
     /**
-     * Aceasta metoda prinde orice adresa care nu este un fisier real (nu are punct in ea).
-     * De exemplu: /login sau /dashboard nu sunt fisiere, sunt rute React.
-     * Java le trimite inapoi la index.html ca sa se ocupe React de ele.
+     * Forwards all non-asset requests to the React entry point.
+     *
+     * @return forward directive to {@code index.html}
      */
     @RequestMapping(value = "/{path:[^\\.]*}")
     public String forward() {
-        // Trimitem totul catre pagina principala index.html
         return "forward:/index.html";
     }
 }

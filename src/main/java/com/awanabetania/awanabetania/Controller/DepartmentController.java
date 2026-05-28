@@ -2,7 +2,6 @@ package com.awanabetania.awanabetania.Controller;
 
 import com.awanabetania.awanabetania.Model.*;
 import com.awanabetania.awanabetania.Repository.*;
-
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -16,8 +15,16 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Aceasta clasa se ocupa de organizarea departamentelor si planificarea serilor.
- * Aici facem orarul: cine unde se implica, cine este director de zi si trimitem invitatii.
+ * Manages department structures and per-meeting leader assignments.
+ * The planning flow supports two assignment modes:
+ * <ul>
+ *   <li><b>Direct assignment</b> — the leader is immediately set to ACCEPTED status.
+ *       If the department is Secretariat, a 4-digit PIN is generated for the meeting
+ *       (once, on first assignment) and sent to the leader as a notification.</li>
+ *   <li><b>Nomination</b> — creates a PENDING assignment and sends the leader a notification.
+ *       The leader then responds (accept keeps the assignment as ACCEPTED; decline deletes it
+ *       and notifies the department head).</li>
+ * </ul>
  */
 @RestController
 @RequestMapping("/api/departments")
@@ -30,34 +37,46 @@ public class DepartmentController {
     @Autowired private MeetingAssignmentRepository assignmentRepo;
     @Autowired private NotificationRepository notificationRepository;
 
-    /** Listeaza toate departamentele */
+    /**
+     * Returns all departments.
+     *
+     * @return list of all {@link Department} entities
+     */
     @GetMapping
-    public List<Department> getAll() { return deptRepo.findAll(); }
+    public List<Department> getAll() {
+        return deptRepo.findAll();
+    }
 
-    /** Arata cine sunt membrii permanenti ai unui departament */
+    /**
+     * Returns all leaders who are permanent members of the given department.
+     *
+     * @param id the department's primary key
+     * @return list of member leaders
+     */
     @GetMapping("/{id}/members")
     public List<Leader> getMembers(@PathVariable Integer id) {
         return leaderRepo.findByDepartmentsId(id);
     }
 
     /**
-     * Metoda principala pentru PLANIFICARE.
-     * Returneaza asignarile + eligibleLeaders (Map cu membrii fiecarui departament).
+     * Returns the full planning data for a meeting: existing assignments grouped by department,
+     * and a map of eligible leaders (permanent members) per department.
+     *
+     * @param meetingId the meeting's primary key
+     * @return map with keys "meeting", "assignments", "directorDay", "eligibleLeaders";
+     *         or {@code null} if the meeting does not exist
      */
     @GetMapping("/plan/{meetingId}")
     public Map<String, Object> getPlan(@PathVariable Integer meetingId) {
         Meeting meeting = meetingRepo.findById(meetingId).orElse(null);
         if (meeting == null) return null;
 
-        // 1. Luam asignarile existente
         List<MeetingAssignment> assignments = assignmentRepo.findByMeetingId(meetingId);
         Map<Integer, List<MeetingAssignment>> groupedAssignments = assignments.stream()
                 .collect(Collectors.groupingBy(a -> a.getDepartment().getId()));
 
-        // 2. CONSTRUIM MAP-UL CU LIDERI ELIGIBILI (Membrii)
-        // Cheie: ID Departament -> Valoare: Lista Lideri
+        // Build eligible-leaders map: departmentId → list of member leaders
         Map<Integer, List<Leader>> eligibleLeaders = new HashMap<>();
-
         List<Leader> allLeaders = leaderRepo.findAll();
         for (Leader leader : allLeaders) {
             for (Department dept : leader.getDepartments()) {
@@ -65,16 +84,22 @@ public class DepartmentController {
             }
         }
 
-        // 3. Trimitem totul la Frontend
         return Map.of(
                 "meeting", meeting,
                 "assignments", groupedAssignments,
-                "directorDay", meeting.getDirectorDay() != null ? meeting.getDirectorDay() : "Neselectat",
+                "directorDay", meeting.getDirectorDay() != null ? meeting.getDirectorDay() : "Unassigned",
                 "eligibleLeaders", eligibleLeaders
         );
     }
 
-    /** Metoda 1: ASIGNARE FORTATA (Directa) - CORECTAT */
+    /**
+     * Directly assigns a leader to a department for a meeting (status: ACCEPTED).
+     * If the department is Secretariat and no PIN exists for the meeting yet,
+     * a 4-digit PIN is generated and sent to the assigned leader via notification.
+     *
+     * @param payload JSON with keys "meetingId", "deptId", "leaderId"
+     * @return 200 on success; 400 if the leader is already assigned or IDs are invalid
+     */
     @PostMapping("/assign")
     public ResponseEntity<?> assignDirect(@RequestBody Map<String, Integer> payload) {
         Integer meetingId = payload.get("meetingId");
@@ -85,45 +110,47 @@ public class DepartmentController {
         Department d = deptRepo.findById(deptId).orElse(null);
         Leader l = leaderRepo.findById(leaderId).orElse(null);
 
-        if (m != null && d != null && l != null) {
-            boolean exists = assignmentRepo.findByMeetingId(meetingId).stream()
-                    .anyMatch(a -> a.getLeader() != null && a.getLeader().getId().equals(leaderId) && a.getDepartment().getId().equals(deptId));
+        if (m == null || d == null || l == null) return ResponseEntity.badRequest().body("Invalid data.");
 
-            if (!exists) {
-                MeetingAssignment ma = new MeetingAssignment();
-                ma.setMeeting(m);
-                ma.setDepartment(d);
-                ma.setLeader(l);
-                ma.setStatus("ACCEPTED");
-                assignmentRepo.save(ma);
+        boolean exists = assignmentRepo.findByMeetingId(meetingId).stream()
+                .anyMatch(a -> a.getLeader() != null &&
+                               a.getLeader().getId().equals(leaderId) &&
+                               a.getDepartment().getId().equals(deptId));
+        if (exists) return ResponseEntity.badRequest().body("Leader is already assigned here.");
 
-                // --- LOGICA GENERARE PIN ---
-                if (d.getName().toLowerCase().contains("secretar")) {
-                    // Generam PIN random doar daca nu exista deja pentru aceasta sedinta
-                    if (m.getMeetingPin() == null) {
-                        String pinCode = String.valueOf(1000 + new java.security.SecureRandom().nextInt(9000));
-                        m.setMeetingPin(pinCode);
-                        meetingRepo.save(m);
-                    }
+        MeetingAssignment ma = new MeetingAssignment();
+        ma.setMeeting(m);
+        ma.setDepartment(d);
+        ma.setLeader(l);
+        ma.setStatus("ACCEPTED");
+        assignmentRepo.save(ma);
 
-                    Notification n = new Notification();
-                    n.setTitle("COD ACCES SECRETARIAT");
-                    n.setMessage("Ai fost planificat la Secretariat.\n\nCodul PIN pentru punctaje este: " + m.getMeetingPin() + "\n\nNu îl comunica copiilor!");
-                    n.setDate(LocalDate.now());
-                    n.setType("INFO");
-                    n.setVisibleTo(String.valueOf(l.getId()));
-                    notificationRepository.save(n);
-                }
-
-                return ResponseEntity.ok("Asignat direct!");
-            } else {
-                return ResponseEntity.badRequest().body("Liderul este deja asignat aici.");
+        // Generate a PIN the first time a secretariat leader is assigned to this meeting
+        if (d.getName().toLowerCase().contains("secretar")) {
+            if (m.getMeetingPin() == null) {
+                String pinCode = String.valueOf(1000 + new java.security.SecureRandom().nextInt(9000));
+                m.setMeetingPin(pinCode);
+                meetingRepo.save(m);
             }
+
+            Notification n = new Notification();
+            n.setTitle("SECRETARIAT ACCESS CODE");
+            n.setMessage("You have been assigned to Secretariat.\n\nThe PIN for scoring is: " + m.getMeetingPin() + "\n\nDo not share it with the children!");
+            n.setDate(LocalDate.now());
+            n.setType("INFO");
+            n.setVisibleTo(String.valueOf(l.getId()));
+            notificationRepository.save(n);
         }
-        return ResponseEntity.badRequest().body("Date invalide");
+
+        return ResponseEntity.ok("Assigned directly.");
     }
 
-    /** Metoda 2: NOMINALIZARE (Invitatie) */
+    /**
+     * Nominates a leader for a department slot (status: PENDING) and sends them a notification.
+     *
+     * @param payload JSON with keys "meetingId", "deptId", "leaderId"
+     * @return 200 on success; 400 if IDs are invalid
+     */
     @PostMapping("/nominate")
     public ResponseEntity<?> nominate(@RequestBody Map<String, Integer> payload) {
         Integer meetingId = payload.get("meetingId");
@@ -134,86 +161,102 @@ public class DepartmentController {
         Department d = deptRepo.findById(deptId).orElse(null);
         Leader l = leaderRepo.findById(leaderId).orElse(null);
 
-        if (m != null && d != null && l != null) {
-            MeetingAssignment ma = new MeetingAssignment();
-            ma.setMeeting(m);
-            ma.setDepartment(d);
-            ma.setLeader(l);
-            ma.setStatus("PENDING");
-            assignmentRepo.save(ma);
+        if (m == null || d == null || l == null) return ResponseEntity.badRequest().build();
 
-            // Folosim LocalDate.now() aici - acum va merge
-            String msg = String.format("📅 Ai fost propus la %s pentru data de %s.", d.getName(), m.getDate());
-            Notification notif = new Notification(msg, "ALERT", String.valueOf(l.getId()), LocalDate.now());
-            notificationRepository.save(notif);
+        MeetingAssignment ma = new MeetingAssignment();
+        ma.setMeeting(m);
+        ma.setDepartment(d);
+        ma.setLeader(l);
+        ma.setStatus("PENDING");
+        assignmentRepo.save(ma);
 
-            return ResponseEntity.ok("Nominalizare trimisă!");
-        }
-        return ResponseEntity.badRequest().build();
+        String msg = String.format("You have been nominated for %s on %s.", d.getName(), m.getDate());
+        notificationRepository.save(new Notification(msg, "ALERT", String.valueOf(l.getId()), LocalDate.now()));
+
+        return ResponseEntity.ok("Nomination sent.");
     }
 
-    /** Metoda 3: RASPUNS LIDER */
+    /**
+     * Records a leader's response to a nomination.
+     * Accepting sets the status to ACCEPTED; declining deletes the assignment and
+     * notifies the department head.
+     *
+     * @param payload JSON with keys "assignmentId" (Integer) and "response" (String: "ACCEPTED" or "DECLINED")
+     * @return 200 on success; 400 if the assignment is not found
+     */
     @PostMapping("/respond")
     public ResponseEntity<?> respond(@RequestBody Map<String, Object> payload) {
         Integer assignmentId = (Integer) payload.get("assignmentId");
         String response = (String) payload.get("response");
 
         MeetingAssignment ma = assignmentRepo.findById(assignmentId).orElse(null);
-        if (ma != null) {
-            if ("DECLINED".equals(response)) {
-                assignmentRepo.delete(ma);
-                if(ma.getDepartment().getHeadLeader() != null) {
-                    // Folosim LocalDate.now() si aici
-                    String msg = String.format("❌ %s %s a refuzat postul la %s.",
-                            ma.getLeader().getName(), ma.getLeader().getSurname(), ma.getDepartment().getName());
-                    Notification n = new Notification(msg, "INFO", String.valueOf(ma.getDepartment().getHeadLeader().getId()), LocalDate.now());
-                    notificationRepository.save(n);
-                }
-            } else {
-                ma.setStatus("ACCEPTED");
-                assignmentRepo.save(ma);
+        if (ma == null) return ResponseEntity.badRequest().build();
+
+        if ("DECLINED".equals(response)) {
+            assignmentRepo.delete(ma);
+            if (ma.getDepartment().getHeadLeader() != null) {
+                String msg = String.format("%s %s declined the slot at %s.",
+                        ma.getLeader().getName(), ma.getLeader().getSurname(), ma.getDepartment().getName());
+                notificationRepository.save(new Notification(
+                        msg, "INFO", String.valueOf(ma.getDepartment().getHeadLeader().getId()), LocalDate.now()));
             }
-            return ResponseEntity.ok("Răspuns înregistrat!");
+        } else {
+            ma.setStatus("ACCEPTED");
+            assignmentRepo.save(ma);
         }
-        return ResponseEntity.badRequest().build();
+
+        return ResponseEntity.ok("Response recorded.");
     }
 
-    /** Sterge o persoana din orar */
+    /**
+     * Removes a leader from a specific department slot in the meeting schedule.
+     *
+     * @param meetingId  the meeting's primary key
+     * @param deptId     the department's primary key
+     * @param leaderId   the leader's primary key
+     * @return 200 on success
+     */
     @DeleteMapping("/remove")
     @Transactional
     public ResponseEntity<?> removeAssignment(
             @RequestParam Integer meetingId,
             @RequestParam Integer deptId,
             @RequestParam Integer leaderId) {
-
         assignmentRepo.deleteByMeetingIdAndDepartmentIdAndLeaderId(meetingId, deptId, leaderId);
-        return ResponseEntity.ok("Șters cu succes!");
+        return ResponseEntity.ok("Removed successfully.");
     }
 
-    /** Seteaza Directorul de Zi */
+    /**
+     * Sets the director-of-the-day for a meeting.
+     *
+     * @param meetingId the meeting's primary key
+     * @param leaderId  the leader's primary key (passed as the request body)
+     * @return 200 on success; 400 if IDs are invalid
+     */
     @PostMapping("/director/{meetingId}")
     public ResponseEntity<?> setMeetingDirector(@PathVariable Integer meetingId, @RequestBody Integer leaderId) {
         Meeting m = meetingRepo.findById(meetingId).orElse(null);
         Leader l = leaderRepo.findById(leaderId).orElse(null);
-
-        if (m != null && l != null) {
-            m.setDirectorDay(l);
-            meetingRepo.save(m);
-            return ResponseEntity.ok("Director setat!");
-        }
-        return ResponseEntity.badRequest().body("Eroare");
+        if (m == null || l == null) return ResponseEntity.badRequest().body("Invalid data.");
+        m.setDirectorDay(l);
+        meetingRepo.save(m);
+        return ResponseEntity.ok("Director set.");
     }
 
-    /** Seteaza Seful de Departament */
+    /**
+     * Sets the head leader (department manager) for a department.
+     *
+     * @param id       the department's primary key
+     * @param leaderId the leader's primary key (passed as the request body)
+     * @return 200 on success; 400 if IDs are invalid
+     */
     @PostMapping("/{id}/set-head")
     public ResponseEntity<?> setDepartmentHead(@PathVariable Integer id, @RequestBody Integer leaderId) {
         Department dept = deptRepo.findById(id).orElse(null);
         Leader leader = leaderRepo.findById(leaderId).orElse(null);
-        if (dept != null && leader != null) {
-            dept.setHeadLeader(leader);
-            deptRepo.save(dept);
-            return ResponseEntity.ok("Actualizat!");
-        }
-        return ResponseEntity.badRequest().body("Eroare.");
+        if (dept == null || leader == null) return ResponseEntity.badRequest().body("Invalid data.");
+        dept.setHeadLeader(leader);
+        deptRepo.save(dept);
+        return ResponseEntity.ok("Department head updated.");
     }
 }

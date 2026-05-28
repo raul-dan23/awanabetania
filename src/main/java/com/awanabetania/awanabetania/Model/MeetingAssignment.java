@@ -6,8 +6,10 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Aceasta clasa face legatura dintre un lider, un departament si o seara de club.
- * Aici tinem minte cine unde lucreaza si daca a acceptat postul.
+ * Represents the assignment of a leader to a department for a specific meeting evening.
+ * An assignment can be created as a nomination (status "PENDING") by the director,
+ * or as a direct assignment (status "ACCEPTED"). The leader can accept or decline
+ * a pending nomination, which either sets the status to "ACCEPTED" or deletes the record.
  */
 @Entity
 @Table(name = "meeting_assignments")
@@ -16,26 +18,25 @@ import lombok.Setter;
 @NoArgsConstructor
 public class MeetingAssignment {
 
-    /** ID unic pentru aceasta planificare */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    /** Legatura catre seara de club pentru care facem planificarea */
+    /** The meeting evening for which this assignment is planned. */
     @ManyToOne
     @JoinColumn(name = "meeting_id")
     private Meeting meeting;
 
-    /** Departamentul unde va sluji liderul in acea seara */
+    /** The department the leader will serve in during this meeting. */
     @ManyToOne
     @JoinColumn(name = "department_id")
     private Department department;
 
-    /** Liderul care a fost ales pentru acest post */
+    /** The leader who is assigned or nominated. */
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "leader_id")
     private Leader leader;
 
-    /** Starea cererii (daca liderul a acceptat, a refuzat sau inca asteapta) */
+    /** Assignment status: "PENDING" (nominated), "ACCEPTED", or "DECLINED" (deleted on decline). */
     private String status;
 }
