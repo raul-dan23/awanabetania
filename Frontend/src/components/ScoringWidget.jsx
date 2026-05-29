@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { API_URL } from '../config';
 
+/**
+ * Scoring form used inside an active meeting session.
+ * Loads all children on mount, lets the user search and select one, then toggle
+ * per-criteria point buttons (attended, Bible, handbook, lesson, friend, uniform)
+ * and enter optional extra points. Submits to POST /api/scores/add.
+ * Resets to empty state after a successful save.
+ */
 const ScoringWidget = () => {
     const [children, setChildren] = useState([]);
     const [selectedChild, setSelectedChild] = useState(null);
@@ -23,6 +30,7 @@ const ScoringWidget = () => {
             .catch(() => setFetchError('Eroare la conectarea cu serverul.'));
     }, []);
 
+    /** Returns children whose full name (either order) contains the current search term. */
     const getFilteredChildren = () => {
         if (!searchTerm) return [];
         const term = searchTerm.toLowerCase().trim();
@@ -33,6 +41,7 @@ const ScoringWidget = () => {
         });
     };
 
+    /** Calculates the live point total from current toggle state and extra points. */
     const calculateTotal = () => {
         let total = 0;
         if (pointsData.attended) total += 1000;
@@ -50,10 +59,12 @@ const ScoringWidget = () => {
         return total;
     };
 
+    /** Toggles a single point category on or off. */
     const togglePoint = (key) => {
         setPointsData(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
+    /** POSTs the score payload to the backend and resets the form on success. */
     const handleSaveScore = () => {
         if (!selectedChild) return;
 

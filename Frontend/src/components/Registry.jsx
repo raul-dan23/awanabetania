@@ -2,6 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { API_URL } from '../config';
 
+/**
+ * Children registry. Shows the full list with search/sort and allows opening
+ * an individual child's "dosar" (file) to view and edit their details.
+ *
+ * Director/Coordinator role additionally can:
+ *  - Award shirt and hat rewards
+ *  - Assign manuals
+ *  - Add discipline warnings and suspensions
+ *
+ * @param {Object} props
+ * @param {Object} props.user - The logged-in user object (role determines edit access)
+ */
 const Registry = ({ user }) => {
     const [children, setChildren] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -9,18 +21,24 @@ const Registry = ({ user }) => {
     const [childWarnings, setChildWarnings] = useState([]);
     const [newWarning, setNewWarning] = useState({ description: '', suspension: false, remainingMeetings: 1 });
     const [availableManuals, setAvailableManuals] = useState([]);
+    // 'SELECT' = pick from existing manuals dropdown; 'NEW' = type a new name
     const [manualMode, setManualMode] = useState('SELECT');
     const [selectedManual, setSelectedManual] = useState('');
     const [customManualName, setCustomManualName] = useState('');
     const [search, setSearch] = useState('');
     const [sortBy, setSortBy] = useState('name');
     const [showAddWarning, setShowAddWarning] = useState(false);
+    // Stores 'SHIRT' or 'HAT' when a reward button is awaiting confirmation
     const [confirmReward, setConfirmReward] = useState(null);
 
     const isDirector = user && (user.role === 'DIRECTOR' || user.role === 'COORDONATOR');
 
     useEffect(() => { loadChildren(); }, []);
 
+    /**
+     * Loads the full children list and derives the set of existing manual names
+     * for the dropdown. On first load with no manuals it switches to 'NEW' mode.
+     */
     const loadChildren = () => {
         fetch(`${API_URL}/children`).then(r => r.ok ? r.json() : []).then(kids => {
             const existingManualsSet = new Set();
@@ -35,6 +53,11 @@ const Registry = ({ user }) => {
         }).catch(() => setLoading(false));
     };
 
+    /**
+     * Opens a child's individual file, fetching fresh data and their warning history.
+     *
+     * @param {{ id: number }} child - Child object (only `id` is required)
+     */
     const openChildFile = (child) => {
         fetch(`${API_URL}/children/${child.id}`).then(r => r.json()).then(freshData => {
             setSelectedChild(freshData);
@@ -52,6 +75,7 @@ const Registry = ({ user }) => {
 
     const handleAddWarning = () => {
         if (!newWarning.description) return toast.warning("Scrie motivul sanctiunii!");
+        // remainingMeetings is only meaningful for suspensions; reset to 0 for warnings
         const payload = { childId: selectedChild.id, ...newWarning, remainingMeetings: newWarning.suspension ? newWarning.remainingMeetings : 0 };
         fetch(`${API_URL}/warnings/add`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
             .then(res => { if(res.ok) { toast.success("Sanctiune salvata!"); openChildFile(selectedChild); setNewWarning({description:'', suspension:false, remainingMeetings:1}); }});
@@ -66,15 +90,15 @@ const Registry = ({ user }) => {
         </div>
     );
 
-    /* ── DOSAR COPIL ───────────────────────────────────── */
+    /* ── INDIVIDUAL CHILD FILE ───────────────────────────────────── */
     if (selectedChild) {
+        // Suspension is active only if the most recent warning is a suspension with meetings remaining
         const isCurrentlySuspended = Array.isArray(childWarnings) && childWarnings.length > 0 && childWarnings[0].suspension && childWarnings[0].remainingMeetings > 0;
         const initials = `${selectedChild.name?.charAt(0) || ''}${selectedChild.surname?.charAt(0) || ''}`;
 
         return (
             <div className="animate-in">
 
-                {/* Hero */}
                 <div className="db-hero" style={{marginBottom:'24px', alignItems:'center', ...(isCurrentlySuspended ? {background:'linear-gradient(135deg, #dc2626 0%, #9f1239 100%)'} : {})}}>
                     <div className="db-hero-left">
                         <span className="db-greeting">Dosar Copil</span>
@@ -92,7 +116,6 @@ const Registry = ({ user }) => {
                     </button>
                 </div>
 
-                {/* Stat cards */}
                 <div className="db-stats" style={{marginBottom:'24px'}}>
                     <div className="db-stat-card db-stat-blue">
                         <div className="db-stat-number">{selectedChild.age || '-'}</div>
@@ -114,10 +137,9 @@ const Registry = ({ user }) => {
 
                 <div className="profile-grid">
 
-                    {/* Coloana stanga */}
                     <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
 
-                        {/* Contact */}
+                        {/* Contact info */}
                         <div className="card">
                             <p className="db-section-title" style={{marginBottom:'14px'}}>Date Contact</p>
                             <div style={{display:'flex', alignItems:'center', gap:'12px', marginBottom:'14px'}}>
@@ -144,7 +166,7 @@ const Registry = ({ user }) => {
                             </div>
                         </div>
 
-                        {/* Inventar */}
+                        {/* Rewards and manuals */}
                         <div className="card">
                             <p className="db-section-title" style={{marginBottom:'14px'}}>Inventar Premii</p>
                             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'18px'}}>
@@ -204,6 +226,7 @@ const Registry = ({ user }) => {
                                             {availableManuals.map(m => <option key={m} value={m}>{m}</option>)}
                                         </select>
                                     )}
+                                    {/* Typing in the custom field switches mode to NEW, clearing it reverts to SELECT */}
                                     <input className="login-input" placeholder="Sau adauga manual nou..." value={customManualName} onChange={e => { setCustomManualName(e.target.value); setManualMode(e.target.value ? 'NEW' : 'SELECT'); }} style={{margin:0}} />
                                     <button onClick={handleAssignManual} style={{background:'var(--accent)', color:'white', border:'none', padding:'10px', borderRadius:'10px', fontWeight:'800', cursor:'pointer', fontSize:'0.9rem'}}>Atribuie Manual</button>
                                 </div>
@@ -211,9 +234,8 @@ const Registry = ({ user }) => {
                         </div>
                     </div>
 
-                    {/* Coloana dreapta — Disciplina */}
+                    {/* Right column — discipline log */}
                     <div className="card">
-                        {/* Header disciplina */}
                         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px'}}>
                             <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
                                 <p className="db-section-title" style={{margin:0}}>Disciplina</p>
@@ -238,7 +260,6 @@ const Registry = ({ user }) => {
                             )}
                         </div>
 
-                        {/* Form adauga sanctiune — collapsible */}
                         {isDirector && showAddWarning && (
                             <div className="animate-in" style={{display:'flex', flexDirection:'column', gap:'10px', marginBottom:'18px', padding:'16px', background:'#fff1f2', borderRadius:'14px', border:'1px solid #fecaca'}}>
                                 <input
@@ -249,7 +270,6 @@ const Registry = ({ user }) => {
                                     style={{margin:0}}
                                     autoFocus
                                 />
-                                {/* Toggle tip: Avertisment / Suspendare */}
                                 <div style={{display:'flex', gap:'8px'}}>
                                     <button onClick={() => setNewWarning({...newWarning, suspension:false})} style={{
                                         flex:1, padding:'9px', borderRadius:'10px', fontWeight:'800', fontSize:'0.82rem', cursor:'pointer', border:'none',
@@ -274,7 +294,6 @@ const Registry = ({ user }) => {
                             </div>
                         )}
 
-                        {/* Lista sanctiuni */}
                         <div style={{display:'flex', flexDirection:'column', gap:'8px', maxHeight:'380px', overflowY:'auto'}}>
                             {childWarnings.length === 0 ? (
                                 <div style={{textAlign:'center', padding:'30px 20px'}}>
@@ -312,15 +331,15 @@ const Registry = ({ user }) => {
         );
     }
 
-    /* ── LISTA COPII ────────────────────────────────────── */
+    /* ── CHILDREN LIST ────────────────────────────────────── */
     const suspendedCount = children.filter(c => c.isSuspended).length;
     let filtered = children.filter(c =>
         search === '' || `${c.name} ${c.surname}`.toLowerCase().includes(search.toLowerCase())
     );
-    if (sortBy === 'suspended') filtered = filtered.filter(c => c.isSuspended);
-    else if (sortBy === 'points') filtered = [...filtered].sort((a,b) => (b.seasonPoints||0) - (a.seasonPoints||0));
+    if (sortBy === 'suspended')       filtered = filtered.filter(c => c.isSuspended);
+    else if (sortBy === 'points')     filtered = [...filtered].sort((a,b) => (b.seasonPoints||0) - (a.seasonPoints||0));
     else if (sortBy === 'attendance') filtered = [...filtered].sort((a,b) => (b.totalAttendance||0) - (a.totalAttendance||0));
-    else filtered = [...filtered].sort((a,b) => a.name.localeCompare(b.name));
+    else                              filtered = [...filtered].sort((a,b) => a.name.localeCompare(b.name));
 
     return (
         <div className="animate-in">
@@ -347,7 +366,6 @@ const Registry = ({ user }) => {
                 style={{marginBottom:'12px'}}
             />
 
-            {/* Sort / Filter pills */}
             <div style={{display:'flex', gap:'6px', marginBottom:'20px', background:'var(--bg-primary)', padding:'4px', borderRadius:'14px'}}>
                 {[
                     {key:'name', label:'Nume A–Z'},

@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config';
 
+/**
+ * Landing page shown after login. Displays club-wide stats, director contacts,
+ * and the notification board for leaders, or the reward progress bar for children.
+ *
+ * @param {Object} props
+ * @param {Object} props.user - The logged-in user object from localStorage
+ */
 const Dashboard = ({ user }) => {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -11,6 +18,11 @@ const Dashboard = ({ user }) => {
         fetch(url).then(r => r.ok ? r.json() : null).then(data => { if(data) { setStats(data); setLoading(false); }}).catch(() => setLoading(false));
     }, [user]);
 
+    /**
+     * Optimistically removes a notification from the local state after deletion.
+     *
+     * @param {number} id - Notification ID
+     */
     const handleDeleteNotification = (id) => {
         if(!window.confirm("Ștergi notificarea?")) return;
         fetch(`${API_URL}/notifications/${id}`, { method: 'DELETE' })
@@ -21,6 +33,11 @@ const Dashboard = ({ user }) => {
             .catch(() => alert("Eroare server."));
     };
 
+    /**
+     * Returns a time-of-day greeting string.
+     *
+     * @returns {string}
+     */
     const getGreeting = () => {
         const h = new Date().getHours();
         if (h < 12) return 'Bună dimineața';
@@ -28,6 +45,13 @@ const Dashboard = ({ user }) => {
         return 'Bună seara';
     };
 
+    /**
+     * Computes the reward progress bar item for the child's next unclaimed prize
+     * (shirt at 5 attendances, hat at 10). Returns an empty array when all prizes
+     * have been claimed.
+     *
+     * @returns {Array<{icon: string, label: string, pct: number, eligible: boolean}>}
+     */
     const getProgressItems = () => {
         if (!isChild) return [];
         const streak = user.attendanceStreak || 0;
@@ -38,6 +62,7 @@ const Dashboard = ({ user }) => {
         if (!user.hasHat) {
             const target = 10;
             const remaining = Math.max(0, target - streak);
+            // Progress starts from 5 (already got shirt), so subtract the baseline
             return [{ icon: '🧢', label: remaining === 0 ? 'Eligibil pentru Căciulă!' : `${remaining} prezențe până la Căciulă`, pct: Math.min(((streak - 5) / 5) * 100, 100), eligible: remaining === 0 }];
         }
         return [];
@@ -55,12 +80,12 @@ const Dashboard = ({ user }) => {
     if (!stats) return <div className="animate-in"><p>Eroare incarcare date.</p></div>;
 
     const progressItems = getProgressItems();
+    // Children see no notifications — those are only for leaders
     const notificationsToDisplay = isChild ? [] : (stats.notifications || []);
 
     return (
         <div className="animate-in dashboard-wrapper">
 
-            {/* HERO */}
             <div className="db-hero">
                 <div className="db-hero-left">
                     <span className="db-greeting">{getGreeting()},</span>
@@ -74,7 +99,6 @@ const Dashboard = ({ user }) => {
                 </div>
             </div>
 
-            {/* STAT CARDS */}
             <div className="db-stats">
                 <div className="db-stat-card db-stat-blue">
                     <div className="db-stat-number">{stats.kidsCount}</div>
@@ -109,7 +133,6 @@ const Dashboard = ({ user }) => {
                 )}
             </div>
 
-            {/* PROGRES COPIL */}
             {isChild && progressItems.length > 0 && (
                 <div className="db-section">
                     <p className="db-section-title">🎯 Progres Recompense</p>
@@ -127,7 +150,6 @@ const Dashboard = ({ user }) => {
                 </div>
             )}
 
-            {/* DIRECTORI */}
             {!isChild && stats.directors && stats.directors.length > 0 && (
                 <div className="db-section">
                     <p className="db-section-title">📞 Contacte Directori</p>
@@ -147,7 +169,6 @@ const Dashboard = ({ user }) => {
                 </div>
             )}
 
-            {/* NOTIFICARI */}
             <div className="db-section db-section-grow">
                 <p className="db-section-title">{isChild ? '✨ Noutăți' : '🔔 Avizier Digital'}</p>
                 <div className="db-notifs">
@@ -171,7 +192,6 @@ const Dashboard = ({ user }) => {
                 </div>
             </div>
 
-            {/* VERSE */}
             <div className="db-verse">
                 „Isus Hristos este acelaşi ieri şi azi şi în veci!" <strong>Evrei 13:8</strong>
             </div>

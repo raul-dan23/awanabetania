@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config';
 
+/**
+ * Visual sticker collection grid for a single child.
+ *
+ * Renders all stickers in order. Unlocked stickers show their image (or a check
+ * icon if no image). The next sticker to unlock is highlighted with a pulse border
+ * and — for leaders — is clickable to trigger the unlock confirmation via onUnlock.
+ * Future stickers are greyed out.
+ *
+ * @param {Object} props
+ * @param {Object} props.child - Child entity with a `progress.lastStickerId` field.
+ * @param {Object} props.user - Currently logged-in user; leaders can unlock stickers.
+ * @param {Function} props.onUnlock - Called with childId when the leader taps the next sticker.
+ */
 const StickerMap = ({ child, user, onUnlock }) => {
     const [stickers, setStickers] = useState([]);
     const isLeader = user && !!user.role;

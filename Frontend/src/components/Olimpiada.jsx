@@ -15,8 +15,18 @@ const PLACE_POINTS = { 1: 1500, 2: 1000, 3: 500, 4: 300 };
 const teamLabel = t => t.charAt(0) + t.slice(1).toLowerCase();
 const medals = ['I', 'II', 'III', 'IV'];
 
-// ─── SCORING TAB ────────────────────────────────────────────────────────────
-
+/**
+ * Scoring tab used by a single arbiter for one Olimpiada session.
+ *
+ * The arbiter taps teams in finishing order (first tap = Loc 1 … fourth = Loc 4).
+ * Supports double-points rounds. After submitting, the round counter increments
+ * and placements reset. Also provides an extra-points form (place=0, round=0)
+ * for bonus points awarded outside the standard ranking.
+ *
+ * @param {Object} props
+ * @param {string} props.arbiterName - Display name attached to all submitted scores.
+ * @param {string} props.sessionCode - Short session code (e.g. "OLM26").
+ */
 function ScoringTab({ arbiterName, sessionCode }) {
     const [placements, setPlacements] = useState({});
     const [round, setRound] = useState(1);
@@ -267,8 +277,13 @@ function ScoringTab({ arbiterName, sessionCode }) {
     );
 }
 
-// ─── COMPARE TAB ────────────────────────────────────────────────────────────
-
+/**
+ * Expandable round-by-round breakdown for one arbiter inside CompareTab.
+ *
+ * @param {Object} props
+ * @param {string} props.arbiterName - Arbiter display name (used as key).
+ * @param {Object} props.arbiterData - Server response containing rounds[] and extras[].
+ */
 function ArbiterDosar({ arbiterName, arbiterData }) {
     const { rounds, extras } = arbiterData;
 
@@ -327,6 +342,15 @@ function ArbiterDosar({ arbiterName, arbiterData }) {
     );
 }
 
+/**
+ * Comparison tab: fetches GET /api/olimpiada/session/:code/compare and renders
+ * one leaderboard card per arbiter plus a diff table when there are ≥ 2 arbiters.
+ * Differences > 0 are highlighted in red. Each card can be expanded to show
+ * the full ArbiterDosar round detail.
+ *
+ * @param {Object} props
+ * @param {string} props.sessionCode - Active session code.
+ */
 function CompareTab({ sessionCode }) {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -480,8 +504,14 @@ function CompareTab({ sessionCode }) {
     );
 }
 
-// ─── SESSIONS TAB ────────────────────────────────────────────────────────────
-
+/**
+ * Sessions management tab (directors only, requires verified admin PIN).
+ * Lists all Olimpiada sessions, allows creating new ones, closing active ones,
+ * and deleting any session (cascades to all scores).
+ *
+ * @param {Object} props
+ * @param {string} props.adminPin - Verified admin PIN sent as X-Admin-Pin header.
+ */
 function SessionsTab({ adminPin }) {
     const [sessions, setSessions] = useState([]);
     const [form, setForm] = useState({ name: '', code: '' });
@@ -568,8 +598,22 @@ function SessionsTab({ adminPin }) {
     );
 }
 
-// ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
-
+/**
+ * Olimpiada Awana — independent arbitration system for the annual club competition.
+ *
+ * Supports two access modes:
+ *   - Regular user (user prop): sees all three tabs. Sessions tab requires admin PIN.
+ *   - Guest arbiter (guestArbiter prop): sees only the Scorare tab with their name
+ *     and session code pre-filled; an "Iesi" button calls onExitGuest.
+ *
+ * The component manages session selection (by short code) shared between Scorare
+ * and Comparatie tabs.
+ *
+ * @param {Object} props
+ * @param {Object|null} props.user - Logged-in user, or null for guest mode.
+ * @param {Object|null} props.guestArbiter - Guest arbiter with { name, code }, or null.
+ * @param {Function} props.onExitGuest - Called when the guest presses "Iesi".
+ */
 export default function Olimpiada({ user, guestArbiter, onExitGuest }) {
     const isGuest = !!guestArbiter;
 

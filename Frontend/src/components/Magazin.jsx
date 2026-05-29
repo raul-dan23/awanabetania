@@ -3,6 +3,19 @@ import { toast } from 'sonner';
 import { API_URL } from '../config';
 import { useNfcBridge } from '../hooks/useNfcBridge';
 
+/**
+ * End-of-season fair store component with three tabs:
+ *
+ *   - Produse (directors only): manage the product catalogue (requires admin PIN).
+ *   - Bon Nou: leader creates a purchase receipt for a child — search by name,
+ *     pick quantities, submit. The bon lands in PENDING state.
+ *   - Contabil: cashier view that polls pending bons every 3 s. Supports NFC card
+ *     identification via the useNfcBridge hook to filter bons by child. The cashier
+ *     approves or rejects bons; approval atomically deducts seasonPoints.
+ *
+ * @param {Object} props
+ * @param {Object} props.user - Currently logged-in user; role controls tab visibility.
+ */
 const Magazin = ({ user }) => {
     const isDirector = user?.role === 'DIRECTOR' || user?.role === 'COORDONATOR';
     const [tab, setTab] = useState('bon');

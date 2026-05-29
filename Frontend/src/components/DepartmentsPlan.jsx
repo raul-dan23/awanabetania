@@ -2,6 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { API_URL } from '../config';
 
+/**
+ * Meeting-level department planning form.
+ *
+ * Can be used in two modes:
+ *   - Embedded (meetingId prop provided): used inside CalendarManager's "Organizare" tab.
+ *     A "Salveaza & Continua" button calls onConfirm to unlock Scoring and Teams tabs.
+ *   - Standalone (no meetingId): shows a meeting picker dropdown.
+ *
+ * Directors can assign/remove leaders per department, set the Director of the Day,
+ * and the form grays out once confirmed (isConfirmed=true).
+ *
+ * @param {Object} props
+ * @param {number|undefined} props.meetingId - Pre-selected meeting ID (embedded mode).
+ * @param {Object} props.user - Currently logged-in user.
+ * @param {Function} props.onConfirm - Called when the director confirms the plan (embedded mode).
+ * @param {boolean} props.isConfirmed - Whether the plan has already been confirmed.
+ */
 const DepartmentsPlan = ({ meetingId, user, onConfirm, isConfirmed }) => {
     const [meetings, setMeetings] = useState([]);
     const [selectedMeetingId, setSelectedMeetingId] = useState(meetingId);

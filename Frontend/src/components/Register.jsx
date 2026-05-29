@@ -2,9 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config';
 import AwanaLogo from '../AwanaLogo';
 
+/**
+ * Account registration form. Adapts its fields based on the selected role:
+ *  - Child: birth date, parent name, parent phone
+ *  - Leader / Director: phone, department selection, access code (validated server-side)
+ *
+ * On success, shows the assigned username and redirects to login after 4.5s.
+ *
+ * @param {Object} props
+ * @param {Function} props.onSwitchToLogin - Called when the user wants to go back to login
+ */
 const Register = ({ onSwitchToLogin }) => {
     const [roleType, setRoleType] = useState('CHILD');
     const [form, setForm] = useState({ name:'', surname:'', pass:'', birthDate:'', parentName:'', phone:'', regCode: '' });
+    // Prefixed with 'ok:' or 'err:' so the same state variable drives both success and error UI
     const [msg, setMsg] = useState('');
     const [loading, setLoading] = useState(false);
     const [departments, setDepartments] = useState([]);
@@ -14,12 +25,21 @@ const Register = ({ onSwitchToLogin }) => {
         fetch(`${API_URL}/departments`).then(r=>r.ok?r.json():[]).then(setDepartments).catch(() => setMsg('Eroare la conectarea cu serverul.'));
     }, []);
 
+    /**
+     * Toggles a department in the selection set.
+     *
+     * @param {number} id - Department ID
+     */
     const toggleDept = (id) => {
         const next = new Set(selectedDepts);
         if(next.has(id)) next.delete(id); else next.add(id);
         setSelectedDepts(next);
     };
 
+    /**
+     * Submits the registration payload. The backend generates and returns the
+     * username, which is shown to the user before redirecting to login.
+     */
     const doRegister = (e) => {
         e.preventDefault();
         setLoading(true);
@@ -56,6 +76,7 @@ const Register = ({ onSwitchToLogin }) => {
         { id: 'DIRECTOR', label: 'Director' },
     ];
 
+    // The 'ok:'/'err:' prefix drives which CSS class is applied
     const isOk  = msg.startsWith('ok:');
     const isErr = msg.startsWith('err:');
     const msgText = msg.slice(3);
@@ -111,6 +132,7 @@ const Register = ({ onSwitchToLogin }) => {
                             <input type="password" placeholder="Parola" className="auth-input" onChange={e=>setForm({...form, pass:e.target.value})} required />
                         </div>
 
+                        {/* Access code required for leader/director registration — validated server-side */}
                         {roleType !== 'CHILD' && (
                             <div className="auth-input-wrap">
                                 <span className="auth-input-icon">🛡️</span>

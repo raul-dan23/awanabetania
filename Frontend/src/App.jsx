@@ -15,9 +15,10 @@ import Login from './components/Login';
 import Magazin from './components/Magazin';
 import Olimpiada from './components/Olimpiada';
 
-// ==========================================
-// 1. SPLASH SCREEN
-// ==========================================
+/**
+ * Shown once per browser session while the app initialises.
+ * Using sessionStorage means it only appears on the first tab open, not on every refresh.
+ */
 const SplashScreen = () => (
     <div className="splash-screen">
         <div className="logo-anim"><AwanaLogo width="280px" /></div>
@@ -25,25 +26,30 @@ const SplashScreen = () => (
     </div>
 );
 
-// ==========================================
-// 15. APP MAIN (FINAL SI CORECTAT)
-// ==========================================
+/**
+ * Root component. Owns global state: authenticated user, current page, and
+ * the olimpiadaGuest session (for arbiters who log in without an account).
+ *
+ * Navigation uses a `page` string instead of a router — no URL changes.
+ * Persisted in localStorage so a page refresh lands on the same view.
+ */
 function App() {
-    // 1. Logoul (tinut minte pe sesiune ca sa nu fie enervant)
+    // Show the splash only once per browser session
     const [loading, setLoading] = useState(() => {
         return !sessionStorage.getItem('hasSeenLogo');
     });
 
-    // 2. USER-UL: Il incarcam din memoria permanenta ca sa nu mai ceara login la refresh
+    // Persist the logged-in user across page refreshes
     const [user, setUser] = useState(() => {
         const savedUser = localStorage.getItem('awanaLoggedUser');
         return savedUser ? JSON.parse(savedUser) : null;
     });
 
     const [register, setRegister] = useState(false);
+    // Non-null when a guest arbiter entered via the Olimpiada quick-join form
     const [olimpiadaGuest, setOlimpiadaGuest] = useState(null);
 
-    // 3. PAGINA: Tine minte unde erai inainte de refresh (Registru, Dashboard, etc.)
+    // Persist the active page so refreshing returns the user to the same section
     const [page, setPage] = useState(() => {
         return localStorage.getItem('awanaCurrentPage') || 'dashboard';
     });
@@ -51,29 +57,23 @@ function App() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-    // ==========================================
-    // EFECTE MAGICE: Salvare automata in fundal
-    // ==========================================
-
-    // Cand userul se schimba (ex: se logheaza sau delogheaza) -> actualizam memoria
+    // Sync user object to localStorage whenever it changes
     useEffect(() => {
         if (user) {
             localStorage.setItem('awanaLoggedUser', JSON.stringify(user));
         } else {
-            // Daca a dat logout (user e null), stergem datele
             localStorage.removeItem('awanaLoggedUser');
             localStorage.removeItem('awanaCurrentPage');
         }
     }, [user]);
 
-    // Cand schimba pagina -> o tinem minte imediat
+    // Sync current page to localStorage so refresh restores the same view
     useEffect(() => {
         if (user) {
             localStorage.setItem('awanaCurrentPage', page);
         }
     }, [page, user]);
 
-    // Animatia cu Logo Awana
     useEffect(() => {
         if (loading) {
             const timer = setTimeout(() => {
@@ -84,7 +84,11 @@ function App() {
         }
     }, [loading]);
 
-    // O functie mica pentru schimbarea paginii (probabil o ai deja mai jos, dar asigura-te ca arata cam asa)
+    /**
+     * Changes the active page and closes the mobile drawer.
+     *
+     * @param {string} pageName - One of the page keys used in the render tree below
+     */
     const navigateTo = (pageName) => {
         setPage(pageName);
         setMobileMenuOpen(false);
@@ -92,6 +96,7 @@ function App() {
 
     if (loading) return <SplashScreen />;
 
+    // Guest arbiters (no account) get a stripped Olimpiada-only view
     if (olimpiadaGuest) {
         return (
             <div style={{ minHeight: '100vh', background: '#f9fafb' }}>
@@ -105,6 +110,7 @@ function App() {
         ? <Register onSwitchToLogin={() => setRegister(false)} />
         : <Login onLogin={setUser} onSwitchToRegister={() => setRegister(true)} onGuestArbiter={setOlimpiadaGuest} />;
 
+    // Children have no `role` field; leaders/directors always have one
     const isChild = !user.role;
     const isDirector = user.role === 'DIRECTOR' || user.role === 'COORDONATOR';
 
@@ -112,7 +118,7 @@ function App() {
         <div className="app-container">
             <Toaster richColors position="top-center" />
 
-            {/* HEADER MOBIL */}
+            {/* Mobile top bar — only visible on small screens */}
             <div className="mobile-header">
                 <div style={{display:'flex', alignItems:'center', gap:'12px'}}>
                     <button className="hamburger-btn" onClick={() => setMobileMenuOpen(true)}>
@@ -127,10 +133,10 @@ function App() {
                 </div>
             </div>
 
-            {/* OVERLAY */}
+            {/* Tap-outside overlay to close the mobile drawer */}
             <div className={`mobile-overlay ${mobileMenuOpen ? 'visible' : ''}`} onClick={() => setMobileMenuOpen(false)}></div>
 
-            {/* SIDEBAR */}
+            {/* Sidebar — always visible on desktop, slides in on mobile */}
             <div className={`sidebar ${mobileMenuOpen ? 'open' : ''} ${sidebarCollapsed ? 'collapsed' : ''}`}>
 
                 <button className="close-menu-btn" onClick={() => setMobileMenuOpen(false)}>
@@ -139,7 +145,6 @@ function App() {
                     </svg>
                 </button>
 
-                {/* LOGO */}
                 <div className="sb-logo">
                     <div className="sb-logo-inner">
                         <AwanaLogo width="110px" />
@@ -154,7 +159,6 @@ function App() {
                     </button>
                 </div>
 
-                {/* USER */}
                 <div className="sb-user">
                     <div className="sb-avatar">{user.name.charAt(0)}{user.surname?.charAt(0) || ''}</div>
                     <div className="sb-user-info">
@@ -163,7 +167,6 @@ function App() {
                     </div>
                 </div>
 
-                {/* NAV */}
                 <nav className="sb-nav">
                     <span className="sb-label">Navigare</span>
 
@@ -198,7 +201,7 @@ function App() {
                                 <span className="sb-btn-text">Departamente</span>
                             </button>
 
-                            {/* Albume Stickere — ascuns temporar */}
+                            {/* StickersHub hidden temporarily */}
 
                             <button className={`sb-btn ${page==='olimpiada'?'active':''}`} onClick={()=>navigateTo('olimpiada')}>
                                 <svg className="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -235,6 +238,7 @@ function App() {
                                 </button>
                             )}
 
+                            {/* Control Center is only for the super-admin account (id === 1) */}
                             {user.id === 1 && (
                                 <button className={`sb-btn sb-btn-admin ${page==='admin'?'active':''}`} onClick={()=>navigateTo('admin')}>
                                     <svg className="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -247,8 +251,8 @@ function App() {
                     )}
                 </nav>
 
-                {/* LOGOUT */}
                 <div className="sb-footer">
+                    {/* Reload after logout to clear all in-memory state */}
                     <button className="sb-btn sb-btn-logout" onClick={() => { setUser(null); window.location.reload(); }}>
                         <svg className="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -259,19 +263,17 @@ function App() {
                 </div>
             </div>
 
-            {/* CONTINUT PRINCIPAL */}
+            {/* Main content area — renders the active page component */}
             <div className="main-content">
                 {page === 'dashboard' && <Dashboard user={user} />}
                 {page === 'profile' && <MyProfile user={user} onUpdateUser={setUser} />}
-                {/* StickersHub ascuns temporar */}
+                {/* StickersHub hidden temporarily */}
                 {!isChild && page === 'calendar' && <CalendarManager user={user} />}
                 {!isChild && page === 'departments' && <DepartmentsList user={user} />}
                 {!isChild && page === 'registry' && <Registry user={user} />}
                 {!isChild && page === 'leaders' && isDirector && <LeadersRegistry />}
                 {!isChild && page === 'olimpiada' && <Olimpiada user={user} />}
                 {!isChild && page === 'magazin' && <Magazin user={user} />}
-
-                {/* 👇 LINIA NOUA PENTRU ADMIN 👇 */}
                 {!isChild && page === 'admin' && <AdminDashboard currentUser={user} />}
             </div>
         </div>

@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config';
 
+/**
+ * Leader directory with sortable list and per-leader feedback history.
+ *
+ * List view: all leaders sortable by name, average rating, or role.
+ * Supports name search. Each row has a "Dosar" button.
+ *
+ * Dosar (detail) view: shows contact info, departments, average rating
+ * with a visual bar, and full feedback history with optional comment deletion.
+ */
 const LeadersRegistry = () => {
     const [leaders, setLeaders] = useState([]);
     const [selectedLeader, setSelectedLeader] = useState(null);
@@ -25,6 +34,7 @@ const LeadersRegistry = () => {
         });
     };
 
+    /** Renders 1–5 filled/empty SVG stars for the given rating value. */
     const StarRating = ({ rating, size = 16 }) => (
         <div style={{display:'flex', gap:'2px'}}>
             {[1,2,3,4,5].map(s => (

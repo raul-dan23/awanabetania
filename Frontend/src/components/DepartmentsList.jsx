@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config';
 
+/**
+ * Organizational view of all club departments.
+ *
+ * List view: shows each department as a card with its head leader.
+ * Detail view (after clicking a card): shows the permanent team members,
+ * the planning schedule for the next five meetings (which leaders are assigned
+ * per meeting), and — for directors/department heads — controls to propose,
+ * accept, or remove leader assignments and change the department head.
+ *
+ * @param {Object} props
+ * @param {Object} props.user - Currently logged-in user; role determines edit rights.
+ */
 const DepartmentsList = ({ user }) => {
     const [departments, setDepartments] = useState([]);
     const [leaders, setLeaders] = useState([]);
@@ -27,6 +39,7 @@ const DepartmentsList = ({ user }) => {
     };
     useEffect(() => { loadData(); }, []);
 
+    /** Opens the department detail view, loading its members and per-meeting schedule. */
     const handleSelectDept = (dept) => {
         setSelectedDept(dept); setDeptMembers([]); setScheduleData({}); setEligibleMap({});
         setHeadSearch(''); setHeadDropOpen(false); setMeetingSearch({}); setOpenMeetingDrop(null);

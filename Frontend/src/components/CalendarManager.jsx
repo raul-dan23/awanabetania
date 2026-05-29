@@ -5,6 +5,17 @@ import DepartmentsPlan from './DepartmentsPlan';
 import ScoringWidget from './ScoringWidget';
 import TeamsManager from './TeamsManager';
 
+/**
+ * End-of-evening feedback form shown before a meeting is permanently closed.
+ * Loads all leaders, collects a general star-rating and per-leader evaluations,
+ * then POSTs to /api/feedback/save. Calls onComplete on success or onCancel if aborted.
+ *
+ * @param {Object} props
+ * @param {Object} props.meeting - The meeting being closed.
+ * @param {Object} props.user - Currently logged-in director.
+ * @param {Function} props.onComplete - Called after feedback is saved successfully.
+ * @param {Function} props.onCancel - Called when the user aborts closure.
+ */
 const MeetingFeedback = ({ meeting, user, onComplete, onCancel }) => {
     const [leaders, setLeaders] = useState([]);
     const [generalData, setGeneralData] = useState({ rating: 0, feedback: '' });
@@ -84,6 +95,21 @@ const MeetingFeedback = ({ meeting, user, onComplete, onCancel }) => {
     );
 };
 
+/**
+ * Meeting calendar and active session hub.
+ *
+ * In list view: shows upcoming (incomplete) meetings; directors can add new ones.
+ * Selecting "Intra" enters the active session view, which exposes three tabs:
+ *   - Organizare (DepartmentsPlan) — assign leaders to departments.
+ *   - Scoring (ScoringWidget) — unlocked after the director confirms organisation.
+ *   - Echipe (TeamsManager) — unlocked after the director confirms organisation.
+ *
+ * Closing a meeting first collects director feedback (MeetingFeedback), then
+ * calls POST /api/meetings/close/{id} which runs all end-of-evening cleanup.
+ *
+ * @param {Object} props
+ * @param {Object} props.user - Currently logged-in user; role used to show/hide director actions.
+ */
 const CalendarManager = ({ user }) => {
     const [meetings, setMeetings] = useState([]);
     const [activeSession, setActiveSession] = useState(null);
@@ -98,6 +124,7 @@ const CalendarManager = ({ user }) => {
 
     const isDirector = user.role === 'DIRECTOR' || user.role === 'COORDONATOR';
 
+    /** Fetches incomplete meetings from the backend and updates state. */
     const loadMeetings = () => { fetch(`${API_URL}/meetings`).then(r => r.ok?r.json():[]).then(setMeetings).catch(() => setFetchError('Eroare la conectarea cu serverul.')); };
     useEffect(() => { loadMeetings(); }, []);
 

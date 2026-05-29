@@ -2,6 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { API_URL } from '../config';
 
+/**
+ * Game-time team manager used inside an active meeting session.
+ *
+ * Selection mode: leaders pick a team color, then drag children from the
+ * "available" pool onto their team. Children can be removed back to the bench.
+ * The panel polls /api/teams/status/:color every 5 s to refresh member list
+ * and live scores (individual dailyPoints + game-round points).
+ *
+ * Games mode: gated behind a 4-digit PIN (POST /api/meetings/check-pin).
+ * Lets the director record game-round rankings (1st–4th place, optional double)
+ * or award manual bonus points to any team.
+ */
 const TeamsManager = () => {
     const [mode, setMode] = useState('selection');
     const [myColor, setMyColor] = useState('red');
@@ -23,6 +35,7 @@ const TeamsManager = () => {
     const teamStyles = { red: { bg: '#fee2e2', border: '#ef4444', text: '#b91c1c' }, blue: { bg: '#dbeafe', border: '#3b82f6', text: '#1d4ed8' }, green: { bg: '#dcfce7', border: '#22c55e', text: '#15803d' }, yellow: { bg: '#fef9c3', border: '#eab308', text: '#a16207' } };
     const currentTheme = teamStyles[myColor];
 
+    /** Refreshes available children and the selected team's current status. */
     const refreshData = () => { fetch(`${API_URL}/teams/available`).then(r => r.ok?r.json():[]).then(setAvailableKids).catch(()=>{}); fetch(`${API_URL}/teams/status/${myColor}`).then(r => r.ok?r.json():null).then(data => { if(data) { setMyTeamMembers(data.members || []); setScores({ individual: data.individualScore || 0, game: data.gameScore || 0, total: data.totalScore || 0 }); } }).catch(()=>{}); };
     useEffect(() => { refreshData(); const interval = setInterval(refreshData, 5000); return () => clearInterval(interval); }, [myColor]);
 
@@ -32,6 +45,7 @@ const TeamsManager = () => {
         setPinInput('');
     };
 
+    /** Submits the PIN input to the backend; unlocks games mode on success. */
     const verifyPin = () => {
         if (!pinInput) return toast.warning("Scrie codul!");
 
@@ -63,6 +77,7 @@ const TeamsManager = () => {
     const handleTeamPress = (c) => { if(!ranking.includes(c)) setRanking([...ranking, c]); };
     const sendGamePoints = () => { if(ranking.length===0) return toast.warning("Selecteaza ordinea!"); fetch(`${API_URL}/teams/game-round`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ ranking, isDouble }) }).then(res => { if(res.ok) { toast.success("Clasament salvat!"); setRanking([]); setIsDouble(false); refreshData(); } }); };
     const sendManualPoints = () => { if(!manualPoints || isNaN(manualPoints)) return toast.warning("Introdu un număr valid!"); fetch(`${API_URL}/teams/add-manual-points`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ teamColor: manualTeam, points: parseInt(manualPoints) }) }).then(async res => { if(res.ok) { toast.success(await res.text()); setManualPoints(''); refreshData(); } else { toast.error("Eroare server: " + await res.text()); } }); };
+    /** Returns the points for finishing position i (0-indexed), doubled if isDouble is active. */
     const getPoints = (i) => { const pts=[1000,500,300,100]; return i<4 ? (isDouble?pts[i]*2:pts[i]) : 0; };
     const getFilteredAvailable = () => { if(!searchAvailable) return availableKids; const term = searchAvailable.toLowerCase(); return availableKids.filter(c => c.name.toLowerCase().includes(term) || c.surname.toLowerCase().includes(term)); };
 

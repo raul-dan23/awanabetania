@@ -1,6 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config';
 
+/**
+ * Personal profile page. Shows and allows editing of the user's own data.
+ * Also contains a collapsible feedback history for leaders and a danger zone
+ * for account deletion.
+ *
+ * The component immediately re-fetches fresh data from the server on mount to
+ * ensure stats like seasonPoints reflect the latest database values rather than
+ * the potentially stale copy stored in localStorage.
+ *
+ * @param {Object} props
+ * @param {Object} props.user - The logged-in user object
+ * @param {Function} props.onUpdateUser - Called with the updated user object after a save,
+ *   so App.jsx can sync localStorage
+ */
 const MyProfile = ({ user, onUpdateUser }) => {
     const isChild = !user.role;
     const [isEditing, setIsEditing] = useState(false);
@@ -26,6 +40,10 @@ const MyProfile = ({ user, onUpdateUser }) => {
         }
     }, []);
 
+    /**
+     * Persists the edited profile. An empty `password` field means "keep current
+     * password" — the field is deleted from the payload so the backend ignores it.
+     */
     const handleSave = () => {
         setLoading(true);
         const endpoint = isChild ? `${API_URL}/children/${user.id}` : `${API_URL}/leaders/${user.id}`;
@@ -37,12 +55,21 @@ const MyProfile = ({ user, onUpdateUser }) => {
             .catch((err) => { setLoading(false); alert(err || "Eroare server."); });
     };
 
+    /**
+     * Toggles a department assignment in the edit form.
+     *
+     * @param {{ id: number }} dept - Department object
+     */
     const toggleDepartment = (dept) => {
         const hasDept = formData.departments.some(d => d.id === dept.id);
         if (hasDept) setFormData({ ...formData, departments: formData.departments.filter(d => d.id !== dept.id) });
         else setFormData({ ...formData, departments: [...formData.departments, dept] });
     };
 
+    /**
+     * Requests a one-time deletion code sent to the admin. The user must then
+     * enter that code to confirm the irreversible deletion.
+     */
     const requestDeletionCode = () => {
         if (!window.confirm("Esti sigur ca vrei sa initiezi stergerea contului?")) return;
         fetch(`${API_URL}/account/request-deletion`, {
@@ -51,6 +78,10 @@ const MyProfile = ({ user, onUpdateUser }) => {
         }).then(res => res.text()).then(msg => alert(msg)).catch(() => alert("Eroare la solicitare cod."));
     };
 
+    /**
+     * Executes account deletion after the user confirms the one-time code.
+     * Clears localStorage and reloads on success.
+     */
     const performDeletion = () => {
         if (!deleteCode) return alert("Te rog introdu codul primit!");
         if (!window.confirm("ATENTIE! Actiunea este IREVERSIBILA. Continui?")) return;
@@ -62,12 +93,12 @@ const MyProfile = ({ user, onUpdateUser }) => {
             }).catch(() => alert("Eroare de conexiune."));
     };
 
+    // id === 1 is the super-admin; hide the danger zone to prevent accidental self-deletion
     const isAdmin = !isChild && user.id === 1;
 
     return (
         <div className="animate-in">
 
-            {/* HERO — acelasi gradient ca Dashboard */}
             <div className="db-hero" style={{marginBottom:'24px', alignItems:'center'}}>
                 <div className="db-hero-left" style={{display:'flex', alignItems:'center', gap:'20px'}}>
                     <div style={{
@@ -93,6 +124,7 @@ const MyProfile = ({ user, onUpdateUser }) => {
                         )}
                         <div style={{display:'flex', alignItems:'center', gap:'10px', flexWrap:'wrap'}}>
                             {isEditing ? (
+                                // Force lowercase, no spaces — must match the backend's username format
                                 <input className="login-input" value={formData.username||''} onChange={e=>setFormData({...formData,username:e.target.value.toLowerCase().replace(/\s/g,'')})} placeholder="username" style={{marginBottom:0, fontSize:'0.85rem', padding:'6px 12px', width:'160px'}}/>
                             ) : (
                                 <span style={{color:'rgba(255,255,255,0.6)', fontSize:'0.95rem'}}>@{user.username || 'fara_username'}</span>
@@ -113,7 +145,6 @@ const MyProfile = ({ user, onUpdateUser }) => {
                 </button>
             </div>
 
-            {/* STAT CARDS — doar la copii */}
             {isChild && (
                 <div className="db-stats" style={{marginBottom:'24px'}}>
                     <div className="db-stat-card db-stat-blue">
@@ -135,10 +166,8 @@ const MyProfile = ({ user, onUpdateUser }) => {
                 </div>
             )}
 
-            {/* GRID — 2 coloane, acelasi .profile-grid ca restul */}
             <div className="profile-grid">
 
-                {/* Date Personale */}
                 <div className="card">
                     <p className="db-section-title">Date Personale</p>
                     {!isChild ? (
@@ -202,7 +231,6 @@ const MyProfile = ({ user, onUpdateUser }) => {
                     )}
                 </div>
 
-                {/* Coloana dreapta */}
                 <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
                     {isChild && (
                         <div className="card">
@@ -250,7 +278,7 @@ const MyProfile = ({ user, onUpdateUser }) => {
 
             </div>
 
-            {/* DOSAR FEEDBACK — doar lideri */}
+            {/* Feedback accordion — leaders only */}
             {!isChild && (
                 <div className="card" style={{marginTop:'20px'}}>
                     <div

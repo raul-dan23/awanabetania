@@ -3,6 +3,15 @@ import { toast } from 'sonner';
 import { API_URL } from './config';
 import { useNfcBridge } from './hooks/useNfcBridge';
 
+/**
+ * PIN-protected admin panel. Gives access to three views:
+ *  - Leaders list with contact info, role badges, and decryptable passwords
+ *  - Children list with stats and equipment status
+ *  - NFC card management: associate/remove a physical card UID per child
+ *
+ * @param {Object} props
+ * @param {Object} props.currentUser - The logged-in user object (used for display only)
+ */
 const AdminDashboard = ({ currentUser }) => {
     const [isUnlocked, setIsUnlocked] = useState(false);
     const [pin, setPin] = useState('');
@@ -10,13 +19,14 @@ const AdminDashboard = ({ currentUser }) => {
     const [viewMode, setViewMode] = useState('LEADERS');
     const [searchTerm, setSearchTerm] = useState('');
     const [sortBy, setSortBy] = useState('name');
+    // Map of userId → plaintext password, populated on demand via decrypt endpoint
     const [visiblePasswords, setVisiblePasswords] = useState({});
 
-    // NFC state
     const [nfcAssigning, setNfcAssigning] = useState(null);
     const [nfcUidInput, setNfcUidInput] = useState('');
     const [nfcScanning, setNfcScanning] = useState(false);
 
+    // Auto-fill the UID input when the NFC bridge detects a card tap
     const nfcBridgeConnected = useNfcBridge((uid) => {
         if (nfcAssigning !== null) {
             setNfcUidInput(uid);
@@ -28,6 +38,10 @@ const AdminDashboard = ({ currentUser }) => {
         if (isUnlocked) fetchData();
     }, [isUnlocked]);
 
+    /**
+     * Loads the full user list (leaders + children) from the admin endpoint.
+     * Requires the PIN to be stored in state so subsequent mutation calls can reuse it.
+     */
     const fetchData = () => {
         fetch(`${API_URL}/admin/all-users`, {
             headers: { 'X-Admin-Pin': pin }
@@ -37,6 +51,9 @@ const AdminDashboard = ({ currentUser }) => {
             .catch(() => toast.error("Eroare la incarcarea datelor!"));
     };
 
+    /**
+     * Verifies the entered PIN against the server. On success, unlocks the dashboard.
+     */
     const handleUnlock = () => {
         if (!pin) return;
         fetch(`${API_URL}/admin/verify-pin`, {
@@ -51,6 +68,12 @@ const AdminDashboard = ({ currentUser }) => {
             .catch(() => { toast.error("Eroare conexiune server."); setPin(''); });
     };
 
+    /**
+     * Registers the given NFC UID for a child. The UID is uppercased before sending
+     * because the bridge always emits uppercase hex.
+     *
+     * @param {number} childId - The child's database ID
+     */
     const assignNfc = (childId) => {
         if (!nfcUidInput.trim()) { toast.error('Introdu UID-ul cardului.'); return; }
         fetch(`${API_URL}/admin/nfc-register`, {
@@ -63,6 +86,11 @@ const AdminDashboard = ({ currentUser }) => {
         .catch(err => toast.error(typeof err === 'string' ? err : 'Eroare.'));
     };
 
+    /**
+     * Removes the NFC card association for a child.
+     *
+     * @param {number} childId
+     */
     const removeNfc = (childId) => {
         if (!window.confirm('Sigur elimini cardul acestui copil?')) return;
         fetch(`${API_URL}/admin/nfc-remove/${childId}`, {
@@ -74,6 +102,10 @@ const AdminDashboard = ({ currentUser }) => {
         .catch(() => toast.error('Eroare.'));
     };
 
+    /**
+     * Reads an NFC card UID using the Web NFC API (Chrome on Android only).
+     * Falls back with a clear error message when the environment doesn't support it.
+     */
     const startNfcScan = async () => {
         if (!('NDEFReader' in window)) {
             toast.error('Web NFC indisponibil. Conditii: Chrome 89+ pe Android, site pe HTTPS, Chrome deschis direct (nu din WhatsApp/Gmail).');
@@ -83,6 +115,7 @@ const AdminDashboard = ({ currentUser }) => {
             setNfcScanning(true);
             const ndef = new window.NDEFReader();
             await ndef.scan();
+            // { once: true } so we don't accumulate listeners on repeated scans
             ndef.addEventListener('reading', ({ serialNumber }) => {
                 const uid = serialNumber.replace(/:/g, '').toUpperCase();
                 setNfcUidInput(uid);
@@ -95,6 +128,13 @@ const AdminDashboard = ({ currentUser }) => {
         }
     };
 
+    /**
+     * Toggles the plaintext password for a user. First call decrypts via the
+     * server; subsequent calls just hide/show the cached value.
+     *
+     * @param {number} id - User ID used as the key in `visiblePasswords`
+     * @param {string} encryptedPass - The encrypted password string from the API
+     */
     const revealPassword = (id, encryptedPass) => {
         if (visiblePasswords[id]) {
             const nv = { ...visiblePasswords };
@@ -112,6 +152,11 @@ const AdminDashboard = ({ currentUser }) => {
             .catch(() => toast.error("Eroare decriptare."));
     };
 
+    /**
+     * Returns the filtered and sorted list for the current view mode (LEADERS or CHILDREN).
+     *
+     * @returns {Array} Filtered and sorted user objects
+     */
     const getList = () => {
         const list = viewMode === 'LEADERS' ? data.leaders : data.children;
         let filtered = searchTerm
@@ -124,9 +169,9 @@ const AdminDashboard = ({ currentUser }) => {
             if (sortBy === 'rating') filtered = [...filtered].sort((a,b) => (b.rating||0) - (a.rating||0));
             else filtered = [...filtered].sort((a,b) => a.name.localeCompare(b.name));
         } else {
-            if (sortBy === 'points')     filtered = [...filtered].sort((a,b) => (b.seasonPoints||0) - (a.seasonPoints||0));
+            if (sortBy === 'points')          filtered = [...filtered].sort((a,b) => (b.seasonPoints||0) - (a.seasonPoints||0));
             else if (sortBy === 'attendance') filtered = [...filtered].sort((a,b) => (b.totalAttendance||0) - (a.totalAttendance||0));
-            else filtered = [...filtered].sort((a,b) => a.name.localeCompare(b.name));
+            else                              filtered = [...filtered].sort((a,b) => a.name.localeCompare(b.name));
         }
         return filtered;
     };
@@ -185,7 +230,6 @@ const AdminDashboard = ({ currentUser }) => {
     return (
         <div className="animate-in" style={{maxWidth:'800px', margin:'0 auto', padding:'10px', paddingBottom:'100px'}}>
 
-            {/* Hero */}
             <div className="db-hero" style={{marginBottom:'24px', alignItems:'center'}}>
                 <div className="db-hero-left">
                     <span className="db-greeting">Sistem</span>
@@ -199,7 +243,7 @@ const AdminDashboard = ({ currentUser }) => {
                 }}>Iesi</button>
             </div>
 
-            {/* Tabs Lideri / Copii / NFC */}
+            {/* View switcher: Leaders / Children / NFC */}
             <div style={{display:'flex', gap:'8px', marginBottom:'14px', background:'#f4f7fe', padding:'4px', borderRadius:'14px'}}>
                 <button onClick={() => { setViewMode('LEADERS'); setSortBy('name'); }} style={{
                     flex:1, padding:'10px', border:'none', cursor:'pointer', borderRadius:'10px',
@@ -224,10 +268,10 @@ const AdminDashboard = ({ currentUser }) => {
                 }}>Carduri NFC</button>
             </div>
 
-            {/* ── VIEW NFC ── */}
+            {/* ── NFC CARD MANAGEMENT VIEW ── */}
             {viewMode === 'NFC' && (
                 <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
-                    {/* Status bridge */}
+                    {/* Bridge connection indicator */}
                     <div style={{display:'flex', alignItems:'center', gap:'8px', padding:'10px 14px', borderRadius:'10px', background: nfcBridgeConnected ? '#f0fdf4' : '#f8fafc', border:`1px solid ${nfcBridgeConnected ? '#86efac' : '#e2e8f0'}`, marginBottom:'4px'}}>
                         <div style={{width:'8px', height:'8px', borderRadius:'50%', background: nfcBridgeConnected ? '#16a34a' : '#94a3b8', flexShrink:0}}/>
                         <span style={{fontSize:'0.82rem', fontWeight:'700', color: nfcBridgeConnected ? '#15803d' : '#64748b'}}>
@@ -241,6 +285,7 @@ const AdminDashboard = ({ currentUser }) => {
                         onChange={e => setSearchTerm(e.target.value)}
                         style={{marginBottom:'6px'}}
                     />
+                    {/* Children sorted: unassigned first, then alphabetically */}
                     {data.children
                         .filter(c => !searchTerm || `${c.name} ${c.surname}`.toLowerCase().includes(searchTerm.toLowerCase()))
                         .sort((a, b) => (a.nfcUid ? 1 : 0) - (b.nfcUid ? 1 : 0) || a.name.localeCompare(b.name))
@@ -278,7 +323,7 @@ const AdminDashboard = ({ currentUser }) => {
                                         style={{flex:1, minWidth:'140px', padding:'9px 13px', borderRadius:'9px', border:'2px solid #e9d5ff', fontFamily:'monospace', fontWeight:'700', outline:'none', fontSize:'0.9rem'}}
                                         autoFocus
                                     />
-                                                    <button onClick={startNfcScan} disabled={nfcScanning} style={{padding:'9px 14px', border:'1px solid #e9d5ff', borderRadius:'9px', background:'white', cursor:'pointer', fontWeight:'700', fontSize:'0.82rem', color:'#7c3aed', opacity: nfcScanning ? 0.6 : 1}}>
+                                    <button onClick={startNfcScan} disabled={nfcScanning} style={{padding:'9px 14px', border:'1px solid #e9d5ff', borderRadius:'9px', background:'white', cursor:'pointer', fontWeight:'700', fontSize:'0.82rem', color:'#7c3aed', opacity: nfcScanning ? 0.6 : 1}}>
                                         {nfcScanning ? 'Scanează...' : 'Scan NFC'}
                                     </button>
                                     <button onClick={() => assignNfc(c.id)} style={{padding:'9px 16px', border:'none', borderRadius:'9px', background:'#7c3aed', color:'white', fontWeight:'800', cursor:'pointer', fontSize:'0.85rem'}}>
@@ -294,7 +339,7 @@ const AdminDashboard = ({ currentUser }) => {
                 </div>
             )}
 
-            {/* Search (Lideri / Copii) */}
+            {/* Search bar — hidden in NFC view which has its own filter */}
             {viewMode !== 'NFC' && <input
                 className="login-input"
                 placeholder={`Cauta ${viewMode === 'LEADERS' ? 'lider' : 'copil'} dupa nume...`}
@@ -303,7 +348,7 @@ const AdminDashboard = ({ currentUser }) => {
                 style={{marginBottom:'10px'}}
             />}
 
-            {/* Sort pills (Lideri / Copii) */}
+            {/* Sort pills */}
             {viewMode !== 'NFC' && (
                 <div style={{display:'flex', gap:'6px', marginBottom:'20px', background:'#f4f7fe', padding:'4px', borderRadius:'14px'}}>
                     {sortOpts.map(opt => (
@@ -318,7 +363,7 @@ const AdminDashboard = ({ currentUser }) => {
                 </div>
             )}
 
-            {/* Cards (Lideri / Copii) */}
+            {/* User cards (Leaders / Children views) */}
             {viewMode !== 'NFC' && <div style={{display:'flex', flexDirection:'column', gap:'14px'}}>
                 {displayList.map(user => {
                     const initials = `${user.name?.charAt(0)||''}${user.surname?.charAt(0)||''}`;
@@ -334,7 +379,6 @@ const AdminDashboard = ({ currentUser }) => {
                             border:'1px solid #e2e8f0',
                             borderLeft:`4px solid ${accentLeft}`
                         }}>
-                            {/* Header card */}
                             <div style={{padding:'16px 20px', borderBottom:'1px solid #f1f5f9', display:'flex', alignItems:'center', gap:'12px'}}>
                                 <div style={{
                                     width:'44px', height:'44px', borderRadius:'12px', flexShrink:0,
@@ -362,10 +406,8 @@ const AdminDashboard = ({ currentUser }) => {
                                 </div>
                             </div>
 
-                            {/* Body card */}
                             <div style={{padding:'14px 20px', display:'flex', flexDirection:'column', gap:'7px'}}>
 
-                                {/* Username */}
                                 {user.username && (
                                     <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 11px', background:'#f8fafc', borderRadius:'8px'}}>
                                         <span style={{fontSize:'0.78rem', color:'#64748b', fontWeight:'600'}}>Username</span>
@@ -373,7 +415,6 @@ const AdminDashboard = ({ currentUser }) => {
                                     </div>
                                 )}
 
-                                {/* LIDER: telefon + rating */}
                                 {isLeaderView && (
                                     <>
                                         {user.phoneNumber && (
@@ -401,7 +442,6 @@ const AdminDashboard = ({ currentUser }) => {
                                     </>
                                 )}
 
-                                {/* COPIL: parinte + stats + premii */}
                                 {!isLeaderView && (
                                     <>
                                         <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 11px', background:'#f8fafc', borderRadius:'8px'}}>
@@ -437,7 +477,7 @@ const AdminDashboard = ({ currentUser }) => {
                                     </>
                                 )}
 
-                                {/* Parola */}
+                                {/* Password reveal — cached client-side after first decrypt */}
                                 <div style={{marginTop:'4px', background:'#f8fafc', padding:'10px 14px', borderRadius:'10px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px'}}>
                                     <span style={{fontFamily:'monospace', fontSize:'1rem', fontWeight:'800', color: visiblePasswords[user.id] ? '#dc2626' : '#cbd5e1', letterSpacing: visiblePasswords[user.id] ? 'normal' : '0.15em'}}>
                                         {visiblePasswords[user.id] ? visiblePasswords[user.id] : '••••••••'}

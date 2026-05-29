@@ -2,6 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config';
 import StickerMap from './StickerMap';
 
+/**
+ * Browser for all children's sticker albums.
+ *
+ * List view: grid of children cards showing progress bar and sticker count.
+ * Supports name search. Clicking a card opens the child's StickerMap.
+ *
+ * Detail view: renders StickerMap with the current leader user, enabling
+ * unlock confirmation. After unlock the child data is refreshed in place.
+ *
+ * @param {Object} props
+ * @param {Object} props.user - Currently logged-in user; passed to StickerMap for unlock rights.
+ */
 const StickersHub = ({ user }) => {
     const [children, setChildren] = useState([]);
     const [totalStickers, setTotalStickers] = useState(0);

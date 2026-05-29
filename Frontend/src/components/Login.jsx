@@ -2,6 +2,17 @@ import React, { useState } from 'react';
 import { API_URL } from '../config';
 import AwanaLogo from '../AwanaLogo';
 
+/**
+ * Authentication screen. Supports three flows:
+ *  1. Normal login (child / leader / director role selector + credentials)
+ *  2. Account registration link
+ *  3. Guest arbiter entry for Olimpiada (no account required — just session code + name)
+ *
+ * @param {Object} props
+ * @param {Function} props.onLogin - Called with the user object on successful login
+ * @param {Function} props.onSwitchToRegister - Called when the user wants to register
+ * @param {Function} props.onGuestArbiter - Called with `{ code, name, sessionName }` for guest arbiters
+ */
 const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
     const [form, setForm] = useState({ username:'', pass:'', role: 'LEADER' });
     const [err, setErr] = useState('');
@@ -11,6 +22,10 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
     const [guestErr, setGuestErr] = useState('');
     const [guestLoading, setGuestLoading] = useState(false);
 
+    /**
+     * Submits login credentials with a 5-second timeout to avoid hanging on
+     * an unresponsive server.
+     */
     const doLogin = (e) => {
         e.preventDefault();
         setLoading(true);
@@ -31,6 +46,7 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
                     if(r.ok) onLogin(data);
                     else setErr(data.message || 'Date gresite!');
                 } else {
+                    // Some error responses come back as plain text
                     setErr(await r.text() || 'Date gresite!');
                 }
             })
@@ -42,6 +58,10 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
             .finally(() => setLoading(false));
     };
 
+    /**
+     * Validates the Olimpiada session code before granting guest arbiter access.
+     * Rejects closed sessions with a user-visible error.
+     */
     const enterAsGuest = async (e) => {
         e.preventDefault();
         if (!guestForm.code.trim() || !guestForm.name.trim()) return;
@@ -71,7 +91,7 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
 
     return (
         <div className="auth-wrap">
-            {/* STANGA — branding */}
+            {/* Left branding panel — decorative, hidden on mobile */}
             <div className="auth-left">
                 <div className="auth-left-circle auth-left-circle-1" />
                 <div className="auth-left-circle auth-left-circle-2" />
@@ -88,7 +108,7 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
                 </div>
             </div>
 
-            {/* DREAPTA — formular */}
+            {/* Right panel — login form */}
             <div className="auth-right">
                 <div className="auth-form-box">
                     <div className="auth-mobile-logo"><AwanaLogo width="130px" /></div>
@@ -114,6 +134,7 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
                                 placeholder="Nume utilizator"
                                 className="auth-input"
                                 value={form.username}
+                                // Strip spaces and force lowercase to match what the backend stores
                                 onChange={e => setForm({...form, username: e.target.value.toLowerCase().replace(/\s/g,'')})}
                                 required
                                 autoComplete="username"
@@ -143,6 +164,7 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
                         Nu ai cont? <strong>Inregistreaza-te</strong>
                     </p>
 
+                    {/* Olimpiada guest entry — collapses into a form when activated */}
                     <div style={{ marginTop: 16, borderTop: '1px solid #e5e7eb', paddingTop: 14 }}>
                         {!guestMode ? (
                             <button type="button" onClick={() => setGuestMode(true)} style={{

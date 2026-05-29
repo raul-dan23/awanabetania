@@ -1,16 +1,22 @@
 import { useState, useEffect, useRef } from 'react';
 
 /**
- * Hook care se conecteaza la NFC Bridge-ul local (ws://localhost:7000).
- * Reconectare automata la 3s daca se pierde conexiunea.
+ * Manages the WebSocket connection to the local NFC bridge JAR.
+ * Reconnects automatically every 3 seconds on disconnect.
  *
- * @param {function} onUid - callback apelat cu UID-ul (string) cand un card e detectat
- * @returns {boolean} connected - true daca bridge-ul e pornit si conectat
+ * The bridge sends `{"uid":"A1B2C3D4"}` whenever a card is tapped on the
+ * PC/SC reader. The hook fires `onUid` with the UID string and keeps the
+ * callback in a ref so callers can pass a new function on every render
+ * without triggering a reconnect.
+ *
+ * @param {Function} onUid - Called with the UID string each time a card is read
+ * @returns {boolean} connected - true when the bridge WebSocket is open
  */
 export function useNfcBridge(onUid) {
     const [connected, setConnected] = useState(false);
     const wsRef = useRef(null);
     const reconnectRef = useRef(null);
+    // Keep the callback in a ref to avoid restarting the socket on every render
     const onUidRef = useRef(onUid);
 
     useEffect(() => { onUidRef.current = onUid; }, [onUid]);
@@ -28,15 +34,20 @@ export function useNfcBridge(onUid) {
                     reconnectRef.current = setTimeout(connect, 3000);
                 };
 
+                // onerror always fires before onclose, so we just track state here
                 ws.onerror = () => setConnected(false);
 
                 ws.onmessage = (e) => {
                     try {
                         const data = JSON.parse(e.data);
                         if (data.uid) onUidRef.current(data.uid);
-                    } catch {}
+                    } catch {
+                        // Ignore non-JSON or unexpected messages from the bridge
+                    }
                 };
-            } catch {}
+            } catch {
+                // WebSocket constructor can throw if the URL is invalid; safe to ignore
+            }
         };
 
         connect();
