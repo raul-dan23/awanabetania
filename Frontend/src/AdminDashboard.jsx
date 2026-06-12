@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { API_URL } from './config';
-import { useNfcBridge } from './hooks/useNfcBridge';
 
 /**
- * PIN-protected admin panel. Gives access to three views:
+ * PIN-protected admin panel. Gives access to two views:
  *  - Leaders list with contact info, role badges, and decryptable passwords
  *  - Children list with stats and equipment status
- *  - NFC card management: associate/remove a physical card UID per child
+ *
+ * NFC card management lives in the Magazin → Carduri tab (director-only).
  *
  * @param {Object} props
  * @param {Object} props.currentUser - The logged-in user object (used for display only)
@@ -21,18 +21,6 @@ const AdminDashboard = ({ currentUser }) => {
     const [sortBy, setSortBy] = useState('name');
     // Map of userId → plaintext password, populated on demand via decrypt endpoint
     const [visiblePasswords, setVisiblePasswords] = useState({});
-
-    const [nfcAssigning, setNfcAssigning] = useState(null);
-    const [nfcUidInput, setNfcUidInput] = useState('');
-    const [nfcScanning, setNfcScanning] = useState(false);
-
-    // Auto-fill the UID input when the NFC bridge detects a card tap
-    const nfcBridgeConnected = useNfcBridge((uid) => {
-        if (nfcAssigning !== null) {
-            setNfcUidInput(uid);
-            toast.success('Card detectat: ' + uid);
-        }
-    });
 
     useEffect(() => {
         if (isUnlocked) fetchData();
@@ -66,66 +54,6 @@ const AdminDashboard = ({ currentUser }) => {
                 else { toast.error("PIN Incorect!"); setPin(''); }
             })
             .catch(() => { toast.error("Eroare conexiune server."); setPin(''); });
-    };
-
-    /**
-     * Registers the given NFC UID for a child. The UID is uppercased before sending
-     * because the bridge always emits uppercase hex.
-     *
-     * @param {number} childId - The child's database ID
-     */
-    const assignNfc = (childId) => {
-        if (!nfcUidInput.trim()) { toast.error('Introdu UID-ul cardului.'); return; }
-        fetch(`${API_URL}/admin/nfc-register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': pin },
-            body: JSON.stringify({ childId, uid: nfcUidInput.trim().toUpperCase() })
-        })
-        .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t)))
-        .then(() => { toast.success('Card asociat!'); setNfcAssigning(null); setNfcUidInput(''); fetchData(); })
-        .catch(err => toast.error(typeof err === 'string' ? err : 'Eroare.'));
-    };
-
-    /**
-     * Removes the NFC card association for a child.
-     *
-     * @param {number} childId
-     */
-    const removeNfc = (childId) => {
-        if (!window.confirm('Sigur elimini cardul acestui copil?')) return;
-        fetch(`${API_URL}/admin/nfc-remove/${childId}`, {
-            method: 'DELETE',
-            headers: { 'X-Admin-Pin': pin }
-        })
-        .then(r => r.ok ? r.json() : Promise.reject())
-        .then(() => { toast.success('Card eliminat.'); fetchData(); })
-        .catch(() => toast.error('Eroare.'));
-    };
-
-    /**
-     * Reads an NFC card UID using the Web NFC API (Chrome on Android only).
-     * Falls back with a clear error message when the environment doesn't support it.
-     */
-    const startNfcScan = async () => {
-        if (!('NDEFReader' in window)) {
-            toast.error('Web NFC indisponibil. Conditii: Chrome 89+ pe Android, site pe HTTPS, Chrome deschis direct (nu din WhatsApp/Gmail).');
-            return;
-        }
-        try {
-            setNfcScanning(true);
-            const ndef = new window.NDEFReader();
-            await ndef.scan();
-            // { once: true } so we don't accumulate listeners on repeated scans
-            ndef.addEventListener('reading', ({ serialNumber }) => {
-                const uid = serialNumber.replace(/:/g, '').toUpperCase();
-                setNfcUidInput(uid);
-                setNfcScanning(false);
-                toast.success('Card detectat: ' + uid);
-            }, { once: true });
-        } catch (err) {
-            setNfcScanning(false);
-            toast.error('Eroare NFC: ' + (err.message || 'permisiune refuzata sau NFC indisponibil'));
-        }
     };
 
     /**
@@ -243,7 +171,7 @@ const AdminDashboard = ({ currentUser }) => {
                 }}>Iesi</button>
             </div>
 
-            {/* View switcher: Leaders / Children / NFC */}
+            {/* View switcher: Leaders / Children */}
             <div style={{display:'flex', gap:'8px', marginBottom:'14px', background:'#f4f7fe', padding:'4px', borderRadius:'14px'}}>
                 <button onClick={() => { setViewMode('LEADERS'); setSortBy('name'); }} style={{
                     flex:1, padding:'10px', border:'none', cursor:'pointer', borderRadius:'10px',
@@ -259,97 +187,19 @@ const AdminDashboard = ({ currentUser }) => {
                     color: viewMode==='CHILDREN' ? '#16a34a' : '#64748b',
                     boxShadow: viewMode==='CHILDREN' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
                 }}>Copii ({data.children.length})</button>
-                <button onClick={() => { setViewMode('NFC'); setSearchTerm(''); }} style={{
-                    flex:1, padding:'10px', border:'none', cursor:'pointer', borderRadius:'10px',
-                    fontWeight:'800', fontSize:'0.85rem', transition:'all 0.18s',
-                    background: viewMode==='NFC' ? 'white' : 'transparent',
-                    color: viewMode==='NFC' ? '#7c3aed' : '#64748b',
-                    boxShadow: viewMode==='NFC' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
-                }}>Carduri NFC</button>
             </div>
 
-            {/* ── NFC CARD MANAGEMENT VIEW ── */}
-            {viewMode === 'NFC' && (
-                <div style={{display:'flex', flexDirection:'column', gap:'10px'}}>
-                    {/* Bridge connection indicator */}
-                    <div style={{display:'flex', alignItems:'center', gap:'8px', padding:'10px 14px', borderRadius:'10px', background: nfcBridgeConnected ? '#f0fdf4' : '#f8fafc', border:`1px solid ${nfcBridgeConnected ? '#86efac' : '#e2e8f0'}`, marginBottom:'4px'}}>
-                        <div style={{width:'8px', height:'8px', borderRadius:'50%', background: nfcBridgeConnected ? '#16a34a' : '#94a3b8', flexShrink:0}}/>
-                        <span style={{fontSize:'0.82rem', fontWeight:'700', color: nfcBridgeConnected ? '#15803d' : '#64748b'}}>
-                            {nfcBridgeConnected ? 'NFC Bridge conectat — pune cardul pe cititor' : 'NFC Bridge deconectat — porneste nfc-bridge.jar'}
-                        </span>
-                    </div>
-                    <input
-                        className="login-input"
-                        placeholder="Caută copil după nume..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        style={{marginBottom:'6px'}}
-                    />
-                    {/* Children sorted: unassigned first, then alphabetically */}
-                    {data.children
-                        .filter(c => !searchTerm || `${c.name} ${c.surname}`.toLowerCase().includes(searchTerm.toLowerCase()))
-                        .sort((a, b) => (a.nfcUid ? 1 : 0) - (b.nfcUid ? 1 : 0) || a.name.localeCompare(b.name))
-                        .map(c => (
-                        <div key={c.id} style={{background:'white', borderRadius:'14px', overflow:'hidden', boxShadow:'0 2px 8px rgba(0,0,0,0.06)', border:'1px solid #e2e8f0', borderLeft:`4px solid ${c.nfcUid ? '#7c3aed' : '#e2e8f0'}`}}>
-                            <div style={{padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px'}}>
-                                <div style={{flex:1, minWidth:0}}>
-                                    <div style={{fontWeight:'900', color:'#1e293b'}}>{c.name} {c.surname}</div>
-                                    <div style={{fontSize:'0.78rem', color:'#64748b', marginTop:'2px'}}>
-                                        {c.nfcUid
-                                            ? <span style={{fontFamily:'monospace', color:'#7c3aed', fontWeight:'800'}}>{c.nfcUid}</span>
-                                            : <span style={{color:'#94a3b8'}}>Fără card</span>
-                                        }
-                                        {' · '}<span style={{color:'#f59e0b', fontWeight:'700'}}>{c.seasonPoints || 0} pct</span>
-                                    </div>
-                                </div>
-                                <div style={{display:'flex', gap:'6px', flexShrink:0}}>
-                                    {c.nfcUid && (
-                                        <button onClick={() => removeNfc(c.id)} style={{padding:'6px 11px', border:'1px solid #fecaca', borderRadius:'8px', background:'#fff5f5', cursor:'pointer', fontWeight:'700', fontSize:'0.78rem', color:'#dc2626'}}>
-                                            Elimină
-                                        </button>
-                                    )}
-                                    <button onClick={() => { setNfcAssigning(nfcAssigning === c.id ? null : c.id); setNfcUidInput(''); }} style={{padding:'6px 11px', border:'1px solid #e9d5ff', borderRadius:'8px', background:nfcAssigning === c.id ? '#f5f3ff' : 'white', cursor:'pointer', fontWeight:'700', fontSize:'0.78rem', color:'#7c3aed'}}>
-                                        {c.nfcUid ? 'Schimbă' : 'Asociază'}
-                                    </button>
-                                </div>
-                            </div>
-                            {nfcAssigning === c.id && (
-                                <div style={{padding:'12px 18px', borderTop:'1px solid #f1f5f9', background:'#faf5ff', display:'flex', gap:'8px', flexWrap:'wrap', alignItems:'center'}}>
-                                    <input
-                                        placeholder="UID card (ex: A1B2C3D4)"
-                                        value={nfcUidInput}
-                                        onChange={e => setNfcUidInput(e.target.value.toUpperCase())}
-                                        onKeyDown={e => e.key === 'Enter' && assignNfc(c.id)}
-                                        style={{flex:1, minWidth:'140px', padding:'9px 13px', borderRadius:'9px', border:'2px solid #e9d5ff', fontFamily:'monospace', fontWeight:'700', outline:'none', fontSize:'0.9rem'}}
-                                        autoFocus
-                                    />
-                                    <button onClick={startNfcScan} disabled={nfcScanning} style={{padding:'9px 14px', border:'1px solid #e9d5ff', borderRadius:'9px', background:'white', cursor:'pointer', fontWeight:'700', fontSize:'0.82rem', color:'#7c3aed', opacity: nfcScanning ? 0.6 : 1}}>
-                                        {nfcScanning ? 'Scanează...' : 'Scan NFC'}
-                                    </button>
-                                    <button onClick={() => assignNfc(c.id)} style={{padding:'9px 16px', border:'none', borderRadius:'9px', background:'#7c3aed', color:'white', fontWeight:'800', cursor:'pointer', fontSize:'0.85rem'}}>
-                                        Salvează
-                                    </button>
-                                    <button onClick={() => setNfcAssigning(null)} style={{padding:'9px 13px', border:'1px solid #e2e8f0', borderRadius:'9px', background:'white', cursor:'pointer', fontWeight:'700', fontSize:'0.82rem', color:'#64748b'}}>
-                                        Anulează
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* Search bar — hidden in NFC view which has its own filter */}
-            {viewMode !== 'NFC' && <input
+            {/* Search bar */}
+            <input
                 className="login-input"
                 placeholder={`Cauta ${viewMode === 'LEADERS' ? 'lider' : 'copil'} dupa nume...`}
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 style={{marginBottom:'10px'}}
-            />}
+            />
 
             {/* Sort pills */}
-            {viewMode !== 'NFC' && (
+            {(
                 <div style={{display:'flex', gap:'6px', marginBottom:'20px', background:'#f4f7fe', padding:'4px', borderRadius:'14px'}}>
                     {sortOpts.map(opt => (
                         <button key={opt.key} onClick={() => setSortBy(opt.key)} style={{
@@ -364,7 +214,7 @@ const AdminDashboard = ({ currentUser }) => {
             )}
 
             {/* User cards (Leaders / Children views) */}
-            {viewMode !== 'NFC' && <div style={{display:'flex', flexDirection:'column', gap:'14px'}}>
+            {<div style={{display:'flex', flexDirection:'column', gap:'14px'}}>
                 {displayList.map(user => {
                     const initials = `${user.name?.charAt(0)||''}${user.surname?.charAt(0)||''}`;
                     const isLeaderView = viewMode === 'LEADERS';
