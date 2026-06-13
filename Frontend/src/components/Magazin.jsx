@@ -24,6 +24,11 @@ const Magazin = ({ user }) => {
     const isDirector = user?.role === 'DIRECTOR' || user?.role === 'COORDONATOR';
     const [tab, setTab] = useState('bon');
 
+    // Shop currency drops the last digit of a child's real points: 100000 → 10000.
+    // Real points stay canonical (in the DB and in bons); we only divide for display,
+    // and multiply a leader's typed shop price by 10 when storing a bon.
+    const toShop = (v) => Math.floor((v || 0) / 10);
+
     // ── COPII ────────────────────────────────────────────────────
     const [children, setChildren] = useState([]);
 
@@ -119,19 +124,22 @@ const Magazin = ({ user }) => {
         const typed = parseInt(calcAmount, 10);
         if (typed > 0) lines = [...bonLines, { name: calcLabel.trim() || 'Cumpărături', pointPrice: typed, qty: 1 }];
         if (lines.length === 0) { toast.error('Adaugă cel puțin o sumă.'); return; }
-        const total = lines.reduce((s, x) => s + x.pointPrice, 0);
+        // lines hold shop prices; store the bon in real points (×10) so the
+        // backend deduction stays correct without any backend change.
+        const realLines = lines.map(l => ({ ...l, pointPrice: l.pointPrice * 10 }));
+        const realTotal = realLines.reduce((s, x) => s + x.pointPrice, 0);
         fetch(`${API_URL}/bons`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 childId: selectedChild.id,
                 leaderName: user.name + ' ' + (user.surname || ''),
-                items: JSON.stringify(lines),
-                totalPoints: total
+                items: JSON.stringify(realLines),
+                totalPoints: realTotal
             })
         })
         .then(r => r.ok ? r.json() : Promise.reject())
-        .then(() => { toast.success(`Bon trimis! Total: ${total} puncte`); resetBon(); })
+        .then(() => { toast.success(`Bon trimis! Total: ${toShop(realTotal)} pct`); resetBon(); })
         .catch(() => toast.error('Eroare la creare bon.'));
     };
 
@@ -144,7 +152,7 @@ const Magazin = ({ user }) => {
         setPendingBons(b => b.filter(x => x.id !== id));
         fetch(`${API_URL}/bons/${id}/approve`, { method: 'POST' })
             .then(r => r.ok ? r.json() : r.text().then(t => Promise.reject(t)))
-            .then(data => { toast.success(`Aprobat! Sold nou: ${data.remainingPoints} puncte`); fetchPendingBons(); fetchChildren(); })
+            .then(data => { toast.success(`Aprobat! Sold nou: ${toShop(data.remainingPoints)} pct`); fetchPendingBons(); fetchChildren(); })
             .catch(err => { toast.error(typeof err === 'string' ? err : 'Eroare la aprobare.'); fetchPendingBons(); });
     };
 
@@ -158,7 +166,7 @@ const Magazin = ({ user }) => {
         if (bons.length === 0) return;
         const total = bons.reduce((s, b) => s + b.totalPoints, 0);
         if (total > balance) {
-            toast.error(`Total ${total} pct depășește soldul (${balance}). Nu se poate aproba.`);
+            toast.error(`Total ${toShop(total)} pct depășește soldul (${toShop(balance)}). Nu se poate aproba.`);
             return;
         }
         setApprovingAll(true);
@@ -172,7 +180,7 @@ const Magazin = ({ user }) => {
             } catch { /* keep going; refetch reconciles below */ }
         }
         setApprovingAll(false);
-        toast.success(`${ok}/${bons.length} bonuri aprobate · sold nou: ${lastBalance} pct`);
+        toast.success(`${ok}/${bons.length} bonuri aprobate · sold nou: ${toShop(lastBalance)} pct`);
         setNfcChild(null);
         fetchPendingBons();
         fetchChildren();
@@ -317,7 +325,7 @@ const Magazin = ({ user }) => {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)', borderRadius: '12px', border: '2px solid #86efac' }}>
                                 <div>
                                     <div style={{ fontWeight: '900', color: '#15803d', fontSize: '1.1rem' }}>{selectedChild.name} {selectedChild.surname}</div>
-                                    <div style={{ color: '#16a34a', fontWeight: '700', fontSize: '0.88rem', marginTop: '2px' }}>{selectedChild.seasonPoints || 0} puncte disponibile</div>
+                                    <div style={{ color: '#16a34a', fontWeight: '700', fontSize: '0.88rem', marginTop: '2px' }}>{toShop(selectedChild.seasonPoints)} puncte disponibile</div>
                                 </div>
                                 <button onClick={resetBon} style={{ padding: '8px 14px', border: '1px solid #86efac', borderRadius: '8px', background: 'white', cursor: 'pointer', fontWeight: '700', fontSize: '0.8rem', color: '#15803d' }}>
                                     Schimbă
@@ -342,7 +350,7 @@ const Magazin = ({ user }) => {
                                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                                             }}>
                                                 <span style={{ fontWeight: '700', color: '#1e293b' }}>{c.name} {c.surname}</span>
-                                                <span style={{ fontWeight: '800', color: '#f59e0b', fontSize: '0.85rem', flexShrink: 0, marginLeft: '8px' }}>{c.seasonPoints || 0} pct</span>
+                                                <span style={{ fontWeight: '800', color: '#f59e0b', fontSize: '0.85rem', flexShrink: 0, marginLeft: '8px' }}>{toShop(c.seasonPoints)} pct</span>
                                             </button>
                                         ))}
                                     </div>
@@ -414,9 +422,9 @@ const Magazin = ({ user }) => {
                                     <div>
                                         <div style={{ color: '#94a3b8', fontWeight: '700', fontSize: '0.72rem', textTransform: 'uppercase' }}>Total</div>
                                         <div style={{ fontWeight: '900', fontSize: '1.6rem', color: '#4318ff', lineHeight: 1.1 }}>{bonTotal} <span style={{ fontSize: '0.9rem' }}>pct</span></div>
-                                        {bonTotal > (selectedChild.seasonPoints || 0) && (
+                                        {bonTotal > toShop(selectedChild.seasonPoints) && (
                                             <div style={{ color: '#dc2626', fontWeight: '700', fontSize: '0.75rem', marginTop: '2px' }}>
-                                                Depășește soldul ({selectedChild.seasonPoints || 0} disponibile)
+                                                Depășește soldul ({toShop(selectedChild.seasonPoints)} disponibile)
                                             </div>
                                         )}
                                     </div>
@@ -475,10 +483,10 @@ const Magazin = ({ user }) => {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
                                     <div>
                                         <div style={{ fontWeight: '900', color: '#15803d', fontSize: '1.15rem' }}>{nfcChild.name} {nfcChild.surname}</div>
-                                        <div style={{ fontSize: '0.82rem', color: '#16a34a', fontWeight: '700', marginTop: '2px' }}>{balance} puncte disponibile</div>
+                                        <div style={{ fontSize: '0.82rem', color: '#16a34a', fontWeight: '700', marginTop: '2px' }}>{toShop(balance)} puncte disponibile</div>
                                     </div>
                                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                        <div style={{ fontWeight: '900', color: '#15803d', fontSize: '1.5rem', lineHeight: 1 }}>{total}</div>
+                                        <div style={{ fontWeight: '900', color: '#15803d', fontSize: '1.5rem', lineHeight: 1 }}>{toShop(total)}</div>
                                         <div style={{ fontSize: '0.68rem', color: '#16a34a', fontWeight: '800' }}>TOTAL DE PLATĂ</div>
                                     </div>
                                 </div>
@@ -497,10 +505,10 @@ const Magazin = ({ user }) => {
                                                 background: (approvingAll || overBalance) ? '#cbd5e1' : 'linear-gradient(135deg, #16a34a, #4ade80)',
                                                 color: 'white', fontWeight: '900', cursor: (approvingAll || overBalance) ? 'not-allowed' : 'pointer', fontSize: '1.05rem'
                                             }}>
-                                            {approvingAll ? 'Se aprobă...' : `Aprobă tot (${childBons.length} ${childBons.length === 1 ? 'bon' : 'bonuri'}) → −${total} pct`}
+                                            {approvingAll ? 'Se aprobă...' : `Aprobă tot (${childBons.length} ${childBons.length === 1 ? 'bon' : 'bonuri'}) → −${toShop(total)} pct`}
                                         </button>
                                         <div style={{ textAlign: 'center', marginTop: '6px', fontSize: '0.78rem', color: '#16a34a', fontWeight: '700' }}>
-                                            Sold după aprobare: {overBalance ? '—' : balance - total} pct
+                                            Sold după aprobare: {overBalance ? '—' : toShop(balance - total)} pct
                                         </div>
                                     </>
                                 ) : (
@@ -534,7 +542,7 @@ const Magazin = ({ user }) => {
                                                 </div>
                                             </div>
                                             <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '10px' }}>
-                                                <div style={{ fontWeight: '900', color: '#f59e0b', fontSize: '1.4rem', lineHeight: 1 }}>{bon.totalPoints}</div>
+                                                <div style={{ fontWeight: '900', color: '#f59e0b', fontSize: '1.4rem', lineHeight: 1 }}>{toShop(bon.totalPoints)}</div>
                                                 <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: '700' }}>PUNCTE</div>
                                             </div>
                                         </div>
@@ -542,7 +550,7 @@ const Magazin = ({ user }) => {
                                             {items.map((item, i) => (
                                                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: '0.9rem' }}>
                                                     <span style={{ fontWeight: '600', color: '#1e293b' }}>{item.qty > 1 ? `${item.qty}× ` : ''}{item.name}</span>
-                                                    <span style={{ fontWeight: '800', color: '#f59e0b' }}>{item.pointPrice * (item.qty || 1)} pct</span>
+                                                    <span style={{ fontWeight: '800', color: '#f59e0b' }}>{toShop(item.pointPrice * (item.qty || 1))} pct</span>
                                                 </div>
                                             ))}
                                         </div>
@@ -573,14 +581,14 @@ const Magazin = ({ user }) => {
                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{ fontWeight: '900', color: '#1e293b' }}>{bon.childName}</div>
                                                 <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
-                                                    {items.map(i => `${i.qty > 1 ? `${i.qty}× ` : ''}${i.name} (${i.pointPrice * (i.qty || 1)})`).join(', ')}
+                                                    {items.map(i => `${i.qty > 1 ? `${i.qty}× ` : ''}${i.name} (${toShop(i.pointPrice * (i.qty || 1))})`).join(', ')}
                                                 </div>
                                                 <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
                                                     {bon.leaderName} · {new Date(bon.createdAt).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                                                 </div>
                                             </div>
                                             <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                                <div style={{ fontWeight: '900', color: sc }}>{bon.totalPoints} pct</div>
+                                                <div style={{ fontWeight: '900', color: sc }}>{toShop(bon.totalPoints)} pct</div>
                                                 <div style={{ fontSize: '0.72rem', color: sc, fontWeight: '800' }}>{sl}</div>
                                             </div>
                                         </div>
@@ -701,7 +709,7 @@ const Magazin = ({ user }) => {
                                                 {c.nfcUid
                                                     ? <span style={{ fontFamily: 'monospace', color: '#7c3aed', fontWeight: '800' }}>{c.nfcUid}</span>
                                                     : <span style={{ color: '#94a3b8' }}>Fără card</span>}
-                                                {' · '}<span style={{ color: '#f59e0b', fontWeight: '700' }}>{c.seasonPoints || 0} pct</span>
+                                                {' · '}<span style={{ color: '#f59e0b', fontWeight: '700' }}>{toShop(c.seasonPoints)} pct</span>
                                             </div>
                                         </div>
                                         {c.nfcUid && (
