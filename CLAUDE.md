@@ -164,12 +164,27 @@ _(valori definite în `OlimpiadaController.BASE_POINTS`)_
 - Lideri/Directori cu cont: toate 3 taburile (Sesiuni necesita PIN)
 
 ### Deploy
-Procesul corect (frontend e bunduit in JAR):
+Pe server: `cd /var/www/html && ./deploy.sh` — face git pull, build React, build JAR
+si `systemctl restart awanabetania`.
+
+**Infrastructura (important):**
+- Aplicatia ruleaza ca serviciu systemd: `awanabetania.service`, `Restart=always`
+- `WorkingDirectory=/var/www/html` (setat prin drop-in in
+  `/etc/systemd/system/awanabetania.service.d/override.conf`)
+- Configuratia de productie sta in `/var/www/html/application.properties` —
+  **netrackat in git**, contine credentialele reale. Spring il citeste din
+  directorul de lucru si suprascrie valorile din JAR. Daca lipseste, aplicatia
+  nu porneste. Backup: `~/application.properties.backup`
+- `deploy.sh` NU porneste procesul direct. Versiunea veche facea `pkill` +
+  `nohup java -jar`, ceea ce crea un proces orfan in afara systemd — site-ul
+  a fost servit 12 zile de un astfel de orfan, iar systemd repornea in bucla
+  fara sa poata ocupa portul.
+
+Comenzi utile:
 ```bash
-cd Frontend && npm run build
-cp -r dist/* ../src/main/resources/static/
-cd .. && mvn package -DskipTests
-# Uploadeaza target/*.jar pe server si restartezi Spring Boot
+sudo systemctl status awanabetania
+sudo journalctl -u awanabetania -f
+pgrep -cf 'awanabetania.*jar'      # trebuie sa fie exact 1
 ```
 
 ---
