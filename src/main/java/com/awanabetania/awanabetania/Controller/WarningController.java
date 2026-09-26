@@ -20,7 +20,6 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/warnings")
-@CrossOrigin(origins = "*")
 public class WarningController {
 
     @Autowired

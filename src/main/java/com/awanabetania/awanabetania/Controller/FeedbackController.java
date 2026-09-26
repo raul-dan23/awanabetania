@@ -18,7 +18,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/feedback")
-@CrossOrigin(origins = "*")
 public class FeedbackController {
 
     @Autowired private MeetingRepository meetingRepository;

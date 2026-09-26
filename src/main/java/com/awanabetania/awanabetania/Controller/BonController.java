@@ -22,7 +22,6 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/api/bons")
-@CrossOrigin(origins = "*")
 public class BonController {
 
     @Autowired private BonRepository bonRepository;

@@ -18,7 +18,6 @@ import java.util.*;
  */
 @RestController
 @RequestMapping("/api/teams")
-@CrossOrigin(origins = "*")
 public class TeamController {
 
     @Autowired private ChildRepository childRepository;

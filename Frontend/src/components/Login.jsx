@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { API_URL } from '../config';
+import { setToken } from '../auth';
 import AwanaLogo from '../AwanaLogo';
 
 /**
@@ -43,7 +44,7 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
                 const contentType = r.headers.get("content-type");
                 if (contentType && contentType.includes("application/json")) {
                     const data = await r.json();
-                    if(r.ok) onLogin(data);
+                    if(r.ok) { setToken(data.token); onLogin(data.user); }
                     else setErr(data.message || 'Date gresite!');
                 } else {
                     // Some error responses come back as plain text

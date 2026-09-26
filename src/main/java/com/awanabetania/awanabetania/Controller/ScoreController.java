@@ -35,7 +35,6 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/scores")
-@CrossOrigin(origins = "*")
 public class ScoreController {
 
     @Autowired private ScoreRepository scoreRepository;

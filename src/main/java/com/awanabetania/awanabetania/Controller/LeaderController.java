@@ -17,7 +17,6 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/leaders")
-@CrossOrigin(origins = "*")
 public class LeaderController {
 
     @Autowired private LeaderRepository leaderRepository;

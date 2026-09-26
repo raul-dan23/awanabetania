@@ -22,7 +22,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/nfc")
-@CrossOrigin(origins = "*")
 public class NfcController {
 
     @Autowired

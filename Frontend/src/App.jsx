@@ -4,6 +4,7 @@ import './App.css';
 import AwanaLogo from './AwanaLogo';
 import AdminDashboard from './AdminDashboard';
 import { API_URL } from './config';
+import { clearToken } from './auth';
 import Dashboard from './components/Dashboard';
 import MyProfile from './components/MyProfile';
 import CalendarManager from './components/CalendarManager';
@@ -253,7 +254,7 @@ function App() {
 
                 <div className="sb-footer">
                     {/* Reload after logout to clear all in-memory state */}
-                    <button className="sb-btn sb-btn-logout" onClick={() => { setUser(null); window.location.reload(); }}>
+                    <button className="sb-btn sb-btn-logout" onClick={() => { clearToken(); setUser(null); window.location.reload(); }}>
                         <svg className="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
                             <polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/>

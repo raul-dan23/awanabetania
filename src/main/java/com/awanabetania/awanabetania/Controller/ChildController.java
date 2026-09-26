@@ -18,7 +18,6 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/children")
-@CrossOrigin(origins = "*")
 public class ChildController {
 
     @Autowired private ChildRepository childRepository;

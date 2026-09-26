@@ -22,7 +22,6 @@ import java.util.stream.Stream;
  */
 @RestController
 @RequestMapping("/api/dashboard")
-@CrossOrigin(origins = "*")
 public class DashboardController {
 
     @Autowired private ChildRepository childRepository;

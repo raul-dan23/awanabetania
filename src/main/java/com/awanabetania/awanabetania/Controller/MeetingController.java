@@ -32,7 +32,6 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/api/meetings")
-@CrossOrigin(origins = "*")
 public class MeetingController {
 
     @Autowired private MeetingRepository meetingRepository;

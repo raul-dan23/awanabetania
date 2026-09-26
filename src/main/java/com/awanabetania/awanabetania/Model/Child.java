@@ -92,6 +92,8 @@ public class Child {
     @Column(name = "current_team")
     private String currentTeam;
 
+    // Accepted on input (login/registration) but never serialised back to the client.
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
 
     private Integer progressPercent = 0;

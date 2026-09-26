@@ -24,7 +24,6 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/account")
-@CrossOrigin(origins = "*")
 public class AccountController {
 
     @Autowired private LeaderRepository leaderRepository;

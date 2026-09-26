@@ -174,6 +174,79 @@ cd .. && mvn package -DskipTests
 
 ---
 
+## AUTENTIFICARE JWT — IMPLEMENTAT ✅
+
+### Principiu
+Fiecare cerere catre API poarta un token semnat pe server. Rolul nu mai vine din
+`localStorage` (unde utilizatorul il putea edita), ci din token, unde e semnat criptografic.
+
+```
+Login ──> POST /api/auth/login ──> { token, user }
+                                      │
+  toate cererile ulterioare: Authorization: Bearer <token>
+                                      │
+              JwtAuthFilter verifica semnatura si expirarea
+                                      │
+          SecurityConfig decide: public / autentificat
+```
+
+### Backend — fisiere noi
+| Fisier | Descriere |
+|---|---|
+| `Security/JwtService.java` | Emite si valideaza token-uri (HMAC-SHA256, expirare 12h) |
+| `Security/JwtAuthFilter.java` | Citeste `Authorization: Bearer`, populeaza contextul de securitate |
+| `Security/SecurityConfig.java` | Regulile de acces + CORS + bean-ul BCrypt |
+
+### Ce s-a schimbat
+- **Parole:** BCrypt in loc de AES reversibil. Conturile vechi se migreaza automat la
+  primul login (`matchesAndUpgrade`) — nimeni nu trebuie sa-si schimbe parola.
+- **Raspunsul de login:** nu mai contine parola (`@JsonProperty(WRITE_ONLY)` pe `Child` si `Leader`).
+- **Coduri de inregistrare:** mutate din sursa in `AUTH_REGISTRATION_CODES`.
+  Cele vechi (`AWANA2024`, `BETANIA`, `DIRECTOR_KEY`) erau publice pe GitHub — nu le mai folosi.
+- **CORS:** `@CrossOrigin(origins="*")` sters din toate cele 17 controllere; acum
+  o singura configuratie centrala, limitata la `CORS_ALLOWED_ORIGINS`.
+- **Default deny:** orice ruta nelistata ca publica cere token. Un controller
+  adaugat maine e protejat automat.
+
+### Rute publice (singurele)
+```
+POST /api/auth/login, /api/auth/register
+GET  /api/olimpiada/session/{code}              ─┐
+GET  /api/olimpiada/session/{code}/round-status  │ arbitru invitat,
+GET  /api/olimpiada/session/{code}/compare       │ nu are cont
+POST /api/olimpiada/session/{code}/score         │
+POST /api/olimpiada/session/{code}/extra        ─┘
+     /api/nfc/**                                  (are propriul X-NFC-Token)
+```
+
+### Frontend
+| Fisier | Descriere |
+|---|---|
+| `Frontend/src/auth.js` | Wrapper global peste `fetch`: ataseaza tokenul la fiecare apel catre API, iar la 401 curata sesiunea si reincarca |
+| `Frontend/src/main.jsx` | Instaleaza wrapper-ul inainte de montarea React |
+
+Wrapper-ul global evita modificarea celor ~80 de apeluri `fetch` individuale si face ca
+orice apel adaugat ulterior sa fie autentificat automat.
+
+### ⚠️ Variabile de mediu NOI — obligatorii la deploy
+Fara ele aplicatia **nu porneste**:
+```bash
+export JWT_SECRET='...'                  # minim 32 caractere
+export AUTH_REGISTRATION_CODES='COD1,COD2'
+export CORS_ALLOWED_ORIGINS='https://awana.betania-tm.ro'
+```
+`AES_SECRET_KEY` ramane necesara — migreaza parolele vechi. Se poate scoate dupa ce
+toti utilizatorii s-au logat macar o data.
+
+### Teste
+`src/test/java/.../Security/SecurityIntegrationTest.java` — 9 teste pe H2 in-memory:
+acces anonim respins, token falsificat respins, login functional, parola absenta din
+raspuns, migrare AES→BCrypt, cod de inregistrare vechi respins, rutele de arbitru
+invitat inca publice. Ruleaza cu `mvn test`.
+
+
+---
+
 ## Referință: proiectul Awana-2 (C# WinForms)
 Locație: `~/Downloads/Awana-2/`
 Același concept dar mai vechi: stoca punctele PE CARD. Fișiere relevante pentru APDU: `AWANAcard.cs`, `CardInfo.cs`.
@@ -199,20 +272,29 @@ Repository-uri noi adăugate: `ScoreRepository.findByMeetingId`, `WarningReposit
 
 ---
 
-### 🔴 CRITIC (de rezolvat ulterior)
+### 🔴 CRITIC
 
-#### 1. Nicio autentificare pe endpoint-uri
-- **Fișier:** Toți controllerii
-- **Problemă:** `@CrossOrigin(origins = "*")` + niciun token de sesiune. Oricine știe URL-urile poate modifica date.
-- **Fix:** Spring Security + JWT (task mare, de planificat separat)
+#### 1. ~~Nicio autentificare pe endpoint-uri~~ — REZOLVAT
+Spring Security + JWT, vezi sectiunea "AUTENTIFICARE JWT" de mai sus.
+
+#### 2. Secrete expuse in istoricul git (repo public) — DE FACUT DE MANA
+Doua lucruri sunt in istoricul public si nu pot fi sterse prin cod:
+- **Parola MySQL** `application.properties`, comentata, prezenta in 5 commit-uri.
+  → schimb-o pe server; rotatia e singurul fix real.
+- **Codurile de inregistrare** vechi, din `beta1.0` incoace.
+  → deja inlocuite cu `AUTH_REGISTRATION_CODES`; cele vechi nu mai functioneaza.
+
+Optional: `git filter-repo` pentru curatarea istoricului, sau trecerea repo-ului pe privat.
 
 ---
 
 ### 🔵 ÎMBUNĂTĂȚIRI VIITOARE
 
 #### Prioritate înaltă
-- **JWT / Autentificare reală** — userul complet în `localStorage` e vulnerabil la impersonare. Token JWT cu expirare.
+- ~~JWT / Autentificare reală~~ — implementat.
 - **HTTPS forțat** — obligatoriu pentru producție.
+- **Reactivarea testelor de controller** — cele 6 fisiere din `src/test/.../Controller/`
+  sunt comentate integral (incep cu `/**`) si nu ruleaza.
 
 #### Prioritate medie
 - **React Router** — navigare pe URL; suportă butonul Back și link-uri directe.

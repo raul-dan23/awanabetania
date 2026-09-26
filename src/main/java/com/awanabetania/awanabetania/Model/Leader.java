@@ -1,5 +1,7 @@
 package com.awanabetania.awanabetania.Model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -57,6 +59,8 @@ public class Leader {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    // Accepted on input (login/registration) but never serialised back to the client.
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
 
     /** Short deletion-confirmation code generated on demand; must match to allow account removal. */

@@ -26,7 +26,6 @@ import java.util.stream.Collectors;
  */
 @RestController
 @RequestMapping("/api/olimpiada")
-@CrossOrigin(origins = "*")
 public class OlimpiadaController {
 
     private static final List<String> TEAMS = List.of("ROSU", "GALBEN", "ALBASTRU", "VERDE");
