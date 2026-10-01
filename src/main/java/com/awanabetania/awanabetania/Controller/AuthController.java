@@ -59,6 +59,9 @@ public class AuthController {
      */
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
+        if (request.getUsername() == null || request.getPassword() == null) {
+            return ResponseEntity.badRequest().body("Username and password are required.");
+        }
         String role = request.getRole();
         String inputUsername = request.getUsername().toLowerCase().trim();
         String rawPassword = request.getPassword();
@@ -162,6 +165,9 @@ public class AuthController {
      */
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
+        if (isBlank(request.getName()) || isBlank(request.getSurname()) || isBlank(request.getPassword())) {
+            return ResponseEntity.badRequest().body("Name, surname and password are required.");
+        }
 
         if ("CHILD".equalsIgnoreCase(request.getRole())) {
             Child newChild = new Child();
@@ -227,6 +233,10 @@ public class AuthController {
             leaderRepository.save(newLeader);
             return ResponseEntity.ok("Leader account created! Username: " + baseUsername);
         }
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 
     /**

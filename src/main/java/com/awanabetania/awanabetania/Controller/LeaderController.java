@@ -2,16 +2,19 @@ package com.awanabetania.awanabetania.Controller;
 
 import com.awanabetania.awanabetania.Model.Leader;
 import com.awanabetania.awanabetania.Repository.*;
+import com.awanabetania.awanabetania.Security.AuthUser;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 /**
  * Manages leader accounts: listing, profile updates, and account deletion.
- * Deletion requires either a pre-generated deletion code or one of the master codes.
+ * Only the account owner or a director/coordinator may edit or delete a leader, and
+ * deletion additionally requires the account's pre-generated deletion code.
  * All relational data (department memberships, meeting assignments, evaluations,
  * director-of-day references) is cleaned up before the leader record is removed.
  */
@@ -25,6 +28,13 @@ public class LeaderController {
     @Autowired private MeetingAssignmentRepository meetingAssignmentRepository;
     @Autowired private LeaderEvaluationRepository leaderEvaluationRepository;
     @Autowired private MeetingRepository meetingRepository;
+    @Autowired private PasswordEncoder passwordEncoder;
+
+    /** The account owner, or a director/coordinator acting on someone else's account. */
+    private static boolean mayManage(Integer leaderId) {
+        AuthUser me = AuthUser.current();
+        return me != null && (me.is(AuthUser.LEADER, leaderId) || me.isDirector());
+    }
 
     /**
      * Returns all leaders registered in the club.
@@ -49,17 +59,19 @@ public class LeaderController {
 
     /**
      * Updates an existing leader's profile.
-     * A non-empty password in the request body overwrites the stored password (no re-encryption here —
-     * the admin panel sends the already-encrypted value, or the frontend sends the new plain text).
+     * A non-empty password in the request body replaces the stored one and is BCrypt-hashed.
+     * Only the account owner or a director/coordinator may do this.
      * Department membership is updated if provided.
      *
      * @param id            the leader's primary key
      * @param leaderDetails updated fields from the request body
-     * @return 200 with the updated entity, 400 on duplicate username, or 404 if not found
+     * @return 200 with the updated entity, 400 on duplicate username, 403 if the caller may not
+     *         edit this account, or 404 if not found
      */
     @PutMapping("/{id}")
     @Transactional
     public ResponseEntity<?> updateLeader(@PathVariable Integer id, @RequestBody Leader leaderDetails) {
+        if (!mayManage(id)) return ResponseEntity.status(403).body("You can only edit your own profile.");
         return leaderRepository.findById(id).map(leader -> {
             var existingUser = leaderRepository.findByUsername(leaderDetails.getUsername());
             if (existingUser.isPresent() && !existingUser.get().getId().equals(id)) {
@@ -76,7 +88,7 @@ public class LeaderController {
             }
 
             if (leaderDetails.getPassword() != null && !leaderDetails.getPassword().isEmpty()) {
-                leader.setPassword(leaderDetails.getPassword());
+                leader.setPassword(passwordEncoder.encode(leaderDetails.getPassword()));
             }
 
             return ResponseEntity.ok(leaderRepository.save(leader));
@@ -85,27 +97,28 @@ public class LeaderController {
 
     /**
      * Permanently deletes a leader account and all associated records.
-     * Accepts either the account-specific deletion code or one of the master codes.
+     * Requires the account-specific deletion code; the caller must be the account owner or a
+     * director/coordinator. (The former master codes were public on GitHub and let any
+     * logged-in user delete any leader.)
      * Cleans up department memberships, head-of-department references, meeting assignments,
      * evaluations (given and received), and director-of-day references before deletion.
      *
      * @param id   the leader's primary key
      * @param code the deletion-confirmation code
-     * @return 200 on success, 400 on incorrect code, or 404 if not found
+     * @return 200 on success, 400 on incorrect code, 403 if the caller may not delete this
+     *         account, or 404 if not found
      */
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<?> deleteLeader(@PathVariable Integer id, @RequestParam(required = false) String code) {
+        if (!mayManage(id)) return ResponseEntity.status(403).body("You can only delete your own account.");
         Leader leader = leaderRepository.findById(id).orElse(null);
         if (leader == null) return ResponseEntity.notFound().build();
 
         String inputCode = (code != null) ? code.trim() : "";
         String dbCode = (leader.getDeletionCode() != null) ? leader.getDeletionCode().trim() : "";
 
-        List<String> masterCodes = List.of("AWANA2024", "BETANIA", "ADMIN");
-        boolean isMaster = masterCodes.stream().anyMatch(mc -> mc.equalsIgnoreCase(inputCode));
-
-        if (!isMaster && !inputCode.equalsIgnoreCase(dbCode)) {
+        if (dbCode.isEmpty() || !inputCode.equalsIgnoreCase(dbCode)) {
             return ResponseEntity.badRequest().body("Incorrect deletion code.");
         }
 

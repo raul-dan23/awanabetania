@@ -1,5 +1,6 @@
 package com.awanabetania.awanabetania.Model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -102,6 +103,8 @@ public class Child {
     private Boolean isSuspended = false;
 
     /** Short deletion-confirmation code generated on demand; must be supplied to the delete endpoint. */
+    // Never serialised: knowing the code is what authorises the deletion.
+    @JsonIgnore
     @Column(name = "deletion_code")
     private String deletionCode;
 

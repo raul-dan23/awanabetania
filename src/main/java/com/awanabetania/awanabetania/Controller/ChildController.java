@@ -3,9 +3,11 @@ package com.awanabetania.awanabetania.Controller;
 import com.awanabetania.awanabetania.DataInitializer;
 import com.awanabetania.awanabetania.Model.Child;
 import com.awanabetania.awanabetania.Repository.*;
+import com.awanabetania.awanabetania.Security.AuthUser;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -26,6 +28,17 @@ public class ChildController {
     @Autowired private NotificationRepository notificationRepository;
     @Autowired private ScoreRepository scoreRepository;
     @Autowired private WarningRepository warningRepository;
+    @Autowired private PasswordEncoder passwordEncoder;
+
+    /**
+     * Children may only reach their own record; leaders may reach any child.
+     * {@link com.awanabetania.awanabetania.Security.SecurityConfig} already keeps children
+     * away from every other endpoint of this controller.
+     */
+    private static boolean mayAccess(Integer childId) {
+        AuthUser me = AuthUser.current();
+        return me != null && (me.isLeader() || me.is(AuthUser.CHILD, childId));
+    }
 
     /**
      * Returns all children registered in the club.
@@ -45,6 +58,7 @@ public class ChildController {
      */
     @GetMapping("/{id}")
     public ResponseEntity<Child> getChildById(@PathVariable Integer id) {
+        if (!mayAccess(id)) return ResponseEntity.status(403).build();
         return childRepository.findById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
     }
 
@@ -61,6 +75,10 @@ public class ChildController {
             baseUsername += new java.util.Random().nextInt(1000);
         }
         child.setUsername(baseUsername);
+        // The password field is write-only JSON, so a client can send one: never store it raw.
+        if (child.getPassword() != null && !child.getPassword().isEmpty()) {
+            child.setPassword(passwordEncoder.encode(child.getPassword()));
+        }
         return childRepository.save(child);
     }
 
@@ -75,6 +93,7 @@ public class ChildController {
     @PutMapping("/{id}")
     @Transactional
     public ResponseEntity<?> updateChild(@PathVariable Integer id, @RequestBody Child childDetails) {
+        if (!mayAccess(id)) return ResponseEntity.status(403).body("You can only edit your own profile.");
         return childRepository.findById(id).map(child -> {
             var existingUser = childRepository.findByUsername(childDetails.getUsername());
             if (existingUser.isPresent() && !existingUser.get().getId().equals(id)) {
@@ -122,6 +141,7 @@ public class ChildController {
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<?> deleteChild(@PathVariable Integer id, @RequestParam(required = false) String code) {
+        if (!mayAccess(id)) return ResponseEntity.status(403).body("You can only delete your own account.");
         Child child = childRepository.findById(id).orElse(null);
         if (child == null) return ResponseEntity.notFound().build();
 

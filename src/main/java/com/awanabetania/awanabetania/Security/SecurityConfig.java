@@ -86,8 +86,20 @@ public class SecurityConfig {
                 // --- NFC bridge: guarded by its own X-NFC-Token shared secret ---
                 .requestMatchers("/api/nfc/**").permitAll()
 
-                // --- Everything else needs a valid token ---
-                .anyRequest().authenticated()
+                // --- Children: their own profile only (ownership checked in the controllers) ---
+                // Anyone can register a child account without a code, so ROLE_CHILD must
+                // never reach the club's management endpoints.
+                .requestMatchers(HttpMethod.GET, "/api/stickers", "/api/dashboard/stats").authenticated()
+                .requestMatchers(HttpMethod.GET, "/api/children/*").authenticated()
+                .requestMatchers(HttpMethod.PUT, "/api/children/*").authenticated()
+                .requestMatchers(HttpMethod.DELETE, "/api/children/*").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/account/request-deletion").authenticated()
+
+                // --- Control Center: directors and coordinators (plus the admin PIN) ---
+                .requestMatchers("/api/admin/**").hasAnyRole("DIRECTOR", "COORDONATOR")
+
+                // --- Everything else: leaders only ---
+                .anyRequest().hasRole("LEADER")
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 

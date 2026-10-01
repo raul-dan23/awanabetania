@@ -234,6 +234,20 @@ POST /api/olimpiada/session/{code}/extra        ─┘
      /api/nfc/**                                  (are propriul X-NFC-Token)
 ```
 
+### Autorizare pe roluri (audit oct. 2026)
+Oricine isi poate crea cont de copil fara cod, deci „autentificat” nu inseamna „de incredere”.
+- `ROLE_CHILD` ajunge DOAR la: `GET /api/stickers`, `GET /api/dashboard/stats`,
+  `GET|PUT|DELETE /api/children/{id}` (doar propriul id), `POST /api/account/request-deletion`.
+- `/api/admin/**` — doar Director/Coordonator (plus PIN).
+- Restul — `ROLE_LEADER`.
+- Identitatea vine din token: `AuthUser.current()`. Nu folosi niciodata `id`/`role`/`leaderId`
+  trimise de client. Id-urile de copil si lider se suprapun — compara mereu si `kind`.
+- `JwtAuthFilter` verifica la fiecare cerere ca contul exista; rolul liderului vine din BD.
+- Editare/stergere lider: doar proprietarul sau un director. Codurile master
+  (`AWANA2024`, `BETANIA`, `ADMIN`) au fost eliminate.
+- `deletionCode` e `@JsonIgnore` pe `Child` si `Leader`.
+- Teste: `Security/SecurityAuditTest.java` (14 scenarii de atac).
+
 ### Frontend
 | Fisier | Descriere |
 |---|---|
@@ -304,6 +318,21 @@ Optional: `git filter-repo` pentru curatarea istoricului, sau trecerea repo-ului
 ---
 
 ### 🔵 ÎMBUNĂTĂȚIRI VIITOARE
+
+#### Ramase din auditul de securitate (oct. 2026)
+- **Inregistrare ca DIRECTOR cu orice cod de lider** — rolul vine din formular. Separa
+  codurile: `AUTH_DIRECTOR_CODES` pentru Director/Coordonator.
+- **Fara limitare de incercari** la login si la PIN-ul admin (PIN-ul are doar 4 cifre). Adauga rate limit.
+- **Olimpiada** — `/extra` public accepta orice valoare si orice nume de arbitru; doua
+  valori `Integer.MAX` dau total negativ (overflow). Pune o limita (ex. 0 < puncte ≤ 10000).
+- **`extraPoints` negativ nelimitat** in `ScoreController` — un lider poate scadea
+  -999999 dintr-o greseala de tastare.
+- **NFC bridge** — WebSocket pe localhost fara verificare de `Origin`: orice site deschis
+  pe laptopul contabilului poate citi UID-urile. UID-ul se poate clona; nu e autentificare puternica.
+- **Input invalid → 500** (amount text la NFC, place lipsa la Olimpiada, nume >255 caractere).
+  Adauga `@Valid` + un `@RestControllerAdvice`.
+- **Approve bon** — fara blocare: doua aprobari simultane pot trece amandoua. `@Version` pe `Bon`.
+- **Telefonul directorului** e hardcodat in `DataInitializer` (repo public).
 
 #### Prioritate înaltă
 - ~~JWT / Autentificare reală~~ — implementat.

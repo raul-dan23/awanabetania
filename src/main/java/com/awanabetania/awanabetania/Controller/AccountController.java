@@ -6,6 +6,7 @@ import com.awanabetania.awanabetania.Model.Notification;
 import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.LeaderRepository;
 import com.awanabetania.awanabetania.Repository.NotificationRepository;
+import com.awanabetania.awanabetania.Security.AuthUser;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -31,19 +32,23 @@ public class AccountController {
     @Autowired private NotificationRepository notificationRepository;
 
     /**
-     * Initiates an account deletion request. Generates a deletion code, stores it on the account,
-     * and creates a director notification containing the code.
+     * Initiates an account deletion request for the caller's own account. Generates a deletion
+     * code, stores it on the account, and creates a director notification containing the code.
      * The primary admin account (leader ID=1) cannot be deleted this way.
+     * <p>
+     * The account is taken from the token. The "id" and "role" fields the client still sends
+     * are ignored: trusting them let anyone start a deletion for any account.
      *
-     * @param payload JSON with "id" (Integer) and "role" ("CHILD" or "LEADER")
+     * @param payload ignored; kept so existing clients keep working
      * @return 200 with a message instructing the user to contact the director;
      *         400 if the account does not exist or is the protected admin account
      */
     @PostMapping("/request-deletion")
     @Transactional
     public ResponseEntity<?> requestDeletion(@RequestBody Map<String, Object> payload) {
-        Integer id = (Integer) payload.get("id");
-        String role = (String) payload.get("role");
+        AuthUser me = AuthUser.current();
+        Integer id = me.id();
+        String role = me.kind();
 
         if ("LEADER".equalsIgnoreCase(role) && id == 1) {
             return ResponseEntity.badRequest().body("The primary administrator account cannot be deleted.");
