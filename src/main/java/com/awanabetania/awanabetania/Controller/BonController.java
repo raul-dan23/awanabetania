@@ -4,6 +4,7 @@ import com.awanabetania.awanabetania.Model.Bon;
 import com.awanabetania.awanabetania.Model.Child;
 import com.awanabetania.awanabetania.Repository.BonRepository;
 import com.awanabetania.awanabetania.Repository.ChildRepository;
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -50,7 +51,8 @@ public class BonController {
      * Creates a new PENDING receipt.
      *
      * @param body JSON with keys "childId", "leaderName", "items" (JSON string), "totalPoints"
-     * @return 200 with the saved receipt as a flat map; 400 if required fields are missing; 404 if child not found
+     * @return 200 with the saved receipt as a flat map; 400 if required fields are missing or the
+     *         total is not positive; 404 if child not found
      */
     @PostMapping
     public ResponseEntity<?> createBon(@RequestBody Map<String, Object> body) {
@@ -61,6 +63,9 @@ public class BonController {
 
         if (childId == null || items == null || totalPoints == null)
             return ResponseEntity.badRequest().body("Incomplete data.");
+        // A negative total would make approve() add points instead of spending them.
+        if (totalPoints <= 0)
+            return ResponseEntity.badRequest().body("Total must be positive.");
 
         Child child = childRepository.findById(childId).orElse(null);
         if (child == null) return ResponseEntity.notFound().build();
@@ -105,6 +110,7 @@ public class BonController {
      *         400 if not pending or insufficient balance; 404 if not found
      */
     @PostMapping("/{id}/approve")
+    @Transactional
     public ResponseEntity<?> approve(@PathVariable Integer id) {
         Bon bon = bonRepository.findById(id).orElse(null);
         if (bon == null) return ResponseEntity.notFound().build();

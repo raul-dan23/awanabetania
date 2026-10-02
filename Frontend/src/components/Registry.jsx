@@ -33,8 +33,6 @@ const Registry = ({ user }) => {
 
     const isDirector = user && (user.role === 'DIRECTOR' || user.role === 'COORDONATOR');
 
-    useEffect(() => { loadChildren(); }, []);
-
     /**
      * Loads the full children list and derives the set of existing manual names
      * for the dropdown. On first load with no manuals it switches to 'NEW' mode.
@@ -52,6 +50,8 @@ const Registry = ({ user }) => {
             setLoading(false);
         }).catch(() => setLoading(false));
     };
+
+    useEffect(() => { loadChildren(); }, []);
 
     /**
      * Opens a child's individual file, fetching fresh data and their warning history.

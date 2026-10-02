@@ -281,10 +281,9 @@ function ScoringTab({ arbiterName, sessionCode }) {
  * Expandable round-by-round breakdown for one arbiter inside CompareTab.
  *
  * @param {Object} props
- * @param {string} props.arbiterName - Arbiter display name (used as key).
  * @param {Object} props.arbiterData - Server response containing rounds[] and extras[].
  */
-function ArbiterDosar({ arbiterName, arbiterData }) {
+function ArbiterDosar({ arbiterData }) {
     const { rounds, extras } = arbiterData;
 
     return (
@@ -456,7 +455,7 @@ function CompareTab({ sessionCode }) {
                         </div>
 
                         {/* Dosar expandabil */}
-                        {isOpen && <ArbiterDosar arbiterName={arbiter} arbiterData={ad} />}
+                        {isOpen && <ArbiterDosar arbiterData={ad} />}
                     </div>
                 );
             })}

@@ -1,5 +1,7 @@
 package com.awanabetania.awanabetania.Security;
 
+import com.awanabetania.awanabetania.Repository.ChildRepository;
+import com.awanabetania.awanabetania.Repository.LeaderRepository;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -26,14 +28,24 @@ import java.util.List;
  * for leaders, {@code ROLE_<ROLE>} derived from the leader's role column — so a director
  * receives {@code ROLE_LEADER} and {@code ROLE_DIRECTOR}. Requests without a token pass
  * through unauthenticated; {@link SecurityConfig} then decides whether that is allowed.
+ * <p>
+ * The account is looked up on every request, so a deleted account's token stops working
+ * immediately and a leader's role comes from the database rather than from a token that
+ * may predate a demotion.
  */
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final ChildRepository childRepository;
+    private final LeaderRepository leaderRepository;
 
-    public JwtAuthFilter(JwtService jwtService) {
+    public JwtAuthFilter(JwtService jwtService,
+                         ChildRepository childRepository,
+                         LeaderRepository leaderRepository) {
         this.jwtService = jwtService;
+        this.childRepository = childRepository;
+        this.leaderRepository = leaderRepository;
     }
 
     @Override
@@ -44,25 +56,42 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith("Bearer ")) {
             Claims claims = jwtService.parse(header.substring(7));
-            if (claims != null) {
+            AuthUser user = claims == null ? null : resolve(claims);
+            if (user != null) {
                 List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-                String kind = claims.get("kind", String.class);
-                if (kind != null && !kind.isBlank()) {
-                    authorities.add(new SimpleGrantedAuthority("ROLE_" + kind.toUpperCase()));
-                }
-                String role = claims.get("role", String.class);
-                if (role != null && !role.isBlank()) {
+                authorities.add(new SimpleGrantedAuthority("ROLE_" + user.kind()));
+                if (!user.role().isBlank()) {
                     authorities.add(new SimpleGrantedAuthority(
-                            "ROLE_" + role.toUpperCase().replace(' ', '_')));
+                            "ROLE_" + user.role().toUpperCase().replace(' ', '_')));
                 }
 
-                var auth = new UsernamePasswordAuthenticationToken(
-                        claims.getSubject(), null, authorities);
+                var auth = new UsernamePasswordAuthenticationToken(user, null, authorities);
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(auth);
             }
         }
 
         chain.doFilter(request, response);
+    }
+
+    /**
+     * Maps verified claims to a live account.
+     *
+     * @return the caller, or {@code null} if the account no longer exists
+     */
+    private AuthUser resolve(Claims claims) {
+        String kind = claims.get("kind", String.class);
+        Integer id = claims.get("uid", Integer.class);
+        if (kind == null || id == null) return null;
+
+        if (AuthUser.CHILD.equals(kind)) {
+            return childRepository.existsById(id) ? new AuthUser(AuthUser.CHILD, id, "") : null;
+        }
+        if (AuthUser.LEADER.equals(kind)) {
+            return leaderRepository.findById(id)
+                    .map(l -> new AuthUser(AuthUser.LEADER, id, l.getRole() == null ? "" : l.getRole()))
+                    .orElse(null);
+        }
+        return null;
     }
 }

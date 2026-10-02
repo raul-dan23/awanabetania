@@ -5,6 +5,7 @@ import com.awanabetania.awanabetania.Model.Notification;
 import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.LeaderRepository;
 import com.awanabetania.awanabetania.Repository.NotificationRepository;
+import com.awanabetania.awanabetania.Security.AuthUser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,8 +32,9 @@ public class DashboardController {
     /**
      * Returns dashboard statistics and the notification feed for the requesting leader.
      *
-     * @param leaderId optional ID of the currently logged-in leader;
-     *                 if absent, only a welcome message is returned
+     * @param leaderId when present, the notification feed is included. Whose feed it is comes
+     *                 from the token, never from this value: child and leader ids overlap, so a
+     *                 child whose id matched the director's used to receive director alerts
      * @return map with keys: "clubName", "kidsCount", "leadersCount", "directors",
      *         "notifications", "reminders"
      */
@@ -46,18 +48,15 @@ public class DashboardController {
         List<Leader> directors = leaderRepository.findByRoleIgnoreCaseIn(List.of("director", "coordonator"));
         stats.put("directors", directors);
 
-        if (leaderId != null) {
-            Leader currentLeader = leaderRepository.findById(leaderId).orElse(null);
-
+        AuthUser me = AuthUser.current();
+        if (leaderId != null && me != null) {
             List<Notification> publicN = notificationRepository.findByVisibleTo("ALL");
-            List<Notification> personalN = notificationRepository.findByVisibleTo(String.valueOf(leaderId));
-            List<Notification> directorN = new ArrayList<>();
-
-            if (currentLeader != null &&
-                    (currentLeader.getRole().equalsIgnoreCase("DIRECTOR") ||
-                     currentLeader.getRole().equalsIgnoreCase("COORDONATOR"))) {
-                directorN = notificationRepository.findByVisibleTo("DIRECTOR");
-            }
+            List<Notification> personalN = me.isLeader()
+                    ? notificationRepository.findByVisibleTo(String.valueOf(me.id()))
+                    : List.of();
+            List<Notification> directorN = me.isDirector()
+                    ? notificationRepository.findByVisibleTo("DIRECTOR")
+                    : List.of();
 
             // Merge, deduplicate, sort newest-first, and cap at 20
             List<Notification> finalN = Stream.of(publicN, personalN, directorN)

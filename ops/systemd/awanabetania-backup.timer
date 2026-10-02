@@ -1,0 +1,12 @@
+# Porneste backup-ul in fiecare noapte. Daca serverul era oprit la ora respectiva,
+# backup-ul ruleaza la urmatoarea pornire (Persistent=true).
+[Unit]
+Description=AwanaBetania - backup zilnic al bazei de date
+
+[Timer]
+OnCalendar=*-*-* 03:17:00
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

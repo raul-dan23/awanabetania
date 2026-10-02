@@ -2,6 +2,7 @@ package com.awanabetania.awanabetania.Controller;
 
 import com.awanabetania.awanabetania.Model.Notification;
 import com.awanabetania.awanabetania.Repository.NotificationRepository;
+import com.awanabetania.awanabetania.Security.AuthUser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,15 +22,19 @@ public class NotificationController {
     private NotificationRepository notificationRepository;
 
     /**
-     * Returns all active notifications visible to the specified leader,
+     * Returns all active notifications visible to the calling leader,
      * including public ("ALL") and personal (leader's own ID) entries.
+     * <p>
+     * The leader comes from the token. The {@code leaderId} parameter is ignored: passing
+     * {@code leaderId=DIRECTOR} used to return the director-only feed, deletion codes included.
      *
-     * @param leaderId the string representation of the leader's ID
+     * @param leaderId ignored; kept so existing clients keep working
      * @return list of active {@link Notification} records
      */
     @GetMapping
-    public List<Notification> getMyNotifications(@RequestParam String leaderId) {
-        return notificationRepository.findMyActiveNotifications(leaderId, "ALL");
+    public List<Notification> getMyNotifications(@RequestParam(required = false) String leaderId) {
+        return notificationRepository.findMyActiveNotifications(
+                String.valueOf(AuthUser.current().id()), "ALL");
     }
 
     /**

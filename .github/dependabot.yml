@@ -1,0 +1,32 @@
+# Weekly dependency updates. Minor and patch versions arrive grouped in one pull request
+# per ecosystem; CI must pass before merging.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      backend:
+        update-types: [minor, patch]
+
+  - package-ecosystem: maven
+    directory: /nfc-bridge
+    schedule:
+      interval: weekly
+    groups:
+      nfc-bridge:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /Frontend
+    schedule:
+      interval: weekly
+    groups:
+      frontend:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

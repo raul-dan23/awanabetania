@@ -1,0 +1,15 @@
+# Backup zilnic al bazei de date, pornit de awanabetania-backup.timer.
+# Instalare: vezi docs/OPERATIONS.md, sectiunea "Backup".
+[Unit]
+Description=AwanaBetania - backup al bazei de date
+Wants=network-online.target
+After=network-online.target mysql.service
+
+[Service]
+Type=oneshot
+# Acelasi utilizator ca aplicatia: citeste application.properties si scrie in ~/awanabetania-backups.
+User=awana
+WorkingDirectory=/var/www/html
+ExecStart=/var/www/html/scripts/backup-db.sh daily
+# Copie in afara serverului (optional, necesita rclone configurat pentru utilizatorul awana):
+#Environment=BACKUP_RCLONE_REMOTE=gdrive:awana-backups

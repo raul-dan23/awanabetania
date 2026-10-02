@@ -8,11 +8,8 @@ import { API_URL } from './config';
  *  - Children list with stats and equipment status
  *
  * NFC card management lives in the Magazin → Carduri tab (director-only).
- *
- * @param {Object} props
- * @param {Object} props.currentUser - The logged-in user object (used for display only)
  */
-const AdminDashboard = ({ currentUser }) => {
+const AdminDashboard = () => {
     const [isUnlocked, setIsUnlocked] = useState(false);
     const [pin, setPin] = useState('');
     const [data, setData] = useState({ leaders: [], children: [] });
@@ -21,10 +18,6 @@ const AdminDashboard = ({ currentUser }) => {
     const [sortBy, setSortBy] = useState('name');
     // Map of userId → plaintext password, populated on demand via decrypt endpoint
     const [visiblePasswords, setVisiblePasswords] = useState({});
-
-    useEffect(() => {
-        if (isUnlocked) fetchData();
-    }, [isUnlocked]);
 
     /**
      * Loads the full user list (leaders + children) from the admin endpoint.
@@ -38,6 +31,10 @@ const AdminDashboard = ({ currentUser }) => {
             .then(d => setData(d))
             .catch(() => toast.error("Eroare la incarcarea datelor!"));
     };
+
+    useEffect(() => {
+        if (isUnlocked) fetchData();
+    }, [isUnlocked]);
 
     /**
      * Verifies the entered PIN against the server. On success, unlocks the dashboard.

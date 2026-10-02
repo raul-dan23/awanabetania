@@ -10,8 +10,10 @@ import com.awanabetania.awanabetania.Repository.LeaderRepository;
 import com.awanabetania.awanabetania.Repository.StickerRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import java.security.SecureRandom;
 import java.util.Optional;
 
 /**
@@ -31,6 +33,8 @@ public class DataInitializer implements CommandLineRunner {
     private ChildRepository childRepository;
     @Autowired
     private StickerRepository stickerRepository;
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     /**
      * Runs all seed and migration tasks at startup.
@@ -53,7 +57,7 @@ public class DataInitializer implements CommandLineRunner {
         createDept("Secretariat", 1, 3);
         createDept("Agapa", 2, 5);
 
-        // 2. Seed admin leader account (default password "1234")
+        // 2. Seed admin leader account (random one-time password, printed once)
         createLeader("Raul", "Macovei", "DIRECTOR", "0774650819", null);
 
         // 3. Seed stickers — regenerate the full set if imagePath is missing on any entry
@@ -122,6 +126,10 @@ public class DataInitializer implements CommandLineRunner {
 
     /**
      * Creates a leader account only if one with the same name and surname does not already exist.
+     * <p>
+     * The password used to be the fixed value "1234", which is public in this repository:
+     * on a fresh database anyone could log in as the director. It is now random, stored as
+     * a BCrypt hash, and printed once to the log so the operator can sign in and change it.
      *
      * @param name     first name
      * @param surname  last name
@@ -131,13 +139,25 @@ public class DataInitializer implements CommandLineRunner {
      */
     private void createLeader(String name, String surname, String role, String phone, String deptName) {
         if (leaderRepository.findByNameAndSurname(name, surname).isEmpty()) {
-            Leader l = new Leader(name, surname, role, "1234", phone);
+            String password = randomPassword();
+            Leader l = new Leader(name, surname, role, passwordEncoder.encode(password), phone);
+            System.out.println("Created leader " + name + " " + surname
+                    + " with one-time password: " + password + " (change it after the first login)");
             if (deptName != null) {
                 Optional<Department> d = departmentRepository.findByName(deptName);
                 d.ifPresent(dep -> l.getDepartments().add(dep));
             }
             leaderRepository.save(l);
         }
+    }
+
+    /** 12 characters from an alphabet without look-alikes (0/O, 1/l/I). */
+    private static String randomPassword() {
+        String alphabet = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        SecureRandom random = new SecureRandom();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 12; i++) sb.append(alphabet.charAt(random.nextInt(alphabet.length())));
+        return sb.toString();
     }
 
     /**

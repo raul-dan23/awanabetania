@@ -1,5 +1,6 @@
 package com.awanabetania.awanabetania.Model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import jakarta.persistence.*;
@@ -64,6 +65,8 @@ public class Leader {
     private String password;
 
     /** Short deletion-confirmation code generated on demand; must match to allow account removal. */
+    // Never serialised: knowing the code is what authorises the deletion.
+    @JsonIgnore
     @Column(name = "deletion_code")
     private String deletionCode;
 

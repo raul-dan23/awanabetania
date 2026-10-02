@@ -1,7 +1,7 @@
 # CLAUDE.md — AwanaBetania
 
 ## Stack
-- **Backend:** Spring Boot 3.5.9, Java 17, JPA/Hibernate
+- **Backend:** Spring Boot 3.5.16, Java 17, JPA/Hibernate, Flyway (MySQL 8)
 - **Frontend:** React + Vite (folder `Frontend/`)
 - **Server:** Ubuntu Linux (remote)
 - **IDE:** IntelliJ IDEA
@@ -65,7 +65,7 @@ Citim UID-ul și îl mapăm la copil în BD. Toate punctele rămân în BD, nu p
 | `Repository/ProductRepository.java` | Acces BD produse |
 | `Repository/BonRepository.java` | `findByStatusOrderByCreatedAtDesc`, `findAllByOrderByCreatedAtDesc` |
 
-**application.properties:** `ddl-auto=update` (creează automat tabelele `products` și `bons`)
+**Schema:** tabelele `products` și `bons` sunt în `db/migration/V1__baseline.sql` (vezi secțiunea INFRASTRUCTURĂ).
 
 ### Frontend
 | Fișier | Descriere |
@@ -145,7 +145,7 @@ _(valori definite în `OlimpiadaController.BASE_POINTS`)_
 - `GET /api/olimpiada/session/{code}/compare` — totaluri + clasament (public)
 - `DELETE /api/olimpiada/session/{code}/round/{round}/arbiter/{name}` (X-Admin-Pin) — sterge un tur
 
-**Tabele noi create automat:** `olimpiada_sessions`, `olimpiada_scores`
+**Tabele:** `olimpiada_sessions`, `olimpiada_scores` (în `V1__baseline.sql`)
 
 ### Frontend — fisiere noi/modificate
 | Fisier | Descriere |
@@ -164,8 +164,10 @@ _(valori definite în `OlimpiadaController.BASE_POINTS`)_
 - Lideri/Directori cu cont: toate 3 taburile (Sesiuni necesita PIN)
 
 ### Deploy
-Pe server: `cd /var/www/html && ./deploy.sh` — face git pull, build React, build JAR
-si `systemctl restart awanabetania`.
+Pe server: `cd /var/www/html && ./deploy.sh`. Pasii: pull → backup BD → build →
+pre-flight (JAR-ul nou pornit fara web: migrari + validare schema, cu site-ul inca pe
+versiunea veche) → restart → health + verificarea commit-ului → rollback automat daca
+nu porneste. Detalii si cazuri de eroare: `docs/OPERATIONS.md`.
 
 **Infrastructura (important):**
 - Aplicatia ruleaza ca serviciu systemd: `awanabetania.service`, `Restart=always`
@@ -185,7 +187,52 @@ Comenzi utile:
 sudo systemctl status awanabetania
 sudo journalctl -u awanabetania -f
 pgrep -cf 'awanabetania.*jar'      # trebuie sa fie exact 1
+curl -s localhost:8080/actuator/info   # commit-ul care ruleaza
 ```
+
+---
+
+## INFRASTRUCTURĂ & LIVRARE (Faza 1, oct. 2026) — IMPLEMENTAT ✅
+
+### Schema bazei de date — Flyway
+- Schema o modifica DOAR fisierele `src/main/resources/db/migration/V<n>__*.sql`.
+  Hibernate are `ddl-auto=validate`: verifica la pornire si refuza sa porneasca la nepotrivire.
+- **Camp nou intr-o entitate ⇒ migrare noua**, altfel pica `DatabaseMigrationTest`.
+- **Nu edita o migrare care a rulat** (Flyway ii verifica checksum-ul). Nu edita `V1__baseline.sql`.
+- `V1__baseline.sql` = schema creata de ddl-auto=update (SHOW CREATE TABLE, MySQL 8.0).
+  In productie NU ruleaza: `baseline-on-migrate=true` marcheaza schema existenta ca v1.
+  Verificat prin reluarea istoricului entitatilor (toate cele 10 versiuni din git) cu
+  ddl-auto=update, apoi validare cu versiunea noua.
+- Doar adauga in acelasi deploy (expand/contract): versiunea veche trebuie sa mearga pe
+  schema noua, pentru pre-flight si rollback. Un singur ALTER pe fisier (MySQL nu anuleaza DDL).
+
+### Actuator
+- Publice: `GET /actuator/health` (UP/DOWN, fara detalii) si `GET /actuator/info` (git commit
+  + build). Restul endpoint-urilor nu sunt expuse; lista `/actuator` e dezactivata.
+- `server.forward-headers-strategy=native`: in spatele proxy-ului, aplicatia vede HTTPS
+  (deci trimite HSTS) si IP-ul real al clientului.
+
+### Configurare
+- Baza (`application.properties`) = productie, sigura implicit; secretele din variabile de mediu.
+- Local: `cp .env.example .env` (importat optional, ignorat de git). Lista completa a variabilelor
+  si explicatiile sunt in `.env.example`.
+- Teste: profilul `test` (H2, Flyway oprit). NU adauga `application-dev.properties` in git: e in
+  `.gitignore` si git suprascrie fara avertisment fisierele ignorate la pull.
+- Frontend: `VITE_API_URL` in `Frontend/.env.development` (`/api`, proxy Vite spre :8080) si
+  `Frontend/.env.production` (URL-ul de productie). Override local: `.env.development.local`.
+
+### CI — `.github/workflows/ci.yml`
+- backend: `./mvnw verify` (inclusiv MySQL 8 in Docker prin Testcontainers);
+  frontend: `npm ci`, `lint`, `build` (Node din `Frontend/.nvmrc`); nfc-bridge: build.
+- Dependabot saptamanal (`.github/dependabot.yml`), minor/patch grupate.
+- Lint-ul frontend trebuie sa aiba 0 erori (warning-urile `exhaustive-deps` raman; corectarea lor
+  orbeste poate crea bucle de request-uri).
+
+### Backup — `scripts/`
+- `backup-db.sh [eticheta]` → `~/awanabetania-backups/*.sql.gz`, retentie 30 zile, scriere atomica,
+  credentialele din `application.properties` (fara parola in linia de comanda). Optional rclone.
+- `restore-db.sh <fisier>` → confirmare, backup pre-restore, stop serviciu, inlocuire tabele, start.
+- Zilnic: `ops/systemd/awanabetania-backup.{service,timer}` (03:17). Instalare: `docs/OPERATIONS.md`.
 
 ---
 
@@ -234,6 +281,20 @@ POST /api/olimpiada/session/{code}/extra        ─┘
      /api/nfc/**                                  (are propriul X-NFC-Token)
 ```
 
+### Autorizare pe roluri (audit oct. 2026)
+Oricine isi poate crea cont de copil fara cod, deci „autentificat” nu inseamna „de incredere”.
+- `ROLE_CHILD` ajunge DOAR la: `GET /api/stickers`, `GET /api/dashboard/stats`,
+  `GET|PUT|DELETE /api/children/{id}` (doar propriul id), `POST /api/account/request-deletion`.
+- `/api/admin/**` — doar Director/Coordonator (plus PIN).
+- Restul — `ROLE_LEADER`.
+- Identitatea vine din token: `AuthUser.current()`. Nu folosi niciodata `id`/`role`/`leaderId`
+  trimise de client. Id-urile de copil si lider se suprapun — compara mereu si `kind`.
+- `JwtAuthFilter` verifica la fiecare cerere ca contul exista; rolul liderului vine din BD.
+- Editare/stergere lider: doar proprietarul sau un director. Codurile master
+  (`AWANA2024`, `BETANIA`, `ADMIN`) au fost eliminate.
+- `deletionCode` e `@JsonIgnore` pe `Child` si `Leader`.
+- Teste: `Security/SecurityAuditTest.java` (14 scenarii de atac).
+
 ### Frontend
 | Fisier | Descriere |
 |---|---|
@@ -257,7 +318,8 @@ toti utilizatorii s-au logat macar o data.
 `src/test/java/.../Security/SecurityIntegrationTest.java` — 9 teste pe H2 in-memory:
 acces anonim respins, token falsificat respins, login functional, parola absenta din
 raspuns, migrare AES→BCrypt, cod de inregistrare vechi respins, rutele de arbitru
-invitat inca publice. Ruleaza cu `mvn test`.
+invitat inca publice. Ruleaza cu `./mvnw verify` (25 de teste in total, cu
+`SecurityAuditTest` si `DatabaseMigrationTest`).
 
 
 ---
@@ -304,6 +366,21 @@ Optional: `git filter-repo` pentru curatarea istoricului, sau trecerea repo-ului
 ---
 
 ### 🔵 ÎMBUNĂTĂȚIRI VIITOARE
+
+#### Ramase din auditul de securitate (oct. 2026)
+- **Inregistrare ca DIRECTOR cu orice cod de lider** — rolul vine din formular. Separa
+  codurile: `AUTH_DIRECTOR_CODES` pentru Director/Coordonator.
+- **Fara limitare de incercari** la login si la PIN-ul admin (PIN-ul are doar 4 cifre). Adauga rate limit.
+- **Olimpiada** — `/extra` public accepta orice valoare si orice nume de arbitru; doua
+  valori `Integer.MAX` dau total negativ (overflow). Pune o limita (ex. 0 < puncte ≤ 10000).
+- **`extraPoints` negativ nelimitat** in `ScoreController` — un lider poate scadea
+  -999999 dintr-o greseala de tastare.
+- **NFC bridge** — WebSocket pe localhost fara verificare de `Origin`: orice site deschis
+  pe laptopul contabilului poate citi UID-urile. UID-ul se poate clona; nu e autentificare puternica.
+- **Input invalid → 500** (amount text la NFC, place lipsa la Olimpiada, nume >255 caractere).
+  Adauga `@Valid` + un `@RestControllerAdvice`.
+- **Approve bon** — fara blocare: doua aprobari simultane pot trece amandoua. `@Version` pe `Bon`.
+- **Telefonul directorului** e hardcodat in `DataInitializer` (repo public).
 
 #### Prioritate înaltă
 - ~~JWT / Autentificare reală~~ — implementat.

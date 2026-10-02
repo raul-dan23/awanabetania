@@ -1,4 +1,6 @@
-/** Base URL for all API requests. Switch the active line when developing locally. */
-export const API_URL = 'https://awana.betania-tm.ro/api';
-//export const API_URL = 'http://localhost:8080/api';
-//export const API_URL = 'http://192.168.1.156:8080/api';
+/**
+ * Base URL for all API requests, set per environment through VITE_API_URL:
+ * Frontend/.env.development for `npm run dev`, Frontend/.env.production for `npm run build`.
+ * To point a local build elsewhere, put VITE_API_URL in .env.development.local (git-ignored).
+ */
+export const API_URL = import.meta.env.VITE_API_URL || '/api';
