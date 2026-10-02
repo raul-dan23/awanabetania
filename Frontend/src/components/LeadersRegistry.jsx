@@ -1,6 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config';
 
+/** Renders 1–5 filled/empty SVG stars for the given rating value. */
+const StarRating = ({ rating, size = 16 }) => (
+    <div style={{display:'flex', gap:'2px'}}>
+        {[1,2,3,4,5].map(s => (
+            <svg key={s} width={size} height={size} viewBox="0 0 24 24"
+                fill={s <= Math.round(rating || 0) ? '#f59e0b' : 'none'}
+                stroke={s <= Math.round(rating || 0) ? '#f59e0b' : '#d1d5db'}
+                strokeWidth="1.5" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+        ))}
+    </div>
+);
+
 /**
  * Leader directory with sortable list and per-leader feedback history.
  *
@@ -33,20 +47,6 @@ const LeadersRegistry = () => {
             if(res.ok) { setFeedbacks(feedbacks.map(f => f.id === id ? { ...f, comment: null } : f)); alert("Sters!"); }
         });
     };
-
-    /** Renders 1–5 filled/empty SVG stars for the given rating value. */
-    const StarRating = ({ rating, size = 16 }) => (
-        <div style={{display:'flex', gap:'2px'}}>
-            {[1,2,3,4,5].map(s => (
-                <svg key={s} width={size} height={size} viewBox="0 0 24 24"
-                    fill={s <= Math.round(rating || 0) ? '#f59e0b' : 'none'}
-                    stroke={s <= Math.round(rating || 0) ? '#f59e0b' : '#d1d5db'}
-                    strokeWidth="1.5" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                </svg>
-            ))}
-        </div>
-    );
 
     const roleStyle = (role) => {
         if (role === 'DIRECTOR')   return { bg:'#fee2e2', color:'#991b1b', border:'#fca5a5', left:'#dc2626' };

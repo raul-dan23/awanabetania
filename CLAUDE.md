@@ -1,7 +1,7 @@
 # CLAUDE.md — AwanaBetania
 
 ## Stack
-- **Backend:** Spring Boot 3.5.9, Java 17, JPA/Hibernate
+- **Backend:** Spring Boot 3.5.16, Java 17, JPA/Hibernate, Flyway (MySQL 8)
 - **Frontend:** React + Vite (folder `Frontend/`)
 - **Server:** Ubuntu Linux (remote)
 - **IDE:** IntelliJ IDEA
@@ -65,7 +65,7 @@ Citim UID-ul și îl mapăm la copil în BD. Toate punctele rămân în BD, nu p
 | `Repository/ProductRepository.java` | Acces BD produse |
 | `Repository/BonRepository.java` | `findByStatusOrderByCreatedAtDesc`, `findAllByOrderByCreatedAtDesc` |
 
-**application.properties:** `ddl-auto=update` (creează automat tabelele `products` și `bons`)
+**Schema:** tabelele `products` și `bons` sunt în `db/migration/V1__baseline.sql` (vezi secțiunea INFRASTRUCTURĂ).
 
 ### Frontend
 | Fișier | Descriere |
@@ -145,7 +145,7 @@ _(valori definite în `OlimpiadaController.BASE_POINTS`)_
 - `GET /api/olimpiada/session/{code}/compare` — totaluri + clasament (public)
 - `DELETE /api/olimpiada/session/{code}/round/{round}/arbiter/{name}` (X-Admin-Pin) — sterge un tur
 
-**Tabele noi create automat:** `olimpiada_sessions`, `olimpiada_scores`
+**Tabele:** `olimpiada_sessions`, `olimpiada_scores` (în `V1__baseline.sql`)
 
 ### Frontend — fisiere noi/modificate
 | Fisier | Descriere |
@@ -164,8 +164,10 @@ _(valori definite în `OlimpiadaController.BASE_POINTS`)_
 - Lideri/Directori cu cont: toate 3 taburile (Sesiuni necesita PIN)
 
 ### Deploy
-Pe server: `cd /var/www/html && ./deploy.sh` — face git pull, build React, build JAR
-si `systemctl restart awanabetania`.
+Pe server: `cd /var/www/html && ./deploy.sh`. Pasii: pull → backup BD → build →
+pre-flight (JAR-ul nou pornit fara web: migrari + validare schema, cu site-ul inca pe
+versiunea veche) → restart → health + verificarea commit-ului → rollback automat daca
+nu porneste. Detalii si cazuri de eroare: `docs/OPERATIONS.md`.
 
 **Infrastructura (important):**
 - Aplicatia ruleaza ca serviciu systemd: `awanabetania.service`, `Restart=always`
@@ -185,7 +187,52 @@ Comenzi utile:
 sudo systemctl status awanabetania
 sudo journalctl -u awanabetania -f
 pgrep -cf 'awanabetania.*jar'      # trebuie sa fie exact 1
+curl -s localhost:8080/actuator/info   # commit-ul care ruleaza
 ```
+
+---
+
+## INFRASTRUCTURĂ & LIVRARE (Faza 1, oct. 2026) — IMPLEMENTAT ✅
+
+### Schema bazei de date — Flyway
+- Schema o modifica DOAR fisierele `src/main/resources/db/migration/V<n>__*.sql`.
+  Hibernate are `ddl-auto=validate`: verifica la pornire si refuza sa porneasca la nepotrivire.
+- **Camp nou intr-o entitate ⇒ migrare noua**, altfel pica `DatabaseMigrationTest`.
+- **Nu edita o migrare care a rulat** (Flyway ii verifica checksum-ul). Nu edita `V1__baseline.sql`.
+- `V1__baseline.sql` = schema creata de ddl-auto=update (SHOW CREATE TABLE, MySQL 8.0).
+  In productie NU ruleaza: `baseline-on-migrate=true` marcheaza schema existenta ca v1.
+  Verificat prin reluarea istoricului entitatilor (toate cele 10 versiuni din git) cu
+  ddl-auto=update, apoi validare cu versiunea noua.
+- Doar adauga in acelasi deploy (expand/contract): versiunea veche trebuie sa mearga pe
+  schema noua, pentru pre-flight si rollback. Un singur ALTER pe fisier (MySQL nu anuleaza DDL).
+
+### Actuator
+- Publice: `GET /actuator/health` (UP/DOWN, fara detalii) si `GET /actuator/info` (git commit
+  + build). Restul endpoint-urilor nu sunt expuse; lista `/actuator` e dezactivata.
+- `server.forward-headers-strategy=native`: in spatele proxy-ului, aplicatia vede HTTPS
+  (deci trimite HSTS) si IP-ul real al clientului.
+
+### Configurare
+- Baza (`application.properties`) = productie, sigura implicit; secretele din variabile de mediu.
+- Local: `cp .env.example .env` (importat optional, ignorat de git). Lista completa a variabilelor
+  si explicatiile sunt in `.env.example`.
+- Teste: profilul `test` (H2, Flyway oprit). NU adauga `application-dev.properties` in git: e in
+  `.gitignore` si git suprascrie fara avertisment fisierele ignorate la pull.
+- Frontend: `VITE_API_URL` in `Frontend/.env.development` (`/api`, proxy Vite spre :8080) si
+  `Frontend/.env.production` (URL-ul de productie). Override local: `.env.development.local`.
+
+### CI — `.github/workflows/ci.yml`
+- backend: `./mvnw verify` (inclusiv MySQL 8 in Docker prin Testcontainers);
+  frontend: `npm ci`, `lint`, `build` (Node din `Frontend/.nvmrc`); nfc-bridge: build.
+- Dependabot saptamanal (`.github/dependabot.yml`), minor/patch grupate.
+- Lint-ul frontend trebuie sa aiba 0 erori (warning-urile `exhaustive-deps` raman; corectarea lor
+  orbeste poate crea bucle de request-uri).
+
+### Backup — `scripts/`
+- `backup-db.sh [eticheta]` → `~/awanabetania-backups/*.sql.gz`, retentie 30 zile, scriere atomica,
+  credentialele din `application.properties` (fara parola in linia de comanda). Optional rclone.
+- `restore-db.sh <fisier>` → confirmare, backup pre-restore, stop serviciu, inlocuire tabele, start.
+- Zilnic: `ops/systemd/awanabetania-backup.{service,timer}` (03:17). Instalare: `docs/OPERATIONS.md`.
 
 ---
 
@@ -271,7 +318,8 @@ toti utilizatorii s-au logat macar o data.
 `src/test/java/.../Security/SecurityIntegrationTest.java` — 9 teste pe H2 in-memory:
 acces anonim respins, token falsificat respins, login functional, parola absenta din
 raspuns, migrare AES→BCrypt, cod de inregistrare vechi respins, rutele de arbitru
-invitat inca publice. Ruleaza cu `mvn test`.
+invitat inca publice. Ruleaza cu `./mvnw verify` (25 de teste in total, cu
+`SecurityAuditTest` si `DatabaseMigrationTest`).
 
 
 ---

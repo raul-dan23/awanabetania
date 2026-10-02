@@ -71,6 +71,9 @@ public class SecurityConfig {
                         "/*.png", "/*.svg", "/*.ico", "/*.webmanifest").permitAll()
                 .requestMatchers(HttpMethod.GET, "/{path:[^\\.]*}").permitAll()
 
+                // --- Monitoring: status and deployed version only (see application.properties) ---
+                .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
+
                 // --- Authentication ---
                 .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
 

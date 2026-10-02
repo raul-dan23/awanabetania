@@ -78,7 +78,6 @@ const Register = ({ onSwitchToLogin }) => {
 
     // The 'ok:'/'err:' prefix drives which CSS class is applied
     const isOk  = msg.startsWith('ok:');
-    const isErr = msg.startsWith('err:');
     const msgText = msg.slice(3);
 
     return (

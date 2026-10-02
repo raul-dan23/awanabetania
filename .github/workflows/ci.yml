@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  # Every push, on any branch. A pull request opened from a branch shows this run's result.
+  push:
+  workflow_dispatch:
+
+# A newer push to the same branch or pull request cancels the run still in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend — tests and MySQL migrations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      # Unit and security tests run on H2. DatabaseMigrationTest starts MySQL 8.0 in Docker
+      # (Testcontainers), applies every Flyway migration and validates the entities
+      # against the result, the same check production makes at startup.
+      - name: Build and test
+        run: ./mvnw -B verify
+
+      - name: Keep test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-test-reports
+          path: target/surefire-reports/
+          retention-days: 14
+
+  frontend:
+    name: Frontend — lint and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: Frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: Frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: Frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  nfc-bridge:
+    name: NFC bridge — build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: nfc-bridge/pom.xml
+
+      - name: Build
+        run: ./mvnw -B -f nfc-bridge/pom.xml package

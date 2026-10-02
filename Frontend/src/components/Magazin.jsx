@@ -72,16 +72,6 @@ const Magazin = ({ user }) => {
         }
     });
 
-    useEffect(() => { fetchChildren(); }, []);
-
-    useEffect(() => {
-        if (tab === 'contabil') {
-            fetchPendingBons();
-            const iv = setInterval(fetchPendingBons, 3000);
-            return () => clearInterval(iv);
-        }
-    }, [tab]);
-
     const fetchChildren = () =>
         fetch(`${API_URL}/children`)
             .then(r => r.json())
@@ -93,6 +83,16 @@ const Magazin = ({ user }) => {
 
     const fetchAllBons = () =>
         fetch(`${API_URL}/bons/all`).then(r => r.json()).then(setAllBons).catch(() => {});
+
+    useEffect(() => { fetchChildren(); }, []);
+
+    useEffect(() => {
+        if (tab === 'contabil') {
+            fetchPendingBons();
+            const iv = setInterval(fetchPendingBons, 3000);
+            return () => clearInterval(iv);
+        }
+    }, [tab]);
 
     // ── BON NOU: CALCULATOR ──────────────────────────────────────
     const pressDigit = (d) =>

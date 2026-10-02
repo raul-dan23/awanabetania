@@ -89,15 +89,6 @@ const ScoringWidget = () => {
             }).catch(() => toast.error("Eroare server!"));
     };
 
-    const getButtonStyle = (isActive) => ({
-        display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '15px', borderRadius: '10px',
-        cursor: 'pointer', transition: 'all 0.2s', fontWeight: 'bold', fontSize: '1rem',
-        border: '2px solid var(--accent)',
-        background: isActive ? 'var(--accent)' : 'white',
-        color: isActive ? 'white' : 'var(--accent)',
-        boxShadow: isActive ? '0 4px 10px rgba(0,0,0,0.2)' : 'none'
-    });
-
     const scoreItems = [
         { k: 'attended',    label: 'Prezent',       pts: 1000,  full: true },
         { k: 'hasBible',    label: 'Biblie',         pts: 500,   full: false },
