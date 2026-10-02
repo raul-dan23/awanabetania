@@ -88,8 +88,10 @@ Client (React + Vite)
         │  HTTPS · REST · Authorization: Bearer <JWT>
         ▼
 Spring Boot (Java 17)
-  ├── Security/     JWT filter, access rules per role
-  ├── Controller/   REST endpoints
+  ├── Security/     JWT filter, access rules per role, admin PIN
+  ├── Controller/   HTTP only: validated request DTOs in, response DTOs out
+  ├── Service/      business rules and transactions
+  ├── Exception/    errors as RFC 7807 problem responses
   ├── Model/        JPA entities (Child, Score, Meeting, Bon, Product, OlimpiadaSession, ...)
   └── Repository/   Spring Data JPA
         │

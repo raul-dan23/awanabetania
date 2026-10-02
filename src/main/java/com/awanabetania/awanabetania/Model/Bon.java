@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -43,7 +45,11 @@ public class Bon {
     private Integer totalPoints;
 
     /** Current status: PENDING, APPROVED, or REJECTED. */
-    private String status = "PENDING";
+    // Stored as text in the existing VARCHAR column (Hibernate would otherwise expect a
+    // MySQL ENUM column, and schema validation would fail).
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    private BonStatus status = BonStatus.PENDING;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();

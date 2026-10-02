@@ -4,8 +4,8 @@ import com.awanabetania.awanabetania.Model.OlimpiadaScore;
 import com.awanabetania.awanabetania.Model.OlimpiadaSession;
 import com.awanabetania.awanabetania.Repository.OlimpiadaScoreRepository;
 import com.awanabetania.awanabetania.Repository.OlimpiadaSessionRepository;
+import com.awanabetania.awanabetania.Security.AdminPinVerifier;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,13 +36,7 @@ public class OlimpiadaController {
     @Autowired private OlimpiadaSessionRepository sessionRepo;
     @Autowired private OlimpiadaScoreRepository scoreRepo;
 
-    @Value("${admin.pin}")
-    private String adminPin;
-
-    /** Returns {@code true} if the supplied PIN matches the configured admin PIN. */
-    private boolean isPinValid(String pin) {
-        return adminPin != null && adminPin.equals(pin);
-    }
+    @Autowired private AdminPinVerifier pinVerifier;
 
     // -------------------------------------------------------------------------
     // Session management (admin-protected)
@@ -53,13 +47,13 @@ public class OlimpiadaController {
      *
      * @param pin  admin PIN from the {@code X-Admin-Pin} header
      * @param body JSON with "name" and "code" (max 10 characters, stored upper-case)
-     * @return 200 with the saved session; 401 on invalid PIN; 400 on missing fields or duplicate code
+     * @return 200 with the saved session; 403 on invalid PIN; 400 on missing fields or duplicate code
      */
     @PostMapping("/sessions")
     public ResponseEntity<?> createSession(
             @RequestHeader(value = "X-Admin-Pin", required = false) String pin,
             @RequestBody Map<String, String> body) {
-        if (!isPinValid(pin)) return ResponseEntity.status(401).body("Incorrect PIN");
+        pinVerifier.verify(pin);
 
         String name = body.get("name");
         String code = body.get("code");
@@ -78,12 +72,12 @@ public class OlimpiadaController {
      * Returns all sessions ordered by creation time descending.
      *
      * @param pin admin PIN from the {@code X-Admin-Pin} header
-     * @return 200 with session list; 401 on invalid PIN
+     * @return 200 with session list; 403 on invalid PIN
      */
     @GetMapping("/sessions")
     public ResponseEntity<?> listSessions(
             @RequestHeader(value = "X-Admin-Pin", required = false) String pin) {
-        if (!isPinValid(pin)) return ResponseEntity.status(401).body("Incorrect PIN");
+        pinVerifier.verify(pin);
         return ResponseEntity.ok(sessionRepo.findAllByOrderByCreatedAtDesc());
     }
 
@@ -92,13 +86,13 @@ public class OlimpiadaController {
      *
      * @param id  the session's primary key
      * @param pin admin PIN from the {@code X-Admin-Pin} header
-     * @return 200 with the updated session; 401 on invalid PIN; 404 if not found
+     * @return 200 with the updated session; 403 on invalid PIN; 404 if not found
      */
     @PostMapping("/sessions/{id}/close")
     public ResponseEntity<?> closeSession(
             @PathVariable Integer id,
             @RequestHeader(value = "X-Admin-Pin", required = false) String pin) {
-        if (!isPinValid(pin)) return ResponseEntity.status(401).body("Incorrect PIN");
+        pinVerifier.verify(pin);
         OlimpiadaSession session = sessionRepo.findById(id).orElse(null);
         if (session == null) return ResponseEntity.notFound().build();
         session.setStatus("CLOSED");
@@ -110,13 +104,13 @@ public class OlimpiadaController {
      *
      * @param id  the session's primary key
      * @param pin admin PIN from the {@code X-Admin-Pin} header
-     * @return 200 on success; 401 on invalid PIN; 404 if not found
+     * @return 200 on success; 403 on invalid PIN; 404 if not found
      */
     @DeleteMapping("/sessions/{id}")
     public ResponseEntity<?> deleteSession(
             @PathVariable Integer id,
             @RequestHeader(value = "X-Admin-Pin", required = false) String pin) {
-        if (!isPinValid(pin)) return ResponseEntity.status(401).body("Incorrect PIN");
+        pinVerifier.verify(pin);
         OlimpiadaSession session = sessionRepo.findById(id).orElse(null);
         if (session == null) return ResponseEntity.notFound().build();
         scoreRepo.findBySessionId(id).forEach(scoreRepo::delete);
@@ -273,7 +267,7 @@ public class OlimpiadaController {
      * @param round       the round number to delete
      * @param arbiterName the arbiter whose submission should be removed
      * @param pin         admin PIN from the {@code X-Admin-Pin} header
-     * @return 200 on success; 401 on invalid PIN; 404 if session not found
+     * @return 200 on success; 403 on invalid PIN; 404 if session not found
      */
     @DeleteMapping("/session/{code}/round/{round}/arbiter/{arbiterName}")
     public ResponseEntity<?> deleteRound(
@@ -281,7 +275,7 @@ public class OlimpiadaController {
             @PathVariable Integer round,
             @PathVariable String arbiterName,
             @RequestHeader(value = "X-Admin-Pin", required = false) String pin) {
-        if (!isPinValid(pin)) return ResponseEntity.status(401).body("Incorrect PIN");
+        pinVerifier.verify(pin);
         OlimpiadaSession session = sessionRepo.findByCode(code.toUpperCase()).orElse(null);
         if (session == null) return ResponseEntity.status(404).body("Session not found.");
         scoreRepo.deleteBySessionIdAndRoundNumberAndArbiterName(session.getId(), round, arbiterName);

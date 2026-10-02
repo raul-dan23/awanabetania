@@ -9,11 +9,16 @@
 ## Structura backend
 ```
 src/main/java/com/awanabetania/awanabetania/
-├── Model/       → Child, Score, Meeting, Leader, Department, Sticker, Warning, etc.
-├── Controller/  → REST endpoints
-├── Repository/  → JPA repositories
+├── Controller/  → doar HTTP: primeste DTO (@Valid), cheama serviciul, intoarce DTO
+├── Service/     → regulile de business + @Transactional          (Faza 2, in curs)
+├── Dto/         → record-uri request/response (forma JSON exacta)  (Faza 2, in curs)
+├── Exception/   → ApiException + GlobalExceptionHandler (ProblemDetail)
+├── Security/    → JWT, AuthUser, AdminPinVerifier, SharedSecrets
+├── Model/       → entitati JPA: Child, Score, Meeting, Leader, Bon, BonStatus...
+├── Repository/  → Spring Data JPA
 └── AwanaBetaniaApplication.java
 ```
+Conventiile pentru cod nou sunt in sectiunea „FAZA 2” de mai jos.
 
 ## Modele cheie
 - **Child** — `id`, `name`, `surname`, `seasonPoints`, `dailyPoints`, relatii cu `Score`, `ChildProgress`, `ChildManual`
@@ -236,6 +241,46 @@ curl -s localhost:8080/actuator/info   # commit-ul care ruleaza
 
 ---
 
+## FAZA 2 — ARHITECTURA PE STRATURI (in curs, oct. 2026)
+
+Se face pe zone, cate un PR, fiecare cu teste. **Gata: Magazin** (bonuri, produse, carduri NFC,
+endpoint-urile NFC din Control Center). Urmeaza: Scorare/Intalniri, Copii/Lideri/Cont,
+Olimpiada, Departamente/Echipe/Feedback/Notificari/Dashboard/Avertismente.
+
+### Conventii (obligatorii pentru cod nou sau refacut)
+- **Controller → Service → Repository.** Controllerul nu contine logica; serviciul are
+  `@Transactional`. Injectie prin constructor (`@RequiredArgsConstructor`), nu `@Autowired` pe campuri.
+- **DTO-uri** (record-uri in `Dto/`): request cu `@Valid` + `@NotNull/@Positive/@Size`; response cu
+  `from(entity)`. Nu intoarce entitati JPA. **Pastreaza forma JSON** pe care o citeste frontend-ul.
+  Fara `Map<String,Object>` in `@RequestBody` (cast-urile dadeau 500 la input gresit).
+- **Erori:** arunca `ApiException.badRequest/forbidden/notFound/conflict(...)`.
+  `GlobalExceptionHandler` le transforma in ProblemDetail (`application/problem+json`, cu `detail`);
+  input invalid/JSON stricat → 400, niciodata 500. `Frontend/src/auth.js` transforma raspunsul in
+  textul din `detail`, deci `res.text()` din ecrane arata mesajul normal.
+- **Niciodata 401 pentru erori de business** (PIN gresit etc.): frontend-ul trateaza 401 ca sesiune
+  expirata si delogheaza. PIN gresit = 403.
+- **PIN admin:** `AdminPinVerifier.verify(pin)`; secretele se compara cu `SharedSecrets.matches`
+  (timp constant). Header-ul PIN e `required = false`, ca lipsa lui sa dea 403, nu 400.
+- **Puncte si stari:** niciodata citeste-modifica-salveaza. `PointsService.spend` face un singur
+  `UPDATE ... WHERE season_points >= :suma`; tranzitiile de stare (bon PENDING→APPROVED) sunt
+  `UPDATE ... WHERE status = 'PENDING'` si se verifica numarul de randuri. Verificat pe MySQL:
+  logica veche aproba acelasi bon de 8 ori din 8 la cereri simultane.
+- **Enum-uri** in loc de string-uri magice (`BonStatus`). Pe coloane VARCHAR existente:
+  `@Enumerated(STRING) @JdbcTypeCode(SqlTypes.VARCHAR)`, altfel `validate` cere coloana ENUM.
+
+### Teste
+- `Shop/ShopApiTest` (H2, MockMvc): forma JSON, 400/403/404/409, rollback la sold insuficient.
+- `Shop/ShopConcurrencyTest` (MySQL 8 in Docker): aprobari simultane, sold niciodata negativ.
+- Total: 44 de teste (`./mvnw verify`).
+
+### De decis
+- `/api/products` si `/api/nfc/**` nu sunt folosite de frontend (Magazinul lucreaza cu calculator,
+  bridge-ul doar cu WebSocket). Candidati la stergere: mai putina suprafata de atac.
+- Control Center → „arata parola”: nu mai poate functiona (parolele nu mai ajung in browser, iar
+  BCrypt nu se decripteaza). De sters impreuna cu `/api/admin/decrypt-password`.
+
+---
+
 ## AUTENTIFICARE JWT — IMPLEMENTAT ✅
 
 ### Principiu
@@ -377,9 +422,8 @@ Optional: `git filter-repo` pentru curatarea istoricului, sau trecerea repo-ului
   -999999 dintr-o greseala de tastare.
 - **NFC bridge** — WebSocket pe localhost fara verificare de `Origin`: orice site deschis
   pe laptopul contabilului poate citi UID-urile. UID-ul se poate clona; nu e autentificare puternica.
-- **Input invalid → 500** (amount text la NFC, place lipsa la Olimpiada, nume >255 caractere).
-  Adauga `@Valid` + un `@RestControllerAdvice`.
-- **Approve bon** — fara blocare: doua aprobari simultane pot trece amandoua. `@Version` pe `Bon`.
+- **Input invalid → 500** in controllerele inca nerefacute (`Map` in `@RequestBody`: Olimpiada,
+  echipe, departamente...). Rezolvat pentru Magazin; restul se rezolva pe masura ce trec in Faza 2.
 - **Telefonul directorului** e hardcodat in `DataInitializer` (repo public).
 
 #### Prioritate înaltă
