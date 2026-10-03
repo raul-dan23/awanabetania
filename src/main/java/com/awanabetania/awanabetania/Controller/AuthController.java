@@ -6,6 +6,7 @@ import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.DepartmentRepository;
 import com.awanabetania.awanabetania.Repository.LeaderRepository;
 import com.awanabetania.awanabetania.Security.JwtService;
+import com.awanabetania.awanabetania.Service.PasswordService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -35,6 +36,9 @@ public class AuthController {
 
     @Autowired
     private JwtService jwtService;
+
+    @Autowired
+    private PasswordService passwordService;
 
     /** Leader registration codes, supplied via the AUTH_REGISTRATION_CODES environment variable. */
     @Value("${auth.registration-codes}")
@@ -75,8 +79,9 @@ public class AuthController {
                 Child child = childOpt.get();
                 if (matchesAndUpgrade(child.getPassword(), rawPassword, child::setPassword,
                                       () -> childRepository.save(child))) {
-                    return ResponseEntity.ok(
-                            session(jwtService.issue(child.getUsername(), "CHILD", child.getId(), null), child));
+                    return ResponseEntity.ok(session(
+                            jwtService.issue(child.getUsername(), "CHILD", child.getId(), null),
+                            child, child.isPasswordChangeRequired()));
                 }
             }
         } else {
@@ -98,7 +103,7 @@ public class AuthController {
                     }
                     return ResponseEntity.ok(session(
                             jwtService.issue(leader.getUsername(), "LEADER", leader.getId(), leader.getRole()),
-                            leader));
+                            leader, leader.isPasswordChangeRequired()));
                 }
             }
         }
@@ -142,14 +147,16 @@ public class AuthController {
     }
 
     /**
-     * Builds the login response: the signed token plus the account entity.
+     * Builds the login response: the signed token, the account entity, and whether the
+     * account must choose a new password first (after a reset by the director).
      * The entity's password field is annotated write-only, so no credential material
      * is serialised here.
      */
-    private Map<String, Object> session(String token, Object user) {
+    private Map<String, Object> session(String token, Object user, boolean mustChangePassword) {
         Map<String, Object> body = new HashMap<>();
         body.put("token", token);
         body.put("user", user);
+        body.put("mustChangePassword", mustChangePassword);
         return body;
     }
 
@@ -179,7 +186,7 @@ public class AuthController {
                 baseUsername += new java.util.Random().nextInt(1000);
             }
             newChild.setUsername(baseUsername);
-            newChild.setPassword(passwordEncoder.encode(request.getPassword()));
+            newChild.setPassword(passwordService.hash(request.getPassword()));
             newChild.setBirthDate(request.getBirthDate());
             newChild.setParentName(request.getParentName());
             newChild.setParentPhone(request.getParentPhone());
@@ -217,7 +224,7 @@ public class AuthController {
                 baseUsername += new java.util.Random().nextInt(1000);
             }
             newLeader.setUsername(baseUsername);
-            newLeader.setPassword(passwordEncoder.encode(request.getPassword()));
+            newLeader.setPassword(passwordService.hash(request.getPassword()));
             newLeader.setRole(request.getRole());
             newLeader.setPhoneNumber(request.getPhoneNumber());
             newLeader.setRating(0.0f);

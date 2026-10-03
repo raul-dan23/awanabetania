@@ -108,6 +108,14 @@ public class Child {
     @Column(name = "deletion_code")
     private String deletionCode;
 
+    /**
+     * Set when a director resets the password: the temporary password works, but the app
+     * asks for a new one right after login. Cleared when the account owner sets a password.
+     */
+    @JsonIgnore
+    @Column(name = "password_change_required", nullable = false)
+    private boolean passwordChangeRequired;
+
     /** Hardware UID of the associated NFC card (unique per card, set by the admin). */
     @Column(name = "nfc_uid", unique = true)
     private String nfcUid;

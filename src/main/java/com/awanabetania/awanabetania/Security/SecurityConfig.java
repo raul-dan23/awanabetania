@@ -96,7 +96,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/children/*").authenticated()
                 .requestMatchers(HttpMethod.PUT, "/api/children/*").authenticated()
                 .requestMatchers(HttpMethod.DELETE, "/api/children/*").authenticated()
-                .requestMatchers(HttpMethod.POST, "/api/account/request-deletion").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/account/request-deletion", "/api/account/password").authenticated()
 
                 // --- Control Center: directors and coordinators (plus the admin PIN) ---
                 .requestMatchers("/api/admin/**").hasAnyRole("DIRECTOR", "COORDONATOR")

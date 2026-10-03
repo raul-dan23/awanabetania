@@ -4,6 +4,7 @@ import com.awanabetania.awanabetania.DataInitializer;
 import com.awanabetania.awanabetania.Model.Child;
 import com.awanabetania.awanabetania.Repository.*;
 import com.awanabetania.awanabetania.Security.AuthUser;
+import com.awanabetania.awanabetania.Service.PasswordService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +30,7 @@ public class ChildController {
     @Autowired private ScoreRepository scoreRepository;
     @Autowired private WarningRepository warningRepository;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private PasswordService passwordService;
 
     /**
      * Children may only reach their own record; leaders may reach any child.
@@ -105,6 +107,11 @@ public class ChildController {
             child.setBirthDate(childDetails.getBirthDate());
             child.setParentName(childDetails.getParentName());
             child.setParentPhone(childDetails.getParentPhone());
+            // The profile form sends a password only when the user typed a new one.
+            if (childDetails.getPassword() != null && !childDetails.getPassword().isEmpty()) {
+                child.setPassword(passwordService.hash(childDetails.getPassword()));
+                child.setPasswordChangeRequired(false);
+            }
             return ResponseEntity.ok(childRepository.save(child));
         }).orElse(ResponseEntity.notFound().build());
     }

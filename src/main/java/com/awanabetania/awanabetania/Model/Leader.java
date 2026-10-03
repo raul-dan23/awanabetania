@@ -71,6 +71,14 @@ public class Leader {
     private String deletionCode;
 
     /**
+     * Set when a director resets the password: the temporary password works, but the app
+     * asks for a new one right after login. Cleared when the account owner sets a password.
+     */
+    @JsonIgnore
+    @Column(name = "password_change_required", nullable = false)
+    private boolean passwordChangeRequired;
+
+    /**
      * Convenience constructor used by {@code DataInitializer} for seeding the admin account.
      *
      * @param name        first name

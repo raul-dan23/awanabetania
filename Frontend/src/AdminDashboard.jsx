@@ -4,7 +4,7 @@ import { API_URL } from './config';
 
 /**
  * PIN-protected admin panel. Gives access to two views:
- *  - Leaders list with contact info, role badges, and decryptable passwords
+ *  - Leaders list with contact info, role badges, and password reset
  *  - Children list with stats and equipment status
  *
  * NFC card management lives in the Magazin → Carduri tab (director-only).
@@ -16,8 +16,8 @@ const AdminDashboard = () => {
     const [viewMode, setViewMode] = useState('LEADERS');
     const [searchTerm, setSearchTerm] = useState('');
     const [sortBy, setSortBy] = useState('name');
-    // Map of userId → plaintext password, populated on demand via decrypt endpoint
-    const [visiblePasswords, setVisiblePasswords] = useState({});
+    // Temporary passwords from resets, keyed "CHILD-12" / "LEADER-3", shown until the page is left
+    const [tempPasswords, setTempPasswords] = useState({});
 
     /**
      * Loads the full user list (leaders + children) from the admin endpoint.
@@ -54,27 +54,27 @@ const AdminDashboard = () => {
     };
 
     /**
-     * Toggles the plaintext password for a user. First call decrypts via the
-     * server; subsequent calls just hide/show the cached value.
+     * Gives the account a new temporary password and shows it here once, so the director
+     * can pass it on. Passwords are stored as one-way hashes and cannot be shown; the owner
+     * picks a new one right after logging in with the temporary password.
      *
-     * @param {number} id - User ID used as the key in `visiblePasswords`
-     * @param {string} encryptedPass - The encrypted password string from the API
+     * @param {'CHILD'|'LEADER'} kind - Account type (child and leader ids overlap)
+     * @param {Object} user - The account from the list
      */
-    const revealPassword = (id, encryptedPass) => {
-        if (visiblePasswords[id]) {
-            const nv = { ...visiblePasswords };
-            delete nv[id];
-            setVisiblePasswords(nv);
-            return;
-        }
-        fetch(`${API_URL}/admin/decrypt-password`, {
+    const resetPassword = (kind, user) => {
+        if (!window.confirm(`Resetezi parola pentru ${user.name} ${user.surname}? Parola actuala nu va mai merge.`)) return;
+        fetch(`${API_URL}/admin/reset-password`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': pin },
-            body: JSON.stringify({ password: encryptedPass })
+            body: JSON.stringify({ kind, id: user.id })
         })
-            .then(res => res.ok ? res.json() : Promise.reject())
-            .then(resp => setVisiblePasswords(prev => ({ ...prev, [id]: resp.realPassword })))
-            .catch(() => toast.error("Eroare decriptare."));
+            .then(res => res.ok ? res.json() : res.text().then(t => Promise.reject(t)))
+            .then(resp => setTempPasswords(prev => ({ ...prev, [`${kind}-${user.id}`]: resp.temporaryPassword })))
+            .catch(err => toast.error(typeof err === 'string' && err ? err : 'Resetarea a esuat.'));
+    };
+
+    const copy = (text) => {
+        navigator.clipboard?.writeText(text).then(() => toast.success('Copiat!')).catch(() => {});
     };
 
     /**
@@ -324,24 +324,29 @@ const AdminDashboard = () => {
                                     </>
                                 )}
 
-                                {/* Password reveal — cached client-side after first decrypt */}
-                                <div style={{marginTop:'4px', background:'#f8fafc', padding:'10px 14px', borderRadius:'10px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px'}}>
-                                    <span style={{fontFamily:'monospace', fontSize:'1rem', fontWeight:'800', color: visiblePasswords[user.id] ? '#dc2626' : '#cbd5e1', letterSpacing: visiblePasswords[user.id] ? 'normal' : '0.15em'}}>
-                                        {visiblePasswords[user.id] ? visiblePasswords[user.id] : '••••••••'}
-                                    </span>
-                                    <button
-                                        onClick={() => revealPassword(user.id, user.password)}
-                                        style={{
-                                            background: visiblePasswords[user.id] ? '#fee2e2' : 'white',
-                                            color: visiblePasswords[user.id] ? '#dc2626' : '#334155',
-                                            border: '1px solid #e2e8f0',
-                                            padding:'7px 13px', borderRadius:'8px', cursor:'pointer',
-                                            fontWeight:'800', fontSize:'0.8rem', flexShrink:0
-                                        }}
-                                    >
-                                        {visiblePasswords[user.id] ? 'Ascunde' : 'Vezi Parola'}
-                                    </button>
-                                </div>
+                                {/* Password reset — the temporary password is shown once, here */}
+                                {(() => {
+                                    const kind = isLeaderView ? 'LEADER' : 'CHILD';
+                                    const temp = tempPasswords[`${kind}-${user.id}`];
+                                    return temp ? (
+                                        <div style={{marginTop:'4px', background:'#fefce8', border:'1px solid #fde68a', padding:'10px 14px', borderRadius:'10px'}}>
+                                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px'}}>
+                                                <span style={{fontFamily:'monospace', fontSize:'1.1rem', fontWeight:'900', color:'#92400e', letterSpacing:'0.05em'}}>{temp}</span>
+                                                <button onClick={() => copy(temp)} style={{background:'white', border:'1px solid #fde68a', padding:'7px 13px', borderRadius:'8px', cursor:'pointer', fontWeight:'800', fontSize:'0.8rem', color:'#92400e', flexShrink:0}}>Copiaza</button>
+                                            </div>
+                                            <div style={{fontSize:'0.75rem', color:'#92400e', marginTop:'6px'}}>
+                                                Parola temporara: spune-i-o lui {user.name}. La prima logare va alege una noua. Nu o vei mai putea vedea dupa ce iesi.
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div style={{marginTop:'4px', background:'#f8fafc', padding:'10px 14px', borderRadius:'10px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px'}}>
+                                            <span style={{fontSize:'0.78rem', color:'#64748b', fontWeight:'600'}}>Parola</span>
+                                            <button onClick={() => resetPassword(kind, user)} style={{background:'white', color:'#334155', border:'1px solid #e2e8f0', padding:'7px 13px', borderRadius:'8px', cursor:'pointer', fontWeight:'800', fontSize:'0.8rem', flexShrink:0}}>
+                                                Reseteaza parola
+                                            </button>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     );

@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { API_URL } from '../config';
 import { setToken } from '../auth';
 import AwanaLogo from '../AwanaLogo';
+import ChangePassword from './ChangePassword';
 
 /**
  * Authentication screen. Supports three flows:
  *  1. Normal login (child / leader / director role selector + credentials)
  *  2. Account registration link
  *  3. Guest arbiter entry for Olimpiada (no account required — just session code + name)
+ * After a director's password reset, the login is followed by a "choose a new password" step.
  *
  * @param {Object} props
  * @param {Function} props.onLogin - Called with the user object on successful login
@@ -22,6 +24,8 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
     const [guestForm, setGuestForm] = useState({ code: '', name: '' });
     const [guestErr, setGuestErr] = useState('');
     const [guestLoading, setGuestLoading] = useState(false);
+    // Logged in with a temporary password: the user must choose a new one before entering.
+    const [pendingUser, setPendingUser] = useState(null);
 
     /**
      * Submits login credentials with a 5-second timeout to avoid hanging on
@@ -44,7 +48,11 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
                 const contentType = r.headers.get("content-type");
                 if (contentType && contentType.includes("application/json")) {
                     const data = await r.json();
-                    if(r.ok) { setToken(data.token); onLogin(data.user); }
+                    if (r.ok) {
+                        setToken(data.token);
+                        if (data.mustChangePassword) setPendingUser(data.user);
+                        else onLogin(data.user);
+                    }
                     else setErr(data.message || 'Date gresite!');
                 } else {
                     // Some error responses come back as plain text
@@ -114,6 +122,9 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
                 <div className="auth-form-box">
                     <div className="auth-mobile-logo"><AwanaLogo width="130px" /></div>
 
+                    {pendingUser ? (
+                        <ChangePassword currentPassword={form.pass} onDone={() => onLogin(pendingUser)} />
+                    ) : (<>
                     <h1 className="auth-title">Bun venit!</h1>
                     <p className="auth-subtitle">Intra in contul tau pentru a continua.</p>
 
@@ -212,6 +223,7 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
                             </form>
                         )}
                     </div>
+                    </>)}
                 </div>
             </div>
         </div>

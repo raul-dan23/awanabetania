@@ -1,5 +1,7 @@
 package com.awanabetania.awanabetania.Controller;
 
+import com.awanabetania.awanabetania.Dto.ChangePasswordRequest;
+import com.awanabetania.awanabetania.Dto.MessageResponse;
 import com.awanabetania.awanabetania.Model.Child;
 import com.awanabetania.awanabetania.Model.Leader;
 import com.awanabetania.awanabetania.Model.Notification;
@@ -7,8 +9,10 @@ import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.LeaderRepository;
 import com.awanabetania.awanabetania.Repository.NotificationRepository;
 import com.awanabetania.awanabetania.Security.AuthUser;
+import com.awanabetania.awanabetania.Service.PasswordService;
 import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,11 +29,23 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/account")
+@RequiredArgsConstructor
 public class AccountController {
 
-    @Autowired private LeaderRepository leaderRepository;
-    @Autowired private ChildRepository childRepository;
-    @Autowired private NotificationRepository notificationRepository;
+    private final LeaderRepository leaderRepository;
+    private final ChildRepository childRepository;
+    private final NotificationRepository notificationRepository;
+    private final PasswordService passwordService;
+
+    /**
+     * The caller replaces their own password; also how a temporary password from a reset is
+     * replaced. 400 new password too short or long; 403 current password wrong.
+     */
+    @PostMapping("/password")
+    public MessageResponse changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        passwordService.change(AuthUser.current(), request.currentPassword(), request.newPassword());
+        return new MessageResponse("Password changed.");
+    }
 
     /**
      * Initiates an account deletion request for the caller's own account. Generates a deletion
