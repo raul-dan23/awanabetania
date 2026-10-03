@@ -31,7 +31,8 @@ The system handles member management, scoring, internal coordination, an NFC-pow
 ## Features
 
 ### Member & Score Management
-- Registration and role assignment (children, leaders, directors, coordinators)
+- Children sign up with a username and password; leaders are added by the director and sign in with Google
+- Forgotten passwords are reset by the director (a one-time temporary password the user must change)
 - Per-meeting scoring: attendance, Bible, lesson, extra points
 - Season-wide point tracking with daily and cumulative totals
 - Department and group management
@@ -70,6 +71,7 @@ Independent scoring system for the annual club competition. Two arbiters score f
 
 ### Role-Based Access
 Enforced on the server: every request carries a signed JWT, and the role comes from the token, never from the client.
+Leaders sign in with Google (invite-only: an account the director has not added is refused); children use passwords.
 
 | Role | Access |
 |---|---|

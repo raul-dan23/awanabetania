@@ -3,6 +3,7 @@ import { API_URL } from '../config';
 import { setToken } from '../auth';
 import AwanaLogo from '../AwanaLogo';
 import ChangePassword from './ChangePassword';
+import GoogleSignInButton from './GoogleSignInButton';
 
 /**
  * Authentication screen. Supports three flows:
@@ -65,6 +66,38 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
                 else setErr('Server offline sau eroare de conexiune.');
             })
             .finally(() => setLoading(false));
+    };
+
+    /**
+     * "Continua cu Google" for leaders: the server checks Google's token and lets in
+     * leaders the director has added.
+     *
+     * @param {string} credential - The ID token from Google's button
+     */
+    const googleLogin = async (credential) => {
+        setLoading(true);
+        setErr('');
+        try {
+            const r = await fetch(`${API_URL}/auth/google`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ credential }),
+            });
+            if (r.ok) {
+                const data = await r.json();
+                setToken(data.token);
+                onLogin(data.user);
+            } else if (r.status === 403) {
+                // Unknown account or a token Google did not sign for us: the same answer for both.
+                setErr('Nu te-am putut autentifica cu acest cont Google. Daca esti lider, cere directorului sa te adauge in Control Center.');
+            } else {
+                setErr('Autentificarea cu Google nu a reusit. Incearca din nou.');
+            }
+        } catch {
+            setErr('Server offline sau eroare de conexiune.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     /**
@@ -172,8 +205,21 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
                         </button>
                     </form>
 
+                    <div style={{ marginTop: 18 }}>
+                        <GoogleSignInButton
+                            onCredential={googleLogin}
+                            caption={
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 12px', color: '#94a3b8', fontSize: '0.8rem', fontWeight: 600 }}>
+                                    <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                                    lideri
+                                    <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                                </div>
+                            }
+                        />
+                    </div>
+
                     <p className="auth-switch" onClick={onSwitchToRegister}>
-                        Nu ai cont? <strong>Inregistreaza-te</strong>
+                        Nu ai cont? <strong>Inscrie un copil</strong>
                     </p>
 
                     {/* Olimpiada guest entry — collapses into a form when activated */}

@@ -33,4 +33,10 @@ public interface LeaderRepository extends JpaRepository<Leader, Integer> {
 
     /** Returns all leaders whose role matches any of the given values (case-insensitive). */
     List<Leader> findByRoleIgnoreCaseIn(List<String> roles);
+
+    /** The leader bound to a Google account (its permanent id). */
+    Optional<Leader> findByGoogleSub(String googleSub);
+
+    /** The leader invited with this Google address. */
+    Optional<Leader> findByEmailIgnoreCase(String email);
 }

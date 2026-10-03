@@ -127,15 +127,17 @@ class SecurityIntegrationTest {
     }
 
     @Test
-    @DisplayName("Registration refuses a code that is not configured")
-    void registrationRejectsUnknownCode() throws Exception {
-        mvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"role":"Lider","name":"X","surname":"Y","password":"p",
-                                 "registrationCode":"AWANA2024"}
-                                """))
-                .andExpect(status().isBadRequest());
+    @DisplayName("Leaders cannot register themselves, whatever code they send")
+    void leadersCannotSelfRegister() throws Exception {
+        for (String role : new String[]{"LEADER", "DIRECTOR", "Lider"}) {
+            mvc.perform(post("/api/auth/register")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"role":"%s","name":"X","surname":"Y","password":"long-enough",
+                                     "registrationCode":"AWANA2024"}
+                                    """.formatted(role)))
+                    .andExpect(status().isForbidden());
+        }
     }
 
     @Test

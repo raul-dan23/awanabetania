@@ -1,6 +1,7 @@
 # Operare în producție
 
-Ghid pentru serverul de producție: deploy, rollback, backup, restaurare și migrări.
+Ghid pentru serverul de producție: deploy, rollback, backup, restaurare, migrări și conturi
+(autentificare cu Google, resetarea parolelor).
 Aplicația rulează ca serviciul systemd `awanabetania`, din `/var/www/html`, ca utilizatorul `awana`.
 
 ---
@@ -208,3 +209,106 @@ pgrep -af 'awanabetania.*jar'                         # trebuie să fie exact un
 systemctl list-timers awanabetania-backup.timer       # următorul backup
 journalctl -u awanabetania-backup -n 20               # rezultatul ultimelor backup-uri
 ```
+
+---
+
+## 8. Autentificare cu Google
+
+Liderii intră cu „Continuă cu Google”. Copiii rămân pe nume de utilizator și parolă.
+Google confirmă *cine* e persoana; lista de lideri din Control Center decide *dacă* are acces.
+Un cont Google care nu e în listă e refuzat, deci nu se poate crea nimeni singur cont de lider.
+
+Serverul are nevoie doar de **Client ID**, care e public (apare oricum în pagina de login).
+Nu se folosește niciun *client secret* și niciun redirect.
+Fără Client ID configurat, butonul Google nu apare și totul merge ca înainte.
+
+### 8.1 Client ID-ul în Google Cloud Console (o singură dată, ~10 minute)
+
+1. Deschide <https://console.cloud.google.com> cu un cont Google **al clubului**, nu cu unul personal,
+   ca accesul să nu depindă de o singură persoană. Alți administratori se adaugă din „IAM & Admin”.
+2. **Proiect nou:** selectorul de proiect din bara de sus → *New project* → nume `Awana Betania` →
+   *Create*. Apoi selectează proiectul. Nu e nevoie de cont de facturare: autentificarea e gratuită.
+3. **Ecranul de consimțământ:** meniul ☰ → *APIs & Services* → *OAuth consent screen*
+   (în consola nouă se numește *Google Auth Platform*: <https://console.cloud.google.com/auth/overview>)
+   → *Get started*:
+   - *App name*: `Awana Betania` (numele pe care îl văd liderii când aleg contul);
+   - *User support email*: adresa clubului;
+   - *Audience*: **External** (liderii au conturi Gmail obișnuite);
+   - *Contact information*: adresa ta → bifează acordul → *Create*.
+4. **Branding** (meniul din stânga):
+   - *Application home page*: `https://awana.betania-tm.ro`;
+   - *Authorized domains*: `betania-tm.ro`;
+   - **nu încărca logo**: logo-ul cere verificarea aplicației de către Google, care durează zile
+     sau săptămâni. Fără logo nu e nevoie de verificare. → *Save*.
+5. **Audience** → *Publish app* → *Confirm*. Statusul devine **In production**.
+   În starea *Testing* pot intra doar adresele trecute manual la *Test users*; ceilalți primesc
+   „Access blocked”. Aplicația cere doar numele și adresa de e-mail, deci publicarea nu cere verificare.
+6. **Data Access:** nu adăuga nimic. Se folosesc doar `openid`, `email` și `profile`, care sunt implicite.
+7. **Clients** → *Create client*:
+   - *Application type*: **Web application**;
+   - *Name*: `Awana web`;
+   - *Authorized JavaScript origins*: `https://awana.betania-tm.ro`
+     (exact așa: cu `https`, fără `/` la final). Pentru dezvoltare locală adaugă și
+     `http://localhost:5173` și `http://localhost`;
+   - *Authorized redirect URIs*: **lasă gol**;
+   - *Create*.
+8. Copiază **Client ID**-ul, de forma `123456789012-abc…xyz.apps.googleusercontent.com`.
+   *Client secret*-ul nu e folosit: nu-l copia nicăieri.
+
+O origine nou adăugată poate avea nevoie de la câteva minute la câteva ore până funcționează.
+
+### 8.2 Pe server
+
+```bash
+cd /var/www/html
+nano application.properties
+#   adaugă linia:  auth.google.client-id=123456789012-abc…xyz.apps.googleusercontent.com
+#   linia auth.registration-codes nu mai e folosită și se poate șterge
+cp application.properties ~/application.properties.backup
+
+./deploy.sh                                  # sau, dacă versiunea e deja la zi:
+                                             # sudo systemctl restart awanabetania
+curl -s localhost:8080/api/auth/config       # {"googleClientId":"123456789012-…"}
+```
+
+Local, aceeași valoare se pune în `.env`, ca `GOOGLE_CLIENT_ID=…`.
+
+### 8.3 Liderii
+
+- **Lider nou:** Control Center → *Lideri* → *+ Adauga lider* → nume, adresa Gmail, rol.
+  Liderul intră apoi cu „Continuă cu Google” pe adresa aceea. Nu primește parolă.
+- **Lider existent** (are deja parolă), una din două:
+  - singur: intră cu parola → *Contul Meu* → *Cont Google* → alege contul;
+  - directorul: Control Center → *Lideri* → rândul *Google* → *Schimba* → adresa liderului.
+
+  Parola veche continuă să meargă.
+- La prima intrare, contul de lider se leagă de identificatorul permanent al contului Google.
+  Dacă directorul schimbă apoi adresa, legătura se șterge și se reface la următoarea intrare.
+- Pagina „Cont Nou” înscrie doar copii. Înainte, oricine cu un cod de lider își putea alege
+  singur rolul de director.
+
+### 8.4 Probleme frecvente
+
+| Simptom | Cauză și rezolvare |
+|---|---|
+| Butonul Google nu apare la login | `curl -s localhost:8080/api/auth/config` arată `null`: lipsește `auth.google.client-id`. Dacă arată ID-ul, browserul blochează `accounts.google.com` (de ex. un adblocker). |
+| Consola browserului (F12): „The given origin is not allowed for the given client ID” | Adresa site-ului lipsește din *Authorized JavaScript origins* sau e scrisă diferit. După corectare, așteaptă propagarea. |
+| Google afișează „Access blocked” sau `access_denied` | Aplicația e încă în *Testing*: *Audience* → *Publish app*. |
+| „Nu te-am putut autentifica cu acest cont Google…” | Adresa nu e în lista de lideri sau liderul a ales alt cont Google. Jurnalul arată adresa: `sudo journalctl -u awanabetania \| grep 'Google sign-in refused'`. |
+| Jurnalul arată `Rejected Google ID token` | Cu `expired` sau `used before`: ceasul serverului e decalat (`timedatectl` trebuie să arate `System clock synchronized: yes`). Cu `JWK set`: serverul nu ajunge la Google (`curl -sI https://www.googleapis.com/oauth2/v3/certs`). |
+| Fereastra Google se deschide și se închide fără efect | Proxy-ul trimite `Cross-Origin-Opener-Policy: same-origin`, care blochează fereastra. Folosește `same-origin-allow-popups` sau scoate header-ul. |
+
+---
+
+## 9. Parolă uitată
+
+Parolele nu pot fi afișate: sunt salvate ca hash BCrypt, care nu se poate întoarce în text.
+În schimb, se resetează:
+
+1. Control Center → *Copii* (sau *Lideri*) → cardul persoanei → *Reseteaza parola* → confirmă.
+2. Apare o parolă temporară, de forma `ab3k-7xmq`, cu butonul *Copiaza*. Trimite-o părintelui.
+   Nu mai apare a doua oară; dacă se pierde, resetezi din nou.
+3. La prima intrare cu ea, aplicația cere o parolă nouă (minimum 6 caractere) înainte de orice altceva.
+
+Fiecare resetare rămâne în jurnal, cu cine a făcut-o:
+`sudo journalctl -u awanabetania | grep 'Password reset'`.

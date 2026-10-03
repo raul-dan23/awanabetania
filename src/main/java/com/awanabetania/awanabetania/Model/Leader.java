@@ -57,6 +57,21 @@ public class Leader {
     /** Average rating computed from visible evaluations; updated after every feedback save. */
     private Float rating = 0.0f;
 
+    /**
+     * Google address the director invited; "Continue with Google" lets this leader in.
+     * Stored in lower case. A leader without one signs in with a password.
+     */
+    @Column(unique = true)
+    private String email;
+
+    /**
+     * Google's permanent id for the account, bound at the first Google sign-in, so that a
+     * later change of address on Google's side does not lock the leader out.
+     */
+    @JsonIgnore
+    @Column(name = "google_sub", unique = true)
+    private String googleSub;
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 
@@ -77,6 +92,12 @@ public class Leader {
     @JsonIgnore
     @Column(name = "password_change_required", nullable = false)
     private boolean passwordChangeRequired;
+
+    /** Whether a Google account is bound; shown in the Control Center and the profile. */
+    @JsonProperty(value = "googleLinked", access = JsonProperty.Access.READ_ONLY)
+    public boolean isGoogleLinked() {
+        return googleSub != null;
+    }
 
     /**
      * Convenience constructor used by {@code DataInitializer} for seeding the admin account.

@@ -1,6 +1,6 @@
 package com.awanabetania.awanabetania.Controller;
 
-import com.awanabetania.awanabetania.Model.Leader;
+import com.awanabetania.awanabetania.Dto.DirectorContactResponse;
 import com.awanabetania.awanabetania.Model.Notification;
 import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.LeaderRepository;
@@ -45,7 +45,8 @@ public class DashboardController {
         stats.put("kidsCount", childRepository.count());
         stats.put("leadersCount", leaderRepository.count());
 
-        List<Leader> directors = leaderRepository.findByRoleIgnoreCaseIn(List.of("director", "coordonator"));
+        List<DirectorContactResponse> directors = leaderRepository.findByRoleIgnoreCaseIn(List.of("director", "coordonator"))
+                .stream().map(DirectorContactResponse::from).toList();
         stats.put("directors", directors);
 
         AuthUser me = AuthUser.current();

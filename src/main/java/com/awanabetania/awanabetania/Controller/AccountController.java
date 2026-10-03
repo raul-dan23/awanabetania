@@ -1,6 +1,8 @@
 package com.awanabetania.awanabetania.Controller;
 
 import com.awanabetania.awanabetania.Dto.ChangePasswordRequest;
+import com.awanabetania.awanabetania.Dto.GoogleCredentialRequest;
+import com.awanabetania.awanabetania.Dto.LeaderAccountResponse;
 import com.awanabetania.awanabetania.Dto.MessageResponse;
 import com.awanabetania.awanabetania.Model.Child;
 import com.awanabetania.awanabetania.Model.Leader;
@@ -9,6 +11,7 @@ import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.LeaderRepository;
 import com.awanabetania.awanabetania.Repository.NotificationRepository;
 import com.awanabetania.awanabetania.Security.AuthUser;
+import com.awanabetania.awanabetania.Service.GoogleSignInService;
 import com.awanabetania.awanabetania.Service.PasswordService;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
@@ -36,6 +39,17 @@ public class AccountController {
     private final ChildRepository childRepository;
     private final NotificationRepository notificationRepository;
     private final PasswordService passwordService;
+    private final GoogleSignInService googleSignInService;
+
+    /**
+     * Links the caller's Google account to their leader account, so they can use
+     * "Continue with Google" from now on. Leaders only (SecurityConfig). 403 invalid token,
+     * 404 Google sign-in not configured, 409 Google account or address used by another leader.
+     */
+    @PostMapping("/google")
+    public LeaderAccountResponse linkGoogle(@Valid @RequestBody GoogleCredentialRequest request) {
+        return LeaderAccountResponse.from(googleSignInService.link(AuthUser.current(), request.credential()));
+    }
 
     /**
      * The caller replaces their own password; also how a temporary password from a reset is

@@ -18,6 +18,9 @@ const AdminDashboard = () => {
     const [sortBy, setSortBy] = useState('name');
     // Temporary passwords from resets, keyed "CHILD-12" / "LEADER-3", shown until the page is left
     const [tempPasswords, setTempPasswords] = useState({});
+    // "Adauga lider" form: leaders sign in with Google at the address entered here
+    const [showInvite, setShowInvite] = useState(false);
+    const [invite, setInvite] = useState({ name: '', surname: '', email: '', role: 'LEADER' });
 
     /**
      * Loads the full user list (leaders + children) from the admin endpoint.
@@ -71,6 +74,40 @@ const AdminDashboard = () => {
             .then(res => res.ok ? res.json() : res.text().then(t => Promise.reject(t)))
             .then(resp => setTempPasswords(prev => ({ ...prev, [`${kind}-${user.id}`]: resp.temporaryPassword })))
             .catch(err => toast.error(typeof err === 'string' && err ? err : 'Resetarea a esuat.'));
+    };
+
+    /** Adds a leader who will sign in with "Continua cu Google" at the given address. */
+    const inviteLeader = (e) => {
+        e.preventDefault();
+        fetch(`${API_URL}/admin/leaders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': pin },
+            body: JSON.stringify(invite)
+        })
+            .then(res => res.ok ? res.json() : res.text().then(t => Promise.reject({ status: res.status, text: t })))
+            .then(added => {
+                toast.success(`${added.name} ${added.surname} a fost adaugat. Poate intra cu Google (${added.email}).`);
+                setInvite({ name: '', surname: '', email: '', role: 'LEADER' });
+                setShowInvite(false);
+                fetchData();
+            })
+            .catch(err => toast.error(err && err.status === 409
+                ? 'Adresa e deja folosita de alt lider.'
+                : 'Verifica datele (email valid, nume, rol).'));
+    };
+
+    /** Sets or removes a leader's Google address; a change disconnects the Google account used so far. */
+    const changeEmail = (leader) => {
+        const value = window.prompt(`Adresa Google pentru ${leader.name} ${leader.surname} (gol = fara Google):`, leader.email || '');
+        if (value === null) return;
+        fetch(`${API_URL}/admin/leaders/${leader.id}/email`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': pin },
+            body: JSON.stringify({ email: value.trim() || null })
+        })
+            .then(res => res.ok ? res.json() : res.text().then(t => Promise.reject({ status: res.status, text: t })))
+            .then(() => { toast.success('Adresa a fost salvata.'); fetchData(); })
+            .catch(err => toast.error(err && err.status === 409 ? 'Adresa e deja folosita de alt lider.' : 'Adresa nu e valida.'));
     };
 
     const copy = (text) => {
@@ -210,6 +247,36 @@ const AdminDashboard = () => {
                 </div>
             )}
 
+            {/* Add a leader: they sign in with Google, no registration code */}
+            {viewMode === 'LEADERS' && (
+                <div style={{marginBottom:'16px'}}>
+                    {!showInvite ? (
+                        <button onClick={() => setShowInvite(true)} style={{width:'100%', padding:'12px', borderRadius:'12px', border:'1.5px dashed #93c5fd', background:'#eff6ff', color:'#1d4ed8', fontWeight:'800', cursor:'pointer'}}>
+                            + Adauga lider
+                        </button>
+                    ) : (
+                        <form onSubmit={inviteLeader} style={{background:'white', border:'1px solid #e2e8f0', borderRadius:'16px', padding:'16px', display:'flex', flexDirection:'column', gap:'10px'}}>
+                            <div style={{fontWeight:'900', color:'#1e293b'}}>Lider nou</div>
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
+                                <input className="login-input" style={{marginBottom:0}} placeholder="Prenume" required value={invite.name} onChange={e => setInvite({ ...invite, name: e.target.value })} />
+                                <input className="login-input" style={{marginBottom:0}} placeholder="Nume" required value={invite.surname} onChange={e => setInvite({ ...invite, surname: e.target.value })} />
+                            </div>
+                            <input className="login-input" style={{marginBottom:0}} type="email" placeholder="Adresa Google (ex: ion@gmail.com)" required value={invite.email} onChange={e => setInvite({ ...invite, email: e.target.value })} />
+                            <select className="login-input" style={{marginBottom:0}} value={invite.role} onChange={e => setInvite({ ...invite, role: e.target.value })}>
+                                <option value="LEADER">Lider</option>
+                                <option value="COORDONATOR">Coordonator</option>
+                                <option value="DIRECTOR">Director</option>
+                            </select>
+                            <div style={{fontSize:'0.78rem', color:'#64748b'}}>Liderul intra pe pagina de login cu „Continua cu Google", folosind exact aceasta adresa.</div>
+                            <div style={{display:'flex', gap:'8px'}}>
+                                <button type="button" onClick={() => setShowInvite(false)} style={{flex:1, padding:'10px', borderRadius:'10px', border:'1px solid #e2e8f0', background:'#f8fafc', cursor:'pointer', fontWeight:'700'}}>Renunta</button>
+                                <button type="submit" style={{flex:2, padding:'10px', borderRadius:'10px', border:'none', background:'#2563eb', color:'white', cursor:'pointer', fontWeight:'800'}}>Adauga</button>
+                            </div>
+                        </form>
+                    )}
+                </div>
+            )}
+
             {/* User cards (Leaders / Children views) */}
             {<div style={{display:'flex', flexDirection:'column', gap:'14px'}}>
                 {displayList.map(user => {
@@ -264,6 +331,18 @@ const AdminDashboard = () => {
 
                                 {isLeaderView && (
                                     <>
+                                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:'8px', padding:'7px 11px', background:'#f8fafc', borderRadius:'8px'}}>
+                                            <span style={{fontSize:'0.78rem', color:'#64748b', fontWeight:'600'}}>Google</span>
+                                            <span style={{display:'flex', alignItems:'center', gap:'8px', minWidth:0}}>
+                                                <span style={{fontWeight:'700', color:'#1e293b', fontSize:'0.85rem', overflow:'hidden', textOverflow:'ellipsis'}}>{user.email || '—'}</span>
+                                                {user.email && (
+                                                    <span style={{fontSize:'0.68rem', fontWeight:'800', padding:'1px 8px', borderRadius:'20px', background: user.googleLinked ? '#dcfce7' : '#f1f5f9', color: user.googleLinked ? '#15803d' : '#64748b'}}>
+                                                        {user.googleLinked ? 'conectat' : 'neconectat inca'}
+                                                    </span>
+                                                )}
+                                                <button onClick={() => changeEmail(user)} style={{background:'white', border:'1px solid #e2e8f0', borderRadius:'8px', padding:'3px 9px', fontSize:'0.75rem', fontWeight:'700', cursor:'pointer', flexShrink:0}}>Schimba</button>
+                                            </span>
+                                        </div>
                                         {user.phoneNumber && (
                                             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 11px', background:'#f8fafc', borderRadius:'8px'}}>
                                                 <span style={{fontSize:'0.78rem', color:'#64748b', fontWeight:'600'}}>Telefon</span>

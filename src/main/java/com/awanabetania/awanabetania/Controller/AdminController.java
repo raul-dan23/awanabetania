@@ -2,6 +2,9 @@ package com.awanabetania.awanabetania.Controller;
 
 import com.awanabetania.awanabetania.Dto.CardAssignedResponse;
 import com.awanabetania.awanabetania.Dto.CardAssignmentRequest;
+import com.awanabetania.awanabetania.Dto.InviteLeaderRequest;
+import com.awanabetania.awanabetania.Dto.LeaderAccountResponse;
+import com.awanabetania.awanabetania.Dto.LeaderEmailRequest;
 import com.awanabetania.awanabetania.Dto.MessageResponse;
 import com.awanabetania.awanabetania.Dto.PasswordResetRequest;
 import com.awanabetania.awanabetania.Dto.TemporaryPasswordResponse;
@@ -11,6 +14,7 @@ import com.awanabetania.awanabetania.Repository.LeaderRepository;
 import com.awanabetania.awanabetania.Security.AdminPinVerifier;
 import com.awanabetania.awanabetania.Security.AuthUser;
 import com.awanabetania.awanabetania.Service.CardService;
+import com.awanabetania.awanabetania.Service.LeaderAccountService;
 import com.awanabetania.awanabetania.Service.PasswordService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +36,7 @@ public class AdminController {
     private final ChildRepository childRepository;
     private final CardService cardService;
     private final PasswordService passwordService;
+    private final LeaderAccountService leaderAccountService;
     private final AdminPinVerifier pinVerifier;
 
     /** Checks the PIN before the Control Center unlocks. 200 "OK", or 403. */
@@ -68,6 +73,26 @@ public class AdminController {
         pinVerifier.verify(pin);
         cardService.remove(childId);
         return new MessageResponse("Card dissociated.");
+    }
+
+    /** Adds a leader who signs in with Google at the given address. 400, 403, 409. */
+    @PostMapping("/leaders")
+    public LeaderAccountResponse inviteLeader(@RequestHeader(value = "X-Admin-Pin", required = false) String pin,
+                                              @Valid @RequestBody InviteLeaderRequest request) {
+        pinVerifier.verify(pin);
+        return leaderAccountService.invite(request);
+    }
+
+    /**
+     * Sets or removes a leader's Google address; a change unbinds the Google account used
+     * so far. 400, 403, 404, 409.
+     */
+    @PutMapping("/leaders/{id}/email")
+    public LeaderAccountResponse setLeaderEmail(@PathVariable Integer id,
+                                                @RequestHeader(value = "X-Admin-Pin", required = false) String pin,
+                                                @Valid @RequestBody LeaderEmailRequest request) {
+        pinVerifier.verify(pin);
+        return leaderAccountService.setEmail(id, request.email());
     }
 
     /**

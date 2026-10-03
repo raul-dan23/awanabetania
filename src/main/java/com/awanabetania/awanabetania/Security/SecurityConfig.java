@@ -75,7 +75,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
 
                 // --- Authentication ---
-                .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register", "/api/auth/google").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/auth/config").permitAll()
 
                 // --- Olimpiada: guest arbiters score without an account ---
                 .requestMatchers(HttpMethod.GET,

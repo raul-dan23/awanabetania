@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { API_URL } from '../config';
 import AwanaLogo from '../AwanaLogo';
 
 /**
- * Account registration form. Adapts its fields based on the selected role:
- *  - Child: birth date, parent name, parent phone
- *  - Leader / Director: phone, department selection, access code (validated server-side)
+ * Registration form for children (birth date, parent name, parent phone).
+ * Leaders do not register here: the director adds them in the Control Center and they
+ * sign in with "Continua cu Google".
  *
  * On success, shows the assigned username and redirects to login after 4.5s.
  *
@@ -13,28 +13,10 @@ import AwanaLogo from '../AwanaLogo';
  * @param {Function} props.onSwitchToLogin - Called when the user wants to go back to login
  */
 const Register = ({ onSwitchToLogin }) => {
-    const [roleType, setRoleType] = useState('CHILD');
-    const [form, setForm] = useState({ name:'', surname:'', pass:'', birthDate:'', parentName:'', phone:'', regCode: '' });
+    const [form, setForm] = useState({ name: '', surname: '', pass: '', birthDate: '', parentName: '', phone: '' });
     // Prefixed with 'ok:' or 'err:' so the same state variable drives both success and error UI
     const [msg, setMsg] = useState('');
     const [loading, setLoading] = useState(false);
-    const [departments, setDepartments] = useState([]);
-    const [selectedDepts, setSelectedDepts] = useState(new Set());
-
-    useEffect(() => {
-        fetch(`${API_URL}/departments`).then(r=>r.ok?r.json():[]).then(setDepartments).catch(() => setMsg('Eroare la conectarea cu serverul.'));
-    }, []);
-
-    /**
-     * Toggles a department in the selection set.
-     *
-     * @param {number} id - Department ID
-     */
-    const toggleDept = (id) => {
-        const next = new Set(selectedDepts);
-        if(next.has(id)) next.delete(id); else next.add(id);
-        setSelectedDepts(next);
-    };
 
     /**
      * Submits the registration payload. The backend generates and returns the
@@ -42,24 +24,20 @@ const Register = ({ onSwitchToLogin }) => {
      */
     const doRegister = (e) => {
         e.preventDefault();
+        if (form.pass.length < 6) { setMsg('err:Parola trebuie sa aiba cel putin 6 caractere.'); return; }
         setLoading(true);
         setMsg('');
         const payload = {
-            name: form.name, surname: form.surname, password: form.pass, role: roleType,
-            birthDate: roleType === 'CHILD' ? form.birthDate : null,
-            parentName: roleType === 'CHILD' ? form.parentName : null,
-            parentPhone: roleType === 'CHILD' ? form.phone : null,
-            phoneNumber: roleType !== 'CHILD' ? form.phone : null,
-            registrationCode: roleType !== 'CHILD' ? form.regCode : null,
-            departmentIds: roleType !== 'CHILD' ? Array.from(selectedDepts) : []
+            role: 'CHILD', name: form.name, surname: form.surname, password: form.pass,
+            birthDate: form.birthDate, parentName: form.parentName, parentPhone: form.phone,
         };
         fetch(`${API_URL}/auth/register`, {
-            method: 'POST', headers: {'Content-Type':'application/json'},
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         })
             .then(async r => {
                 const text = await r.text();
-                if(r.ok) {
+                if (r.ok) {
                     setMsg('ok:' + text + '. Noteaza-ti username-ul pentru login!');
                     setTimeout(onSwitchToLogin, 4500);
                 } else {
@@ -70,14 +48,8 @@ const Register = ({ onSwitchToLogin }) => {
             .finally(() => setLoading(false));
     };
 
-    const roles = [
-        { id: 'CHILD',    label: 'Copil'    },
-        { id: 'LEADER',   label: 'Lider'    },
-        { id: 'DIRECTOR', label: 'Director' },
-    ];
-
     // The 'ok:'/'err:' prefix drives which CSS class is applied
-    const isOk  = msg.startsWith('ok:');
+    const isOk = msg.startsWith('ok:');
     const msgText = msg.slice(3);
 
     return (
@@ -102,17 +74,7 @@ const Register = ({ onSwitchToLogin }) => {
                 <div className="auth-form-box">
                     <div className="auth-mobile-logo"><AwanaLogo width="130px" /></div>
                     <h1 className="auth-title">Cont Nou</h1>
-                    <p className="auth-subtitle">Alatura-te comunitatii Awana Betania.</p>
-
-                    <div className="auth-roles" style={{marginBottom:'20px'}}>
-                        {roles.map(r => (
-                            <button key={r.id} type="button"
-                                onClick={() => { setRoleType(r.id); setSelectedDepts(new Set()); }}
-                                className={`auth-role-btn ${roleType === r.id ? 'auth-role-active' : ''}`}>
-                                {r.label}
-                            </button>
-                        ))}
-                    </div>
+                    <p className="auth-subtitle">Inscrie un copil in clubul Awana Betania.</p>
 
                     <form onSubmit={doRegister} style={{display:'flex', flexDirection:'column', gap:'12px'}}>
                         <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px'}}>
@@ -128,54 +90,20 @@ const Register = ({ onSwitchToLogin }) => {
 
                         <div className="auth-input-wrap">
                             <span className="auth-input-icon">🔒</span>
-                            <input type="password" placeholder="Parola" className="auth-input" onChange={e=>setForm({...form, pass:e.target.value})} required />
+                            <input type="password" placeholder="Parola (min. 6 caractere)" className="auth-input" onChange={e=>setForm({...form, pass:e.target.value})} required autoComplete="new-password" />
                         </div>
-
-                        {/* Access code required for leader/director registration — validated server-side */}
-                        {roleType !== 'CHILD' && (
-                            <div className="auth-input-wrap">
-                                <span className="auth-input-icon">🛡️</span>
-                                <input placeholder="Cod de Acces" className="auth-input" style={{borderColor:'#f87171'}} onChange={e=>setForm({...form, regCode:e.target.value})} required />
-                            </div>
-                        )}
-
-                        {roleType === 'CHILD' ? (
-                            <>
-                                <div className="auth-input-wrap">
-                                    <span className="auth-input-icon">📅</span>
-                                    <input type="date" className="auth-input" onChange={e=>setForm({...form, birthDate:e.target.value})} required />
-                                </div>
-                                <div className="auth-input-wrap">
-                                    <span className="auth-input-icon">👤</span>
-                                    <input placeholder="Nume Parinte" className="auth-input" onChange={e=>setForm({...form, parentName:e.target.value})} required />
-                                </div>
-                                <div className="auth-input-wrap">
-                                    <span className="auth-input-icon">📞</span>
-                                    <input placeholder="Telefon Parinte" className="auth-input" onChange={e=>setForm({...form, phone:e.target.value})} required />
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <div className="auth-input-wrap">
-                                    <span className="auth-input-icon">📞</span>
-                                    <input placeholder="Telefonul tau" className="auth-input" onChange={e=>setForm({...form, phone:e.target.value})} required />
-                                </div>
-                                {departments.length > 0 && (
-                                    <div>
-                                        <p style={{fontSize:'0.8rem', fontWeight:'700', color:'var(--text-secondary)', textTransform:'uppercase', letterSpacing:'0.8px', marginBottom:'10px'}}>Departamente</p>
-                                        <div className="auth-dept-grid">
-                                            {departments.map(d => (
-                                                <div key={d.id} onClick={() => toggleDept(d.id)}
-                                                    className={`auth-dept-chip ${selectedDepts.has(d.id) ? 'auth-dept-selected' : ''}`}>
-                                                    <span>{d.name}</span>
-                                                    {selectedDepts.has(d.id) && <span>✓</span>}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </>
-                        )}
+                        <div className="auth-input-wrap">
+                            <span className="auth-input-icon">📅</span>
+                            <input type="date" className="auth-input" onChange={e=>setForm({...form, birthDate:e.target.value})} required />
+                        </div>
+                        <div className="auth-input-wrap">
+                            <span className="auth-input-icon">👤</span>
+                            <input placeholder="Nume Parinte" className="auth-input" onChange={e=>setForm({...form, parentName:e.target.value})} required />
+                        </div>
+                        <div className="auth-input-wrap">
+                            <span className="auth-input-icon">📞</span>
+                            <input placeholder="Telefon Parinte" className="auth-input" onChange={e=>setForm({...form, phone:e.target.value})} required />
+                        </div>
 
                         {msg && (
                             <div className={isOk ? 'auth-success' : 'auth-error'}>{msgText}</div>
@@ -185,6 +113,10 @@ const Register = ({ onSwitchToLogin }) => {
                             {loading ? <span className="auth-spinner" /> : 'Creeaza Cont'}
                         </button>
                     </form>
+
+                    <p style={{fontSize:'0.82rem', color:'var(--text-secondary)', textAlign:'center', margin:'14px 0 0'}}>
+                        Esti lider? Nu ai nevoie de cont nou: directorul te adauga, iar tu intri cu <strong>Continua cu Google</strong>.
+                    </p>
 
                     <p className="auth-switch" onClick={onSwitchToLogin}>
                         Ai deja cont? <strong>Logheaza-te</strong>
