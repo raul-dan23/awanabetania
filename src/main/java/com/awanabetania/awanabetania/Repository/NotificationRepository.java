@@ -2,6 +2,7 @@ package com.awanabetania.awanabetania.Repository;
 
 import com.awanabetania.awanabetania.Model.Notification;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
@@ -42,4 +43,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Inte
 
     /** Deletes all notifications addressed to the given audience string. */
     void deleteByVisibleTo(String visibleTo);
+
+    /** Hides the visible notifications of the given types (feedback, reward reminders). */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Notification n SET n.isVisible = false WHERE n.type IN ?1 AND n.isVisible = true")
+    int hideByTypes(java.util.Collection<String> types);
 }

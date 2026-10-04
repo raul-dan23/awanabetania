@@ -31,6 +31,7 @@ public class BonService {
     private final ChildRepository childRepository;
     private final LeaderRepository leaderRepository;
     private final PointsService pointsService;
+    private final SeasonService seasonService;
 
     /**
      * Creates a PENDING receipt. The seller recorded on it is the logged-in leader, not a
@@ -48,20 +49,21 @@ public class BonService {
         bon.setLeaderName(sellerName(seller));
         bon.setItems(request.items());
         bon.setTotalPoints(request.totalPoints());
+        bon.setSeasonId(seasonService.currentId());
         return BonResponse.from(bonRepository.save(bon));
     }
 
-    /** Pending receipts, newest first. */
+    /** The current season's pending receipts, newest first. */
     @Transactional(readOnly = true)
     public List<BonResponse> pending() {
-        return bonRepository.findByStatusOrderByCreatedAtDesc(BonStatus.PENDING)
+        return bonRepository.findBySeasonIdAndStatusOrderByCreatedAtDesc(seasonService.currentId(), BonStatus.PENDING)
                 .stream().map(BonResponse::from).toList();
     }
 
-    /** All receipts, newest first. */
+    /** The current season's receipts, newest first. */
     @Transactional(readOnly = true)
     public List<BonResponse> all() {
-        return bonRepository.findAllByOrderByCreatedAtDesc()
+        return bonRepository.findBySeasonIdOrderByCreatedAtDesc(seasonService.currentId())
                 .stream().map(BonResponse::from).toList();
     }
 

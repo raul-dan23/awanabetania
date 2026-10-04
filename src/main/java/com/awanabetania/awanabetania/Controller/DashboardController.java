@@ -6,6 +6,7 @@ import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.LeaderRepository;
 import com.awanabetania.awanabetania.Repository.NotificationRepository;
 import com.awanabetania.awanabetania.Security.AuthUser;
+import com.awanabetania.awanabetania.Service.SeasonService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,6 +29,7 @@ public class DashboardController {
     @Autowired private ChildRepository childRepository;
     @Autowired private LeaderRepository leaderRepository;
     @Autowired private NotificationRepository notificationRepository;
+    @Autowired private SeasonService seasonService;
 
     /**
      * Returns dashboard statistics and the notification feed for the requesting leader.
@@ -35,13 +37,14 @@ public class DashboardController {
      * @param leaderId when present, the notification feed is included. Whose feed it is comes
      *                 from the token, never from this value: child and leader ids overlap, so a
      *                 child whose id matched the director's used to receive director alerts
-     * @return map with keys: "clubName", "kidsCount", "leadersCount", "directors",
-     *         "notifications", "reminders"
+     * @return map with keys: "clubName", "season" (the current season's name), "kidsCount",
+     *         "leadersCount", "directors", "notifications", "reminders"
      */
     @GetMapping("/stats")
     public Map<String, Object> getDashboardStats(@RequestParam(required = false) Integer leaderId) {
         Map<String, Object> stats = new HashMap<>();
         stats.put("clubName", "Awana Betania");
+        stats.put("season", seasonService.current().getName());
         stats.put("kidsCount", childRepository.count());
         stats.put("leadersCount", leaderRepository.count());
 

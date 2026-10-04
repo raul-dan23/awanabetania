@@ -36,6 +36,7 @@ The system handles member management, scoring, internal coordination, an NFC-pow
 - Per-meeting scoring: attendance, Bible, lesson, extra points
 - Season-wide point tracking with daily and cumulative totals
 - Department and group management
+- Club seasons: starting a new season sets points, streaks, rewards and leader ratings back to zero, keeps every child and leader, and keeps the closed season's standings readable
 
 ### NFC Fair System (Târg Final de Sezon)
 End-of-season marketplace where children spend their accumulated season points using physical NFC cards.

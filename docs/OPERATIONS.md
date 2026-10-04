@@ -1,7 +1,7 @@
 # Operare în producție
 
-Ghid pentru serverul de producție: deploy, rollback, backup, restaurare, migrări și conturi
-(autentificare cu Google, resetarea parolelor).
+Ghid pentru serverul de producție: deploy, rollback, backup, restaurare, migrări, conturi
+(autentificare cu Google, resetarea parolelor) și sezoane.
 Aplicația rulează ca serviciul systemd `awanabetania`, din `/var/www/html`, ca utilizatorul `awana`.
 
 ---
@@ -312,3 +312,48 @@ Parolele nu pot fi afișate: sunt salvate ca hash BCrypt, care nu se poate înto
 
 Fiecare resetare rămâne în jurnal, cu cine a făcut-o:
 `sudo journalctl -u awanabetania | grep 'Password reset'`.
+
+---
+
+## 10. Sezon nou
+
+Un sezon e un an de club. La un sezon nou, copiii și liderii rămân, cu datele și conturile lor;
+datele de sezon pornesc de la zero, iar sezonul încheiat rămâne de citit. Nu se șterge nimic.
+
+### Prima dată
+
+Deploy-ul care aduce sezoanele creează singur primul sezon, cu toate datele existente. Îl numește
+după anul de club al primei întâlniri (de ex. `2025–2026`). Numele se poate schimba din
+Control Center → *Sezoane* → *Redenumeste*.
+
+### Pornirea unui sezon nou
+
+1. Fă un backup înainte, ca la orice schimbare mare:
+   `scripts/backup-db.sh inainte-de-sezon-nou`.
+2. Control Center → *Sezoane* → *Incheie sezonul si incepe unul nou…*
+3. Pagina arată exact ce pornește de la zero și ce rămâne. Scrie numele sezonului nou, bifează
+   *Am inteles* și confirmă.
+
+Ce se întâmplă, într-o singură operație:
+
+| Pornesc de la zero | Rămân |
+|---|---|
+| punctele, streak-ul, prezențele, lecțiile | copiii și liderii, datele de contact, conturile |
+| insignele, manualele, uniforma primită | cardurile NFC |
+| suspendările în curs | stickerele de pe hartă |
+| rating-ul liderilor și comentariile primite | anunțurile și cererile de ștergere a contului |
+| bonurile neaprobate (se anulează) | întâlnirile planificate (trec în sezonul nou) |
+
+Sezonul încheiat apare la *Sezoane incheiate* → *Vezi rezultatele*: clasamentul copiilor (puncte
+câștigate, cheltuite la târg, rămase, prezențe, lecții, uniformă, avertismente) și media fiecărui lider.
+
+Pornirea e blocată cât timp o întâlnire neînchisă are deja punctaje: închide-o întâi.
+
+Fiecare sezon nou rămâne în jurnal, cu cine l-a pornit:
+`sudo journalctl -u awanabetania | grep 'started by leader'`.
+
+### Dacă ai pornit un sezon din greșeală
+
+Nu există buton de anulare. Datele sezonului vechi sunt toate în baza de date, dar punctele și
+streak-urile copiilor au fost puse pe zero. Cel mai simplu: restaurează backup-ul de la pasul 1
+(`scripts/restore-db.sh`, vezi secțiunea 4). Se pierde doar ce s-a scris după el.

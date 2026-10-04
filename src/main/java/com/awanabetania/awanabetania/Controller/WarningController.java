@@ -4,6 +4,7 @@ import com.awanabetania.awanabetania.Model.Child;
 import com.awanabetania.awanabetania.Model.Warning;
 import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.WarningRepository;
+import com.awanabetania.awanabetania.Service.SeasonService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -28,15 +29,18 @@ public class WarningController {
     @Autowired
     private ChildRepository childRepository;
 
+    @Autowired
+    private SeasonService seasonService;
+
     /**
-     * Returns all warnings for a given child, ordered newest first.
+     * Returns a child's warnings in the current season, ordered newest first.
      *
      * @param childId the child's primary key
      * @return list of {@link Warning} records
      */
     @GetMapping("/child/{childId}")
     public List<Warning> getWarnings(@PathVariable Integer childId) {
-        return warningRepository.findByChildIdOrderByIdDesc(childId);
+        return warningRepository.findByChildIdAndSeasonIdOrderByIdDesc(childId, seasonService.currentId());
     }
 
     /**
@@ -59,6 +63,7 @@ public class WarningController {
         warning.setSuspension(warningRequest.getSuspension());
         warning.setRemainingMeetings(warningRequest.getRemainingMeetings());
         warning.setDate(LocalDate.now());
+        warning.setSeasonId(seasonService.currentId());
         warningRepository.save(warning);
 
         if (Boolean.TRUE.equals(warningRequest.getSuspension())) {

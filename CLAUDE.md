@@ -68,7 +68,7 @@ Citim UID-ul și îl mapăm la copil în BD. Toate punctele rămân în BD, nu p
 | `Controller/BonController.java` | `POST /api/bons`, `GET /api/bons/pending`, `GET /api/bons/all`, `POST /api/bons/{id}/approve`, `POST /api/bons/{id}/reject` |
 | `Controller/AdminController.java` | `POST /api/admin/nfc-register`, `DELETE /api/admin/nfc-remove/{childId}` — cu `X-Admin-Pin` |
 | `Repository/ProductRepository.java` | Acces BD produse |
-| `Repository/BonRepository.java` | `findByStatusOrderByCreatedAtDesc`, `findAllByOrderByCreatedAtDesc` |
+| `Repository/BonRepository.java` | `findBySeasonIdAndStatusOrderByCreatedAtDesc`, `findBySeasonIdOrderByCreatedAtDesc` (doar sezonul curent) |
 
 **Schema:** tabelele `products` și `bons` sunt în `db/migration/V1__baseline.sql` (vezi secțiunea INFRASTRUCTURĂ).
 
@@ -272,7 +272,8 @@ Olimpiada, Departamente/Echipe/Feedback/Notificari/Dashboard/Avertismente.
 - `Shop/ShopApiTest` (H2, MockMvc): forma JSON, 400/403/404/409, rollback la sold insuficient.
 - `Shop/ShopConcurrencyTest` (MySQL 8 in Docker): aprobari simultane, sold niciodata negativ.
 - `Account/GoogleSignInTest`, `Account/PasswordResetTest`: vezi sectiunea CONTURI.
-- Total: 59 de teste (`./mvnw verify`).
+- `Season/SeasonTest`, `Season/SeasonMySqlTest`: vezi sectiunea SEZOANE.
+- Total: 67 de teste (`./mvnw verify`).
 
 ### De decis
 - `/api/products` si `/api/nfc/**` nu sunt folosite de frontend (Magazinul lucreaza cu calculator,
@@ -413,6 +414,61 @@ copiii nu vad adresele Google ale directorilor in `/api/dashboard/stats`) si `Ac
 
 ---
 
+## SEZOANE — IMPLEMENTAT ✅
+
+### Principiu
+Un sezon = un an de club. Copiii si liderii raman de la un sezon la altul; datele de sezon
+pornesc de la zero, iar sezonul incheiat ramane de citit (nu se sterge nimic).
+- Tabel `seasons` (`name` unic, `start_date`, `end_date`, `status` ACTIVE/CLOSED). Mereu exact un ACTIVE.
+- `season_id` pe `scores`, `meetings`, `leader_evaluations`, `warnings`, `bons`. Orice cod nou care
+  creeaza randuri in tabelele astea pune `seasonId = seasonService.currentId()`, iar listele filtreaza
+  pe sezonul curent. Nu folosi interogari fara sezon pe ele (cele vechi au fost sterse).
+- Contoarele tinute pe `Child` (puncte, streak, prezente...) se copiaza in `season_child_results` la
+  inchidere, apoi se pun pe zero. Punctele castigate/cheltuite si avertismentele se numara din
+  randurile sezonului, care raman in BD.
+
+### Sezon nou (Control Center → Sezoane, director + PIN)
+`SeasonService.startNew`, o singura tranzactie:
+- **Se reseteaza:** `season_points`, `daily_points`, streak, prezente, lectii, `last_attendance_date`,
+  insigne, `has_manual/has_shirt/has_hat`, suspendari, echipa; `child_progress.manuals_count`;
+  lista `child_manual` (copiata ca JSON in arhiva); `leaders.rating`; notificarile FEEDBACK,
+  SHIRT_ELIGIBLE, HAT_ELIGIBLE (ascunse); bonurile PENDING (respinse).
+- **Raman:** copiii, liderii, datele de contact, conturile, cardurile NFC, stickerele
+  (`child_progress.last_sticker_id`), anunturile, cererile de stergere a contului.
+- Intalnirile neinchise trec in sezonul nou. **Blocat** cat timp o intalnire neinchisa are punctaje.
+- Protectie la dublu-click / doi directori: cererea poarta `currentSeasonId`; inchiderea e
+  `UPDATE ... WHERE status = 'ACTIVE'` cu verificarea numarului de randuri (vezi conventiile Faza 2).
+
+### Primul sezon si deploy-ul
+- Migrarile V5–V11 doar adauga (coloane `season_id` nullable). Primul sezon il creeaza
+  `SeasonStartup` la pornire (inclusiv in pre-flight): numit dupa anul de club al primei intalniri
+  (ex. `2025–2026`), cu toate datele existente. Directorul il poate redenumi.
+- La fiecare pornire, randurile fara sezon (scrise de versiunea veche in pre-flight sau dupa un
+  rollback) intra in sezonul activ.
+
+### Endpoint-uri
+- `GET /api/seasons` — lista (lideri); `GET /api/seasons/{id}/results` — clasamentul unui sezon incheiat
+  (409 cat ruleaza).
+- `GET /api/admin/seasons/preview`, `POST /api/admin/seasons` `{currentSeasonId, name}`,
+  `PUT /api/admin/seasons/{id}` `{name}` — director + PIN.
+- `GET /api/dashboard/stats` contine `season` (numele sezonului curent).
+
+### Fisiere
+| Fisier | Descriere |
+|---|---|
+| `Model/Season.java`, `SeasonStatus.java`, `SeasonChildResult.java` | Sezonul si arhiva per copil |
+| `Service/SeasonService.java`, `SeasonStartup.java` | Sezon nou, arhiva, primul sezon, preluarea randurilor fara sezon |
+| `Controller/SeasonController.java`, `SeasonAdminController.java` | Citire (lideri) / administrare (director + PIN) |
+| `Frontend/src/components/SeasonsPanel.jsx` | Control Center → Sezoane: sezonul curent, sezon nou, rezultate |
+
+### Teste
+- `Season/SeasonTest` (H2): scenariu complet prin endpoint-uri (punctaj, avertisment, evaluare, bon)
+  → sezon nou → tot ce trebuie e pe zero, nimic nu e sters, arhiva corecta; dublu-click; intalnire
+  deschisa; PIN/rol/nume; copiii nu vad sezoanele; preluarea randurilor fara sezon.
+- `Season/SeasonMySqlTest` (MySQL 8): 4 directori simultan → un singur sezon nou, arhiva o singura data.
+
+---
+
 ## Referință: proiectul Awana-2 (C# WinForms)
 Locație: `~/Downloads/Awana-2/`
 Același concept dar mai vechi: stoca punctele PE CARD. Fișiere relevante pentru APDU: `AWANAcard.cs`, `CardInfo.cs`.
@@ -428,7 +484,7 @@ Toate `findAll()` + stream filter din controlleri au fost înlocuite cu query-ur
 
 | Controller | Fix aplicat |
 |---|---|
-| `ScoreController` | `findByChildIdAndMeetingId` + `findByChildIdOrderByMeeting_DateDesc` |
+| `ScoreController` | `findByChildIdAndMeetingId` + `findByChildIdAndSeasonIdOrderByMeeting_DateDesc` |
 | `MeetingController` | `findByMeetingId` + `findBySuspensionTrueAndRemainingMeetingsGreaterThan(0)` |
 | `AuthController` | `findByNameIgnoreCase` (child + leader) în loc de `findAll().stream().filter()` |
 | `DashboardController` | `findByRoleIgnoreCaseIn(List.of("director","coordonator"))` |
@@ -467,6 +523,9 @@ Optional: `git filter-repo` pentru curatarea istoricului, sau trecerea repo-ului
 - **Input invalid → 500** in controllerele inca nerefacute (`Map` in `@RequestBody`: Olimpiada,
   echipe, departamente...). Rezolvat pentru Magazin; restul se rezolva pe masura ce trec in Faza 2.
 - **Telefonul directorului** e hardcodat in `DataInitializer` (repo public).
+- **Registru Copii → „Atribuie Manual”** apeleaza `POST /api/children/{id}/assign-manual`, care nu
+  mai exista in backend (disparut in „awanabetania 3.0”): butonul nu face nimic, fara niciun mesaj.
+  De refacut (cu `seasonId`, ca manualele sa tina de sezon) sau de scos.
 
 #### Prioritate înaltă
 - ~~JWT / Autentificare reală~~ — implementat.

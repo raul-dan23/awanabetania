@@ -15,20 +15,19 @@ import java.util.List;
 @Repository
 public interface WarningRepository extends JpaRepository<Warning, Integer> {
 
-    /** Returns all warnings for a given child, ordered newest first. */
-    @Query("SELECT w FROM Warning w WHERE w.child.id = :childId ORDER BY w.id DESC")
-    List<Warning> findByChildIdOrderByIdDesc(@Param("childId") Integer childId);
-
-    /**
-     * Returns all active suspensions (suspension=true) where the countdown has not yet
-     * reached zero. Used during meeting close to decrement remaining meetings.
-     *
-     * @param count threshold — only records with {@code remainingMeetings > count} are returned
-     */
-    List<Warning> findBySuspensionTrueAndRemainingMeetingsGreaterThan(int count);
-
     /** Deletes all warnings belonging to a specific child. */
     @Modifying
     @Query("DELETE FROM Warning w WHERE w.child.id = ?1")
     void deleteByChildId(Integer childId);
+
+    /** A child's warnings in one season, newest first. */
+    @Query("SELECT w FROM Warning w WHERE w.child.id = :childId AND w.seasonId = :seasonId ORDER BY w.id DESC")
+    List<Warning> findByChildIdAndSeasonIdOrderByIdDesc(@Param("childId") Integer childId, @Param("seasonId") Integer seasonId);
+
+    /** Suspensions still running in a season; those of a closed season ended with it. */
+    List<Warning> findBySeasonIdAndSuspensionTrueAndRemainingMeetingsGreaterThan(Integer seasonId, int count);
+
+    /** Warnings per child in a season: rows of [childId, count]. */
+    @Query("SELECT w.child.id, COUNT(w) FROM Warning w WHERE w.seasonId = ?1 GROUP BY w.child.id")
+    List<Object[]> countPerChild(Integer seasonId);
 }

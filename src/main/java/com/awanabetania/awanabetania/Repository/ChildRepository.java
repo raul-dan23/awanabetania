@@ -51,4 +51,22 @@ public interface ChildRepository extends JpaRepository<Child, Integer> {
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE Child c SET c.seasonPoints = c.seasonPoints - :amount WHERE c.id = :id AND c.seasonPoints >= :amount")
     int deductSeasonPoints(@Param("id") Integer id, @Param("amount") int amount);
+
+    /**
+     * Starts the season counters over for every child: points, streak, attendance, lessons,
+     * badges, rewards given, suspension and team. Their previous values are archived first
+     * (SeasonChildResult). Sticker progress is kept.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Child c SET c.seasonPoints = 0, c.dailyPoints = 0, c.attendanceStreak = 0, "
+            + "c.totalAttendance = 0, c.lessonsCompleted = 0, c.lastAttendanceDate = NULL, c.badgesCount = 0, "
+            + "c.hasManual = false, c.hasShirt = false, c.hasHat = false, c.isSuspended = false, c.currentTeam = NULL")
+    int resetSeasonCounters();
+
+    long countBySeasonPointsGreaterThan(int points);
+
+    long countByIsSuspendedTrue();
+
+    @Query("SELECT COALESCE(SUM(c.seasonPoints), 0) FROM Child c")
+    long sumSeasonPoints();
 }

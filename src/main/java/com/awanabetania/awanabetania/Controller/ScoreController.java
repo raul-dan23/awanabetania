@@ -9,6 +9,7 @@ import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.MeetingRepository;
 import com.awanabetania.awanabetania.Repository.NotificationRepository;
 import com.awanabetania.awanabetania.Repository.ScoreRepository;
+import com.awanabetania.awanabetania.Service.SeasonService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -41,6 +42,7 @@ public class ScoreController {
     @Autowired private ChildRepository childRepository;
     @Autowired private MeetingRepository meetingRepository;
     @Autowired private NotificationRepository notificationRepository;
+    @Autowired private SeasonService seasonService;
 
     /**
      * Records a score for a child at the current active meeting.
@@ -65,6 +67,7 @@ public class ScoreController {
         Score score = new Score();
         score.setChild(child);
         score.setMeeting(meeting);
+        score.setSeasonId(seasonService.currentId());
         score.setDate(LocalDate.now());
         score.setAttended(Boolean.TRUE.equals(request.getAttended()));
         score.setHasBible(Boolean.TRUE.equals(request.getHasBible()));
@@ -106,14 +109,14 @@ public class ScoreController {
     }
 
     /**
-     * Returns the full scoring history for a child, newest meeting first.
+     * Returns a child's scoring history in the current season, newest meeting first.
      *
      * @param childId the child's primary key
      * @return list of {@link Score} records
      */
     @GetMapping("/child/{childId}")
     public List<Score> getScoresByChild(@PathVariable Integer childId) {
-        return scoreRepository.findByChildIdOrderByMeeting_DateDesc(childId);
+        return scoreRepository.findByChildIdAndSeasonIdOrderByMeeting_DateDesc(childId, seasonService.currentId());
     }
 
     /**

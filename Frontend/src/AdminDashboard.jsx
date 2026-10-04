@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { API_URL } from './config';
+import SeasonsPanel from './components/SeasonsPanel';
 
 /**
- * PIN-protected admin panel. Gives access to two views:
+ * PIN-protected admin panel. Gives access to three views:
  *  - Leaders list with contact info, role badges, and password reset
  *  - Children list with stats and equipment status
+ *  - Seasons: the current season, starting a new one, and the closed seasons' results
  *
  * NFC card management lives in the Magazin → Carduri tab (director-only).
  */
@@ -221,7 +223,18 @@ const AdminDashboard = () => {
                     color: viewMode==='CHILDREN' ? '#16a34a' : '#64748b',
                     boxShadow: viewMode==='CHILDREN' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
                 }}>Copii ({data.children.length})</button>
+                <button onClick={() => setViewMode('SEASONS')} style={{
+                    flex:1, padding:'10px', border:'none', cursor:'pointer', borderRadius:'10px',
+                    fontWeight:'800', fontSize:'0.85rem', transition:'all 0.18s',
+                    background: viewMode==='SEASONS' ? 'white' : 'transparent',
+                    color: viewMode==='SEASONS' ? '#dc2626' : '#64748b',
+                    boxShadow: viewMode==='SEASONS' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
+                }}>Sezoane</button>
             </div>
+
+            {viewMode === 'SEASONS' && <SeasonsPanel pin={pin} />}
+
+            {viewMode !== 'SEASONS' && <>
 
             {/* Search bar */}
             <input
@@ -434,6 +447,7 @@ const AdminDashboard = () => {
                     <div style={{textAlign:'center', color:'#94a3b8', padding:'40px', fontStyle:'italic'}}>Nu am gasit niciun rezultat.</div>
                 )}
             </div>}
+            </>}
         </div>
     );
 };

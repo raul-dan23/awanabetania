@@ -25,6 +25,11 @@ public class Warning {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
+    /** The season this row belongs to (see {@link Season}); set by the server, never by the client. */
+    @JsonIgnore
+    @Column(name = "season_id")
+    private Integer seasonId;
+
     /** Description of the incident that led to this warning. */
     @Column(name = "description")
     private String description;

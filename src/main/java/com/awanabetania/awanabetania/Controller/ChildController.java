@@ -29,6 +29,7 @@ public class ChildController {
     @Autowired private NotificationRepository notificationRepository;
     @Autowired private ScoreRepository scoreRepository;
     @Autowired private WarningRepository warningRepository;
+    @Autowired private SeasonChildResultRepository seasonChildResultRepository;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private PasswordService passwordService;
 
@@ -163,6 +164,7 @@ public class ChildController {
         scoreRepository.deleteByChildId(id);
         notificationRepository.deleteByChildId(id);
         warningRepository.deleteByChildId(id);
+        seasonChildResultRepository.deleteByChildId(id);
 
         childRepository.deleteById(id);
         return ResponseEntity.ok("Account deleted successfully.");

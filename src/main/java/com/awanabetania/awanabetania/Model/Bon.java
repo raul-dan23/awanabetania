@@ -1,5 +1,6 @@
 package com.awanabetania.awanabetania.Model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -26,6 +27,11 @@ public class Bon {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
+
+    /** The season this row belongs to (see {@link Season}); set by the server, never by the client. */
+    @JsonIgnore
+    @Column(name = "season_id")
+    private Integer seasonId;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "child_id")

@@ -1,5 +1,6 @@
 package com.awanabetania.awanabetania.Model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -24,6 +25,11 @@ public class LeaderEvaluation {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
+
+    /** The season this row belongs to (see {@link Season}); set by the server, never by the client. */
+    @JsonIgnore
+    @Column(name = "season_id")
+    private Integer seasonId;
 
     /** The leader who received this evaluation. */
     @ManyToOne

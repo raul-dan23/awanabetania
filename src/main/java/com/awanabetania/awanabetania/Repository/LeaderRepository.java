@@ -2,6 +2,8 @@ package com.awanabetania.awanabetania.Repository;
 
 import com.awanabetania.awanabetania.Model.Leader;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -39,4 +41,9 @@ public interface LeaderRepository extends JpaRepository<Leader, Integer> {
 
     /** The leader invited with this Google address. */
     Optional<Leader> findByEmailIgnoreCase(String email);
+
+    /** Ratings start over with the new season; they are averages of that season's evaluations. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE Leader l SET l.rating = 0")
+    int resetRatings();
 }

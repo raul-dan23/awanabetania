@@ -2,6 +2,7 @@ package com.awanabetania.awanabetania.Controller;
 
 import com.awanabetania.awanabetania.Model.*;
 import com.awanabetania.awanabetania.Repository.*;
+import com.awanabetania.awanabetania.Service.SeasonService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +25,7 @@ public class FeedbackController {
     @Autowired private LeaderEvaluationRepository evaluationRepository;
     @Autowired private LeaderRepository leaderRepository;
     @Autowired private NotificationRepository notificationRepository;
+    @Autowired private SeasonService seasonService;
 
     /**
      * Returns the general rating and all visible individual evaluations for a given meeting.
@@ -46,14 +48,14 @@ public class FeedbackController {
     }
 
     /**
-     * Returns the visible evaluation history for a given leader, newest first.
+     * Returns a leader's visible evaluations in the current season, newest first.
      *
      * @param leaderId the leader's primary key
      * @return list of visible {@link LeaderEvaluation} records
      */
     @GetMapping("/leader/{leaderId}")
     public List<LeaderEvaluation> getLeaderHistory(@PathVariable Integer leaderId) {
-        return evaluationRepository.findByLeaderIdAndIsVisibleTrueOrderByDateDesc(leaderId);
+        return evaluationRepository.findByLeaderIdAndSeasonIdAndIsVisibleTrueOrderByDateDesc(leaderId, seasonService.currentId());
     }
 
     /**
@@ -111,6 +113,7 @@ public class FeedbackController {
                 le.setComment(comment);
                 le.setIsVisible(true);
                 le.setLeader(l);
+                le.setSeasonId(seasonService.currentId());
                 evaluationRepository.save(le);
                 recalculateLeaderRating(leaderId);
 
@@ -125,15 +128,15 @@ public class FeedbackController {
     }
 
     /**
-     * Recomputes the leader's average {@code rating} from all currently visible evaluations.
+     * Recomputes the leader's average {@code rating} from the current season's visible evaluations.
      * Sets the rating to 0.0 if there are no visible evaluations.
      * The result is rounded to one decimal place.
      */
     private void recalculateLeaderRating(Integer leaderId) {
         Leader leader = leaderRepository.findById(leaderId).orElse(null);
         if (leader != null) {
-            List<LeaderEvaluation> visibleEvals =
-                    evaluationRepository.findByLeaderIdAndIsVisibleTrueOrderByDateDesc(leaderId);
+            List<LeaderEvaluation> visibleEvals = evaluationRepository
+                    .findByLeaderIdAndSeasonIdAndIsVisibleTrueOrderByDateDesc(leaderId, seasonService.currentId());
             if (!visibleEvals.isEmpty()) {
                 double average = visibleEvals.stream().mapToInt(LeaderEvaluation::getRating).average().orElse(0.0);
                 float roundedAvg = (float) (Math.round(average * 10.0) / 10.0);
