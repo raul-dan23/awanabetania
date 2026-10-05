@@ -127,10 +127,30 @@ secțiunea 5).
 
 | | |
 |---|---|
-| Unde | `~/awanabetania-backups/awana-<baza>-<data>-<eticheta>.sql.gz` (doar utilizatorul `awana` le poate citi) |
-| Când | zilnic la 03:17 (`daily`), înainte de fiecare deploy (`pre-deploy`), înainte de o restaurare (`pre-restore`) |
-| Cât timp | 30 de zile (`BACKUP_RETENTION_DAYS`) |
+| Unde | `~/awanabetania-backups/awana-<baza>-<data>-<eticheta>.sql.gz` (doar utilizatorul `awana` le poate citi), plus, dacă e configurat, pe Google Drive |
+| Când | înainte de fiecare deploy (`pre-deploy`), înainte de un sezon nou (`pre-season`, automat din aplicație), înainte de o restaurare (`pre-restore`), la cerere (`scripts/backup-db.sh manual`) și, opțional, zilnic la 03:17 (`daily`) |
+| Câte pe server | ultimele 10 (`backup.keep-local`); pe Drive rămân toate |
 | Integritate | un fișier `.sql.gz` e scris doar dacă dump-ul s-a terminat complet |
+
+**Setări**, în `/var/www/html/application.properties` (le citește scriptul, deci se aplică oricărui
+backup, inclusiv celor de la deploy și de la sezonul nou):
+
+```properties
+backup.rclone-remote=gdrive:awana-backups   # copie pe Google Drive (vezi mai jos)
+backup.keep-local=3                         # câte backup-uri rămân pe server; cel nou rămâne mereu
+```
+
+Un backup are câteva zeci de KB, deci nici 10 nu ocupă aproape nimic. Dacă Google Drive nu răspunde,
+backup-ul de pe server se face oricum, iar deploy-ul și sezonul nou merg mai departe cu un
+avertisment (scriptul iese cu codul 3).
+
+**Backup zilnic: opțional.** Datele se schimbă la fiecare întâlnire, deci un backup doar la deploy
+poate rămâne în urmă cu săptămâni. Cu Drive configurat, cel zilnic nu ocupă loc pe server. Pornit/oprit:
+
+```bash
+sudo systemctl enable --now awanabetania-backup.timer    # pornește
+sudo systemctl disable --now awanabetania-backup.timer   # oprește
+```
 
 **Restaurare** (oprește aplicația, înlocuiește toate tabelele, o pornește la loc):
 
@@ -142,17 +162,40 @@ scripts/restore-db.sh ~/awanabetania-backups/awana-awana_club_manager-....sql.gz
 Scriptul cere numele bazei ca confirmare și face întâi un backup `pre-restore` al stării curente,
 deci și restaurarea se poate anula.
 
-**Copie în afara serverului (recomandat).** Un backup aflat pe același disc nu te ajută dacă
-serverul cade. Cu [rclone](https://rclone.org) poți trimite fiecare backup, de exemplu, pe Google Drive:
+**Copie pe Google Drive (recomandat).** Un backup aflat pe același disc nu te ajută dacă serverul
+cade. Configurarea, o singură dată, ca utilizatorul `awana`:
+
+1. Instalează [rclone](https://rclone.org) cu scriptul oficial; versiunea din `apt` poate fi prea
+   veche pentru autorizarea Google:
+   `sudo -v ; curl https://rclone.org/install.sh | sudo bash`
+2. Serverul nu are browser, deci autorizarea o faci din browserul calculatorului, printr-un tunel.
+   De pe calculator: `ssh -L 53682:localhost:53682 awana@<server>`, apoi `rclone config`:
+   `n` (remote nou) → nume `gdrive` → `drive` → client_id și client_secret goale (sau ale tale,
+   vezi mai jos) → scope `drive.file` (rclone vede doar fișierele create de el) → `n` la
+   *advanced config* → `y` la *web browser*. Deschide link-ul afișat (`http://127.0.0.1:53682/...`)
+   în browserul calculatorului și permite accesul, apoi `n` la *Shared Drive*, `y`, `q`.
+   Mesajele `channel ... Connection refused` de după `Got code` sunt inofensive.
+3. Pune `backup.rclone-remote=gdrive:awana-backups` în `application.properties` și testează:
+   `scripts/backup-db.sh manual` trebuie să afișeze `Copiat in gdrive:awana-backups`.
+
+Folosește contul Google al clubului: backup-urile conțin date ale copiilor; nu partaja folderul.
+Restaurare din Drive: `rclone copy gdrive:awana-backups/<fisier> ~/awanabetania-backups/`, apoi
+`scripts/restore-db.sh` ca mai sus (sau descarci fișierul de pe drive.google.com).
+
+**Client ID propriu pentru rclone.** Accesul comun al rclone la Google Drive se oprește în 2026
+(rclone afișează un `NOTICE`). Cu un Client ID propriu, în proiectul Google Cloud al clubului
+(același ca la secțiunea 8): *APIs & Services → Library → Google Drive API → Enable*; ecranul de
+consimțământ publicat (*Audience → Publish app*; în *Testing*, accesul expiră după 7 zile);
+*Data Access* → scope `.../auth/drive.file`; *Clients → Create client → Desktop app*. Apoi, prin tunel:
 
 ```bash
-sudo apt install rclone
-rclone config                                       # creează un remote, ex. „gdrive”
-BACKUP_RCLONE_REMOTE=gdrive:awana-backups scripts/backup-db.sh manual
+rclone config update gdrive client_id=<CLIENT_ID> client_secret=<CLIENT_SECRET>
+rclone config reconnect gdrive:
 ```
 
-Apoi decomentează linia `Environment=BACKUP_RCLONE_REMOTE=...` din
-`/etc/systemd/system/awanabetania-backup.service` și rulează `sudo systemctl daemon-reload`.
+Cu `drive.file`, rclone nu mai vede fișierele urcate cu vechiul acces: pe Drive apare un al doilea
+folder `awana-backups`; pe cel vechi îl poți șterge de pe drive.google.com. Dacă vreodată copia
+pică cu `invalid_grant`, rulează din nou `rclone config reconnect gdrive:` prin tunel.
 
 **Exercițiu de restaurare (o dată la câteva luni).** Un backup pe care nu l-ai restaurat niciodată
 nu e un backup sigur. Restaurează-l într-o bază separată, nu în cea de producție (scriptul îți
@@ -333,11 +376,13 @@ Control Center → *Sezoane* → *Redenumeste*.
 
 ### Pornirea unui sezon nou
 
-1. Fă un backup înainte, ca la orice schimbare mare:
-   `scripts/backup-db.sh inainte-de-sezon-nou`.
-2. Control Center → *Sezoane* → *Incheie sezonul si incepe unul nou…*
-3. Pagina arată exact ce pornește de la zero și ce rămâne. Scrie numele sezonului nou, bifează
+1. Control Center → *Sezoane* → *Incheie sezonul si incepe unul nou…*
+2. Pagina arată exact ce pornește de la zero și ce rămâne. Scrie numele sezonului nou, bifează
    *Am inteles* și confirmă.
+
+Înainte de orice schimbare, aplicația face singură un backup al bazei de date (`…-pre-season.sql.gz`,
+și pe Google Drive dacă e configurat). Dacă backup-ul nu reușește, sezonul nu pornește și nu se
+schimbă nimic; cauza e în `sudo journalctl -u awanabetania | grep -i backup`.
 
 Ce se întâmplă, într-o singură operație:
 
@@ -360,5 +405,6 @@ Fiecare sezon nou rămâne în jurnal, cu cine l-a pornit:
 ### Dacă ai pornit un sezon din greșeală
 
 Nu există buton de anulare. Datele sezonului vechi sunt toate în baza de date, dar punctele și
-streak-urile copiilor au fost puse pe zero. Cel mai simplu: restaurează backup-ul de la pasul 1
-(`scripts/restore-db.sh`, vezi secțiunea 4). Se pierde doar ce s-a scris după el.
+streak-urile copiilor au fost puse pe zero. Cel mai simplu: restaurează backup-ul făcut automat
+chiar înainte, cel mai nou `*-pre-season.sql.gz` (`scripts/restore-db.sh`, vezi secțiunea 4).
+Se pierde doar ce s-a scris după el.

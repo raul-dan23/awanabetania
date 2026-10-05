@@ -7,6 +7,7 @@ import java.time.LocalDate;
  *
  * @param openMeetingDate a meeting that is not closed yet but already has scores: the new
  *                        season cannot start until it is closed. {@code null} when there is none
+ * @param autoBackup      whether the database is backed up automatically before the new season
  */
 public record NewSeasonPreviewResponse(SeasonResponse current,
                                        long children,
@@ -17,5 +18,6 @@ public record NewSeasonPreviewResponse(SeasonResponse current,
                                        long suspensions,
                                        long pendingBons,
                                        long plannedMeetings,
-                                       LocalDate openMeetingDate) {
+                                       LocalDate openMeetingDate,
+                                       boolean autoBackup) {
 }

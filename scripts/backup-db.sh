@@ -9,11 +9,15 @@
 #
 # Credentialele: aceleasi ca ale aplicatiei, vezi scripts/lib/db-connection.sh.
 #
-# Variabile optionale:
-#   APP_DIR                 directorul aplicatiei            (implicit /var/www/html)
-#   BACKUP_DIR              unde se scriu backup-urile        (implicit ~/awanabetania-backups)
-#   BACKUP_RETENTION_DAYS   backup-urile mai vechi se sterg   (implicit 30)
-#   BACKUP_RCLONE_REMOTE    copie in afara serverului, ex. gdrive:awana-backups (necesita rclone)
+# Setari, din $APP_DIR/application.properties (o variabila de mediu cu acelasi rol are prioritate):
+#   backup.rclone-remote  BACKUP_RCLONE_REMOTE  copie in afara serverului, ex. gdrive:awana-backups
+#                                               (necesita rclone configurat pentru acest utilizator)
+#   backup.keep-local     BACKUP_KEEP_LOCAL     cate backup-uri raman pe server (implicit 10);
+#                                               cele mai vechi se sterg, cel nou ramane mereu
+# Alte variabile: APP_DIR (implicit /var/www/html), BACKUP_DIR (implicit ~/awanabetania-backups).
+#
+# Cod de iesire: 0 = gata; 3 = backup-ul de pe server e facut, dar copia in afara serverului
+# a esuat (deploy-ul si sezonul nou continua cu un avertisment); altceva = niciun backup.
 
 set -euo pipefail
 umask 077
@@ -23,9 +27,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/db-connection.sh"
 
 LABEL="${1:-daily}"
 BACKUP_DIR="${BACKUP_DIR:-$HOME/awanabetania-backups}"
-RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
+REMOTE="${BACKUP_RCLONE_REMOTE:-$(resolve "$(prop 'backup\.rclone-remote')")}"
+KEEP_LOCAL="${BACKUP_KEEP_LOCAL:-$(resolve "$(prop 'backup\.keep-local')")}"
+KEEP_LOCAL="${KEEP_LOCAL:-10}"
 
 [[ "$LABEL" =~ ^[A-Za-z0-9_-]+$ ]] || die "eticheta invalida: '$LABEL' (doar litere, cifre, - si _)"
+[[ "$KEEP_LOCAL" =~ ^[1-9][0-9]*$ ]] || die "backup.keep-local trebuie sa fie un numar de la 1 in sus, nu '$KEEP_LOCAL'"
 command -v mysqldump >/dev/null || die "lipseste mysqldump (sudo apt install mysql-client)"
 
 db_connect
@@ -54,11 +61,25 @@ fi
 mv "$FILE.partial" "$FILE"
 echo "Backup: $FILE ($(du -h "$FILE" | cut -f1))"
 
-if [[ -n "${BACKUP_RCLONE_REMOTE:-}" ]]; then
-    command -v rclone >/dev/null || die "BACKUP_RCLONE_REMOTE e setat, dar rclone nu e instalat"
-    rclone copy "$FILE" "$BACKUP_RCLONE_REMOTE" || die "copia in $BACKUP_RCLONE_REMOTE a esuat (backup-ul local exista)"
-    echo "Copiat in $BACKUP_RCLONE_REMOTE"
+REMOTE_FAILED=0
+if [[ -n "$REMOTE" ]]; then
+    if ! command -v rclone >/dev/null; then
+        echo "$(basename "$0"): backup.rclone-remote e setat, dar rclone nu e instalat" >&2
+        REMOTE_FAILED=1
+    elif rclone copy "$FILE" "$REMOTE"; then
+        echo "Copiat in $REMOTE"
+    else
+        echo "$(basename "$0"): copia in $REMOTE a esuat; backup-ul de pe server exista" >&2
+        REMOTE_FAILED=1
+    fi
 fi
 
-find "$BACKUP_DIR" -maxdepth 1 -name 'awana-*.sql.gz' -mtime +"$RETENTION_DAYS" -print -delete \
-    | sed 's/^/Sters (mai vechi de '"$RETENTION_DAYS"' zile): /'
+# Pe server raman doar cele mai noi $KEEP_LOCAL, dupa data fisierului; cel abia facut e mereu
+# printre ele.
+find "$BACKUP_DIR" -maxdepth 1 -name 'awana-*.sql.gz' -printf '%T@ %p\n' | sort -rn | cut -d' ' -f2- \
+    | tail -n +"$((KEEP_LOCAL + 1))" | while read -r old; do
+        rm -f -- "$old"
+        echo "Sters de pe server (raman ultimele $KEEP_LOCAL): $(basename "$old")"
+    done
+
+[[ "$REMOTE_FAILED" -eq 0 ]] || exit 3

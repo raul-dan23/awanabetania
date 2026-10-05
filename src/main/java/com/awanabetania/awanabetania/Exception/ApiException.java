@@ -43,4 +43,9 @@ public class ApiException extends RuntimeException {
     public static ApiException conflict(String detail) {
         return new ApiException(HttpStatus.CONFLICT, detail);
     }
+
+    /** 503: something the operation depends on (the database backup) failed; nothing was changed. */
+    public static ApiException unavailable(String detail) {
+        return new ApiException(HttpStatus.SERVICE_UNAVAILABLE, detail);
+    }
 }

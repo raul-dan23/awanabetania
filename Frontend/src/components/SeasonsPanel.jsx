@@ -81,7 +81,9 @@ const SeasonsPanel = ({ pin }) => {
             })
             .catch(err => {
                 const text = (err && err.text) || '';
-                if (text.includes('already exists')) toast.error('Exista deja un sezon cu acest nume.');
+                // 503 first: its message ("...nothing was changed") must not read as "the season changed"
+                if (err && err.status === 503) toast.error('Backup-ul bazei de date a esuat, asa ca sezonul nu a fost pornit si nimic nu s-a schimbat. Detalii: sudo journalctl -u awanabetania');
+                else if (text.includes('already exists')) toast.error('Exista deja un sezon cu acest nume.');
                 else if (text.includes('still open')) toast.error('O intalnire cu punctaje e inca deschisa. Inchide-o, apoi incearca din nou.');
                 else if (text.includes('changed')) { toast.error('Sezonul s-a schimbat intre timp. Am reincarcat pagina.'); load(); }
                 else toast.error('Sezonul nou nu a putut fi pornit.');
@@ -145,6 +147,12 @@ const SeasonsPanel = ({ pin }) => {
                         <li>tot sezonul {current.name} ({preview.scores} punctaje), de citit mai jos la „Sezoane incheiate”</li>
                         {preview.plannedMeetings > 0 && <li>{preview.plannedMeetings} intalniri planificate trec in sezonul nou</li>}
                     </ul>
+
+                    <div style={{ fontSize: '0.85rem', color: '#334155', marginBottom: '12px' }}>
+                        {preview.autoBackup
+                            ? 'Inainte de pornire se face automat un backup al bazei de date. Daca nu reuseste, sezonul nu porneste.'
+                            : 'Fa un backup al bazei de date inainte (scripts/backup-db.sh pe server).'}
+                    </div>
 
                     {preview.openMeetingDate ? (
                         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', borderRadius: '10px', padding: '10px 12px', fontSize: '0.88rem', fontWeight: 700, marginBottom: '12px' }}>

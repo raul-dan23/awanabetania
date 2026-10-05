@@ -49,11 +49,11 @@ import java.util.stream.Collectors;
  * Club seasons. Everything recorded during a season (scores, meetings, leader evaluations,
  * warnings, fair receipts) is tagged with it, and the app works with the active season.
  *
- * <p>Starting a new season, in one transaction: closes the current season, archives each
- * child's counters ({@link SeasonChildResult}), sets points, streaks, attendance, lessons,
- * badges, handbooks, rewards and suspensions back to zero, resets leader ratings, hides
- * feedback and reward notifications, rejects receipts still waiting, and moves planned
- * meetings to the new season. Children, leaders, their contact details and the sticker
+ * <p>Starting a new season backs up the database first ({@link BackupService}), then, in one
+ * transaction: closes the current season, archives each child's counters
+ * ({@link SeasonChildResult}), sets points, streaks, attendance, lessons, badges, handbooks,
+ * rewards and suspensions back to zero, resets leader ratings, hides feedback and reward
+ * notifications, rejects receipts still waiting, and moves planned meetings to the new season. Children, leaders, their contact details and the sticker
  * progress stay. Nothing recorded is deleted except the handbook list, which is archived.</p>
  */
 @Service
@@ -80,6 +80,7 @@ public class SeasonService {
     private final WarningRepository warningRepository;
     private final BonRepository bonRepository;
     private final NotificationRepository notificationRepository;
+    private final BackupService backupService;
     private final ObjectMapper objectMapper;
     private final EntityManager entityManager;
 
@@ -136,14 +137,17 @@ public class SeasonService {
                 childRepository.countByIsSuspendedTrue(),
                 bonRepository.countByStatus(BonStatus.PENDING),
                 meetingRepository.countBySeasonIdAndIsCompletedFalse(id),
-                scoreRepository.firstOpenMeetingWithScores());
+                scoreRepository.firstOpenMeetingWithScores(),
+                backupService.enabled());
     }
 
     /**
-     * Closes the current season and starts a new one, as described on the class.
+     * Backs up the database, then closes the current season and starts a new one, as
+     * described on the class.
      *
      * @throws ApiException 409 when the current season is not the one the director confirmed,
-     *                      the name is taken, or a meeting with scores is still open
+     *                      the name is taken, or a meeting with scores is still open;
+     *                      503 when the backup failed (nothing is changed)
      */
     @Transactional
     public SeasonResponse startNew(Integer confirmedSeasonId, String requestedName, AuthUser director) {
@@ -160,6 +164,9 @@ public class SeasonService {
             throw ApiException.conflict("The meeting of " + openMeeting
                     + " is still open and has scores. Close it before starting a new season.");
         }
+
+        // Before anything changes; without a backup the season does not start (503)
+        backupService.backup("pre-season");
 
         LocalDate today = LocalDate.now();
         // The conditional UPDATE is what stops two simultaneous requests: only one closes it

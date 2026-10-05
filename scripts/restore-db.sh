@@ -31,7 +31,11 @@ gzip -t "$FILE" || die "$FILE nu e o arhiva gzip valida"
 zcat "$FILE" | tail -n 1 | grep -q "Dump completed" || die "$FILE e un dump incomplet"
 
 db_connect
-trap 'rm -f "$DB_CNF"' EXIT
+# Copie de lucru a backup-ului: backup-ul pre-restore de la pasul 2 sterge de pe server
+# backup-urile vechi peste backup.keep-local, deci si, poate, fisierul din care restauram.
+SOURCE="$(mktemp)"
+trap 'rm -f "$DB_CNF" "$SOURCE"' EXIT
+cp "$FILE" "$SOURCE"
 sql() { mysql --defaults-extra-file="$DB_CNF" --host="$DB_HOST" --port="$DB_PORT" "$@"; }
 
 echo "Restaurez $FILE"
@@ -42,7 +46,8 @@ if [[ "${RESTORE_CONFIRM:-}" != "$DB_NAME" ]]; then
 fi
 
 echo "1/4 Backup al starii curente..."
-"$SCRIPTS/backup-db.sh" pre-restore
+# 3 = backup-ul de pe server e facut, doar copia in afara serverului a esuat: continuam
+"$SCRIPTS/backup-db.sh" pre-restore || [[ $? -eq 3 ]] || die "backup-ul starii curente a esuat; nu restaurez"
 
 restart=false
 if command -v systemctl >/dev/null && systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
@@ -59,7 +64,7 @@ tables="$(sql -N -B -e "SELECT CONCAT('\`', table_name, '\`') FROM information_s
 if [[ -n "$tables" ]]; then
     sql "$DB_NAME" -e "SET FOREIGN_KEY_CHECKS = 0; DROP TABLE $tables; SET FOREIGN_KEY_CHECKS = 1;"
 fi
-if ! zcat "$FILE" | sql "$DB_NAME"; then
+if ! zcat "$SOURCE" | sql "$DB_NAME"; then
     echo "Restaurarea a esuat la jumatate; aplicatia ramane oprita." >&2
     echo "Revino la starea de dinainte cu cel mai nou backup *-pre-restore.sql.gz:" >&2
     echo "  $0 \$(ls -t ${BACKUP_DIR:-$HOME/awanabetania-backups}/*-pre-restore.sql.gz | head -1)" >&2
