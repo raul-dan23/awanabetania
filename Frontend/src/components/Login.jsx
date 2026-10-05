@@ -2,12 +2,15 @@ import React, { useState } from 'react';
 import { API_URL } from '../config';
 import { setToken } from '../auth';
 import AwanaLogo from '../AwanaLogo';
+import ChangePassword from './ChangePassword';
+import GoogleSignInButton from './GoogleSignInButton';
 
 /**
  * Authentication screen. Supports three flows:
  *  1. Normal login (child / leader / director role selector + credentials)
  *  2. Account registration link
  *  3. Guest arbiter entry for Olimpiada (no account required — just session code + name)
+ * After a director's password reset, the login is followed by a "choose a new password" step.
  *
  * @param {Object} props
  * @param {Function} props.onLogin - Called with the user object on successful login
@@ -22,6 +25,8 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
     const [guestForm, setGuestForm] = useState({ code: '', name: '' });
     const [guestErr, setGuestErr] = useState('');
     const [guestLoading, setGuestLoading] = useState(false);
+    // Logged in with a temporary password: the user must choose a new one before entering.
+    const [pendingUser, setPendingUser] = useState(null);
 
     /**
      * Submits login credentials with a 5-second timeout to avoid hanging on
@@ -44,7 +49,11 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
                 const contentType = r.headers.get("content-type");
                 if (contentType && contentType.includes("application/json")) {
                     const data = await r.json();
-                    if(r.ok) { setToken(data.token); onLogin(data.user); }
+                    if (r.ok) {
+                        setToken(data.token);
+                        if (data.mustChangePassword) setPendingUser(data.user);
+                        else onLogin(data.user);
+                    }
                     else setErr(data.message || 'Date gresite!');
                 } else {
                     // Some error responses come back as plain text
@@ -57,6 +66,38 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
                 else setErr('Server offline sau eroare de conexiune.');
             })
             .finally(() => setLoading(false));
+    };
+
+    /**
+     * "Continua cu Google" for leaders: the server checks Google's token and lets in
+     * leaders the director has added.
+     *
+     * @param {string} credential - The ID token from Google's button
+     */
+    const googleLogin = async (credential) => {
+        setLoading(true);
+        setErr('');
+        try {
+            const r = await fetch(`${API_URL}/auth/google`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ credential }),
+            });
+            if (r.ok) {
+                const data = await r.json();
+                setToken(data.token);
+                onLogin(data.user);
+            } else if (r.status === 403) {
+                // Unknown account or a token Google did not sign for us: the same answer for both.
+                setErr('Nu te-am putut autentifica cu acest cont Google. Daca esti lider, cere directorului sa te adauge in Control Center.');
+            } else {
+                setErr('Autentificarea cu Google nu a reusit. Incearca din nou.');
+            }
+        } catch {
+            setErr('Server offline sau eroare de conexiune.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     /**
@@ -114,6 +155,9 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
                 <div className="auth-form-box">
                     <div className="auth-mobile-logo"><AwanaLogo width="130px" /></div>
 
+                    {pendingUser ? (
+                        <ChangePassword currentPassword={form.pass} onDone={() => onLogin(pendingUser)} />
+                    ) : (<>
                     <h1 className="auth-title">Bun venit!</h1>
                     <p className="auth-subtitle">Intra in contul tau pentru a continua.</p>
 
@@ -161,8 +205,21 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
                         </button>
                     </form>
 
+                    <div style={{ marginTop: 18 }}>
+                        <GoogleSignInButton
+                            onCredential={googleLogin}
+                            caption={
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 12px', color: '#94a3b8', fontSize: '0.8rem', fontWeight: 600 }}>
+                                    <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                                    lideri
+                                    <span style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                                </div>
+                            }
+                        />
+                    </div>
+
                     <p className="auth-switch" onClick={onSwitchToRegister}>
-                        Nu ai cont? <strong>Inregistreaza-te</strong>
+                        Nu ai cont? <strong>Inscrie un copil</strong>
                     </p>
 
                     {/* Olimpiada guest entry — collapses into a form when activated */}
@@ -212,6 +269,7 @@ const Login = ({ onLogin, onSwitchToRegister, onGuestArbiter }) => {
                             </form>
                         )}
                     </div>
+                    </>)}
                 </div>
             </div>
         </div>

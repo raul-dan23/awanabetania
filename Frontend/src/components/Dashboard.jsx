@@ -91,6 +91,7 @@ const Dashboard = ({ user }) => {
                     <span className="db-greeting">{getGreeting()},</span>
                     <h1 className="db-name">{user?.name} {user?.surname}</h1>
                     <span className="db-role-pill">{isChild ? 'Copil' : (user.role || 'Lider')}</span>
+                    {stats.season && <span className="db-role-pill" style={{ marginLeft: '6px' }}>Sezon {stats.season}</span>}
                 </div>
                 <div className="db-hero-date">
                     <div className="db-date-day">{new Date().toLocaleDateString('ro-RO', { day: 'numeric' })}</div>

@@ -31,10 +31,12 @@ The system handles member management, scoring, internal coordination, an NFC-pow
 ## Features
 
 ### Member & Score Management
-- Registration and role assignment (children, leaders, directors, coordinators)
+- Children sign up with a username and password; leaders are added by the director and sign in with Google
+- Forgotten passwords are reset by the director (a one-time temporary password the user must change)
 - Per-meeting scoring: attendance, Bible, lesson, extra points
 - Season-wide point tracking with daily and cumulative totals
 - Department and group management
+- Club seasons: starting a new season sets points, streaks, rewards and leader ratings back to zero, keeps every child and leader, and keeps the closed season's standings readable
 
 ### NFC Fair System (Târg Final de Sezon)
 End-of-season marketplace where children spend their accumulated season points using physical NFC cards.
@@ -70,6 +72,7 @@ Independent scoring system for the annual club competition. Two arbiters score f
 
 ### Role-Based Access
 Enforced on the server: every request carries a signed JWT, and the role comes from the token, never from the client.
+Leaders sign in with Google (invite-only: an account the director has not added is refused); children use passwords.
 
 | Role | Access |
 |---|---|
@@ -88,8 +91,10 @@ Client (React + Vite)
         │  HTTPS · REST · Authorization: Bearer <JWT>
         ▼
 Spring Boot (Java 17)
-  ├── Security/     JWT filter, access rules per role
-  ├── Controller/   REST endpoints
+  ├── Security/     JWT filter, access rules per role, admin PIN
+  ├── Controller/   HTTP only: validated request DTOs in, response DTOs out
+  ├── Service/      business rules and transactions
+  ├── Exception/    errors as RFC 7807 problem responses
   ├── Model/        JPA entities (Child, Score, Meeting, Bon, Product, OlimpiadaSession, ...)
   └── Repository/   Spring Data JPA
         │

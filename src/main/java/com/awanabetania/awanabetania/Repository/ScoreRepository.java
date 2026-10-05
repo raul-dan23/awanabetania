@@ -19,9 +19,6 @@ public interface ScoreRepository extends JpaRepository<Score, Integer> {
     /** Returns all score records for a given child (unordered). */
     List<Score> findByChildId(Integer childId);
 
-    /** Returns all score records for a given child, newest meeting first. */
-    List<Score> findByChildIdOrderByMeeting_DateDesc(Integer childId);
-
     /** Returns all scores for a child on a specific calendar date. */
     List<Score> findByChildIdAndMeeting_Date(Integer childId, LocalDate date);
 
@@ -38,4 +35,20 @@ public interface ScoreRepository extends JpaRepository<Score, Integer> {
     @Modifying
     @Query("DELETE FROM Score s WHERE s.child.id = ?1")
     void deleteByChildId(Integer childId);
+
+    /** A child's scores in one season, newest meeting first. */
+    List<Score> findByChildIdAndSeasonIdOrderByMeeting_DateDesc(Integer childId, Integer seasonId);
+
+    long countBySeasonId(Integer seasonId);
+
+    /** Points earned per child in a season: rows of [childId, sum(total)]. */
+    @Query("SELECT s.child.id, SUM(s.total) FROM Score s WHERE s.seasonId = ?1 GROUP BY s.child.id")
+    List<Object[]> earnedPerChild(Integer seasonId);
+
+    /**
+     * The earliest meeting not closed yet that already has scores, or null: a season cannot
+     * end in the middle of one.
+     */
+    @Query("SELECT MIN(s.meeting.date) FROM Score s WHERE s.meeting.isCompleted = false")
+    LocalDate firstOpenMeetingWithScores();
 }

@@ -18,4 +18,9 @@ public interface ChildProgressRepository extends JpaRepository<ChildProgress, In
     @Modifying
     @Query("DELETE FROM ChildProgress cp WHERE cp.child.id = ?1")
     void deleteByChildId(Integer childId);
+
+    /** Handbook count back to zero for a new season; sticker progress is kept. */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE ChildProgress cp SET cp.manualsCount = 0")
+    int resetManualsCount();
 }

@@ -97,10 +97,10 @@ class SecurityAuditTest {
         mvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"role":"CHILD","name":"Hacker","surname":"Kid","password":"x"}
+                                {"role":"CHILD","name":"Hacker","surname":"Kid","password":"secret1"}
                                 """))
                 .andExpect(status().isOk());
-        String token = login("hackerkid", "x", "CHILD");
+        String token = login("hackerkid", "secret1", "CHILD");
         assertThat(token).isNotNull();
         return token;
     }

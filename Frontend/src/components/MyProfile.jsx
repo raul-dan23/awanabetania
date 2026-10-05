@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config';
+import { toast } from 'sonner';
+import GoogleSignInButton from './GoogleSignInButton';
+import { useGoogleSignIn } from '../googleConfig';
 
 /**
  * Personal profile page. Shows and allows editing of the user's own data.
@@ -24,6 +27,7 @@ const MyProfile = ({ user, onUpdateUser }) => {
     const [showDeleteInput, setShowDeleteInput] = useState(false);
     const [deleteCode, setDeleteCode] = useState('');
     const [myFeedbacks, setMyFeedbacks] = useState([]);
+    const googleAvailable = useGoogleSignIn();
     const [showFeedback, setShowFeedback] = useState(false);
 
     useEffect(() => {
@@ -53,6 +57,26 @@ const MyProfile = ({ user, onUpdateUser }) => {
             .then(res => res.ok ? res.json() : res.text().then(t => {throw t}))
             .then(u => { setLoading(false); setIsEditing(false); onUpdateUser(u); alert("Actualizat!"); })
             .catch((err) => { setLoading(false); alert(err || "Eroare server."); });
+    };
+
+    /**
+     * Links the leader's Google account, so they can use "Continua cu Google" from now on.
+     *
+     * @param {string} credential - The ID token from Google's button
+     */
+    const linkGoogle = (credential) => {
+        fetch(`${API_URL}/account/google`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credential })
+        })
+            .then(res => res.ok ? res.json() : res.text().then(t => Promise.reject({ status: res.status, text: t })))
+            .then(account => {
+                onUpdateUser({ ...user, email: account.email, googleLinked: true });
+                toast.success('Contul Google a fost conectat.');
+            })
+            .catch(err => toast.error(err && err.status === 409
+                ? 'Acest cont Google e deja folosit de alt lider.'
+                : 'Conectarea cu Google nu a reusit.'));
     };
 
     /**
@@ -252,6 +276,26 @@ const MyProfile = ({ user, onUpdateUser }) => {
                                     </span>
                                 </div>
                             ))}
+                        </div>
+                    )}
+
+                    {/* Only once Google sign-in is configured on the server */}
+                    {!isChild && googleAvailable && (
+                        <div className="card">
+                            <p className="db-section-title">Cont Google</p>
+                            {user.googleLinked ? (
+                                <p style={{fontSize:'0.9rem', color:'var(--text-primary)', margin:0, lineHeight:1.55}}>
+                                    <span style={{color:'#16a34a', fontWeight:800}}>✓ Conectat</span>
+                                    {user.email && <> — intri cu <strong>{user.email}</strong></>}. La login apasa „Continua cu Google".
+                                </p>
+                            ) : (
+                                <>
+                                    <p style={{fontSize:'0.88rem', color:'var(--text-secondary)', margin:'0 0 14px', lineHeight:1.55}}>
+                                        Conecteaza-ti contul Google ca sa intri cu un singur click, fara parola.
+                                    </p>
+                                    <GoogleSignInButton onCredential={linkGoogle} />
+                                </>
+                            )}
                         </div>
                     )}
 

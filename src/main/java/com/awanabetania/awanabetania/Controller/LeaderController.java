@@ -3,10 +3,10 @@ package com.awanabetania.awanabetania.Controller;
 import com.awanabetania.awanabetania.Model.Leader;
 import com.awanabetania.awanabetania.Repository.*;
 import com.awanabetania.awanabetania.Security.AuthUser;
+import com.awanabetania.awanabetania.Service.PasswordService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,7 +28,7 @@ public class LeaderController {
     @Autowired private MeetingAssignmentRepository meetingAssignmentRepository;
     @Autowired private LeaderEvaluationRepository leaderEvaluationRepository;
     @Autowired private MeetingRepository meetingRepository;
-    @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private PasswordService passwordService;
 
     /** The account owner, or a director/coordinator acting on someone else's account. */
     private static boolean mayManage(Integer leaderId) {
@@ -88,7 +88,8 @@ public class LeaderController {
             }
 
             if (leaderDetails.getPassword() != null && !leaderDetails.getPassword().isEmpty()) {
-                leader.setPassword(passwordEncoder.encode(leaderDetails.getPassword()));
+                leader.setPassword(passwordService.hash(leaderDetails.getPassword()));
+                leader.setPasswordChangeRequired(false);
             }
 
             return ResponseEntity.ok(leaderRepository.save(leader));

@@ -75,7 +75,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/info").permitAll()
 
                 // --- Authentication ---
-                .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register", "/api/auth/google").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/auth/config").permitAll()
 
                 // --- Olimpiada: guest arbiters score without an account ---
                 .requestMatchers(HttpMethod.GET,
@@ -96,7 +97,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/children/*").authenticated()
                 .requestMatchers(HttpMethod.PUT, "/api/children/*").authenticated()
                 .requestMatchers(HttpMethod.DELETE, "/api/children/*").authenticated()
-                .requestMatchers(HttpMethod.POST, "/api/account/request-deletion").authenticated()
+                .requestMatchers(HttpMethod.POST, "/api/account/request-deletion", "/api/account/password").authenticated()
 
                 // --- Control Center: directors and coordinators (plus the admin PIN) ---
                 .requestMatchers("/api/admin/**").hasAnyRole("DIRECTOR", "COORDONATOR")

@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { API_URL } from './config';
+import SeasonsPanel from './components/SeasonsPanel';
+import { useGoogleSignIn } from './googleConfig';
 
 /**
- * PIN-protected admin panel. Gives access to two views:
- *  - Leaders list with contact info, role badges, and decryptable passwords
+ * PIN-protected admin panel. Gives access to three views:
+ *  - Leaders list with contact info, role badges, and password reset
  *  - Children list with stats and equipment status
+ *  - Seasons: the current season, starting a new one, and the closed seasons' results
  *
  * NFC card management lives in the Magazin → Carduri tab (director-only).
  */
@@ -16,8 +19,13 @@ const AdminDashboard = () => {
     const [viewMode, setViewMode] = useState('LEADERS');
     const [searchTerm, setSearchTerm] = useState('');
     const [sortBy, setSortBy] = useState('name');
-    // Map of userId → plaintext password, populated on demand via decrypt endpoint
-    const [visiblePasswords, setVisiblePasswords] = useState({});
+    // Temporary passwords from resets, keyed "CHILD-12" / "LEADER-3", shown until the page is left
+    const [tempPasswords, setTempPasswords] = useState({});
+    // "Adauga lider" form: the new leader signs in with Google at the address entered here,
+    // or, while Google sign-in is not configured, with a temporary password shown once
+    const [showInvite, setShowInvite] = useState(false);
+    const [invite, setInvite] = useState({ name: '', surname: '', email: '', role: 'LEADER' });
+    const googleAvailable = useGoogleSignIn();
 
     /**
      * Loads the full user list (leaders + children) from the admin endpoint.
@@ -54,27 +62,71 @@ const AdminDashboard = () => {
     };
 
     /**
-     * Toggles the plaintext password for a user. First call decrypts via the
-     * server; subsequent calls just hide/show the cached value.
+     * Gives the account a new temporary password and shows it here once, so the director
+     * can pass it on. Passwords are stored as one-way hashes and cannot be shown; the owner
+     * picks a new one right after logging in with the temporary password.
      *
-     * @param {number} id - User ID used as the key in `visiblePasswords`
-     * @param {string} encryptedPass - The encrypted password string from the API
+     * @param {'CHILD'|'LEADER'} kind - Account type (child and leader ids overlap)
+     * @param {Object} user - The account from the list
      */
-    const revealPassword = (id, encryptedPass) => {
-        if (visiblePasswords[id]) {
-            const nv = { ...visiblePasswords };
-            delete nv[id];
-            setVisiblePasswords(nv);
-            return;
-        }
-        fetch(`${API_URL}/admin/decrypt-password`, {
+    const resetPassword = (kind, user) => {
+        if (!window.confirm(`Resetezi parola pentru ${user.name} ${user.surname}? Parola actuala nu va mai merge.`)) return;
+        fetch(`${API_URL}/admin/reset-password`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': pin },
-            body: JSON.stringify({ password: encryptedPass })
+            body: JSON.stringify({ kind, id: user.id })
         })
-            .then(res => res.ok ? res.json() : Promise.reject())
-            .then(resp => setVisiblePasswords(prev => ({ ...prev, [id]: resp.realPassword })))
-            .catch(() => toast.error("Eroare decriptare."));
+            .then(res => res.ok ? res.json() : res.text().then(t => Promise.reject(t)))
+            .then(resp => setTempPasswords(prev => ({ ...prev, [`${kind}-${user.id}`]: resp.temporaryPassword })))
+            .catch(err => toast.error(typeof err === 'string' && err ? err : 'Resetarea a esuat.'));
+    };
+
+    /**
+     * Adds a leader. With Google configured and an address given, they sign in with
+     * "Continua cu Google"; otherwise the server returns a temporary password, shown in
+     * the new leader's card like a reset one.
+     */
+    const inviteLeader = (e) => {
+        e.preventDefault();
+        fetch(`${API_URL}/admin/leaders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': pin },
+            body: JSON.stringify(invite)
+        })
+            .then(res => res.ok ? res.json() : res.text().then(t => Promise.reject({ status: res.status, text: t })))
+            .then(added => {
+                if (added.temporaryPassword) {
+                    setTempPasswords(prev => ({ ...prev, [`LEADER-${added.id}`]: added.temporaryPassword }));
+                    setSearchTerm(added.name);   // brings the new card, with the password, into view
+                    toast.success(`${added.name} ${added.surname} a fost adaugat. Username-ul si parola temporara sunt in cardul lui.`);
+                } else {
+                    toast.success(`${added.name} ${added.surname} a fost adaugat. Poate intra cu Google (${added.email}).`);
+                }
+                setInvite({ name: '', surname: '', email: '', role: 'LEADER' });
+                setShowInvite(false);
+                fetchData();
+            })
+            .catch(err => toast.error(err && err.status === 409
+                ? 'Adresa e deja folosita de alt lider.'
+                : 'Verifica datele (email valid, nume, rol).'));
+    };
+
+    /** Sets or removes a leader's Google address; a change disconnects the Google account used so far. */
+    const changeEmail = (leader) => {
+        const value = window.prompt(`Adresa Google pentru ${leader.name} ${leader.surname} (gol = fara Google):`, leader.email || '');
+        if (value === null) return;
+        fetch(`${API_URL}/admin/leaders/${leader.id}/email`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': pin },
+            body: JSON.stringify({ email: value.trim() || null })
+        })
+            .then(res => res.ok ? res.json() : res.text().then(t => Promise.reject({ status: res.status, text: t })))
+            .then(() => { toast.success('Adresa a fost salvata.'); fetchData(); })
+            .catch(err => toast.error(err && err.status === 409 ? 'Adresa e deja folosita de alt lider.' : 'Adresa nu e valida.'));
+    };
+
+    const copy = (text) => {
+        navigator.clipboard?.writeText(text).then(() => toast.success('Copiat!')).catch(() => {});
     };
 
     /**
@@ -184,7 +236,18 @@ const AdminDashboard = () => {
                     color: viewMode==='CHILDREN' ? '#16a34a' : '#64748b',
                     boxShadow: viewMode==='CHILDREN' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
                 }}>Copii ({data.children.length})</button>
+                <button onClick={() => setViewMode('SEASONS')} style={{
+                    flex:1, padding:'10px', border:'none', cursor:'pointer', borderRadius:'10px',
+                    fontWeight:'800', fontSize:'0.85rem', transition:'all 0.18s',
+                    background: viewMode==='SEASONS' ? 'white' : 'transparent',
+                    color: viewMode==='SEASONS' ? '#dc2626' : '#64748b',
+                    boxShadow: viewMode==='SEASONS' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
+                }}>Sezoane</button>
             </div>
+
+            {viewMode === 'SEASONS' && <SeasonsPanel pin={pin} />}
+
+            {viewMode !== 'SEASONS' && <>
 
             {/* Search bar */}
             <input
@@ -207,6 +270,42 @@ const AdminDashboard = () => {
                             boxShadow: sortBy === opt.key ? '0 2px 8px rgba(0,0,0,0.08)' : 'none'
                         }}>{opt.label}</button>
                     ))}
+                </div>
+            )}
+
+            {/* Add a leader: with Google, or a temporary password while Google is not set up */}
+            {viewMode === 'LEADERS' && (
+                <div style={{marginBottom:'16px'}}>
+                    {!showInvite ? (
+                        <button onClick={() => setShowInvite(true)} style={{width:'100%', padding:'12px', borderRadius:'12px', border:'1.5px dashed #93c5fd', background:'#eff6ff', color:'#1d4ed8', fontWeight:'800', cursor:'pointer'}}>
+                            + Adauga lider
+                        </button>
+                    ) : (
+                        <form onSubmit={inviteLeader} style={{background:'white', border:'1px solid #e2e8f0', borderRadius:'16px', padding:'16px', display:'flex', flexDirection:'column', gap:'10px'}}>
+                            <div style={{fontWeight:'900', color:'#1e293b'}}>Lider nou</div>
+                            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px'}}>
+                                <input className="login-input" style={{marginBottom:0}} placeholder="Prenume" required value={invite.name} onChange={e => setInvite({ ...invite, name: e.target.value })} />
+                                <input className="login-input" style={{marginBottom:0}} placeholder="Nume" required value={invite.surname} onChange={e => setInvite({ ...invite, surname: e.target.value })} />
+                            </div>
+                            <input className="login-input" style={{marginBottom:0}} type="email"
+                                   placeholder={googleAvailable ? 'Adresa Google (ex: ion@gmail.com)' : 'Adresa Gmail (optional, pentru mai tarziu)'}
+                                   required={!!googleAvailable} value={invite.email} onChange={e => setInvite({ ...invite, email: e.target.value })} />
+                            <select className="login-input" style={{marginBottom:0}} value={invite.role} onChange={e => setInvite({ ...invite, role: e.target.value })}>
+                                <option value="LEADER">Lider</option>
+                                <option value="COORDONATOR">Coordonator</option>
+                                <option value="DIRECTOR">Director</option>
+                            </select>
+                            <div style={{fontSize:'0.78rem', color:'#64748b'}}>
+                                {googleAvailable
+                                    ? 'Liderul intra pe pagina de login cu „Continua cu Google", folosind exact aceasta adresa.'
+                                    : 'Dupa ce apesi Adauga, vezi in cardul liderului username-ul si o parola temporara. La prima intrare isi alege parola lui.'}
+                            </div>
+                            <div style={{display:'flex', gap:'8px'}}>
+                                <button type="button" onClick={() => setShowInvite(false)} style={{flex:1, padding:'10px', borderRadius:'10px', border:'1px solid #e2e8f0', background:'#f8fafc', cursor:'pointer', fontWeight:'700'}}>Renunta</button>
+                                <button type="submit" style={{flex:2, padding:'10px', borderRadius:'10px', border:'none', background:'#2563eb', color:'white', cursor:'pointer', fontWeight:'800'}}>Adauga</button>
+                            </div>
+                        </form>
+                    )}
                 </div>
             )}
 
@@ -264,6 +363,20 @@ const AdminDashboard = () => {
 
                                 {isLeaderView && (
                                     <>
+                                        {googleAvailable && (
+                                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:'8px', padding:'7px 11px', background:'#f8fafc', borderRadius:'8px'}}>
+                                                <span style={{fontSize:'0.78rem', color:'#64748b', fontWeight:'600'}}>Google</span>
+                                                <span style={{display:'flex', alignItems:'center', gap:'8px', minWidth:0}}>
+                                                    <span style={{fontWeight:'700', color:'#1e293b', fontSize:'0.85rem', overflow:'hidden', textOverflow:'ellipsis'}}>{user.email || '—'}</span>
+                                                    {user.email && (
+                                                        <span style={{fontSize:'0.68rem', fontWeight:'800', padding:'1px 8px', borderRadius:'20px', background: user.googleLinked ? '#dcfce7' : '#f1f5f9', color: user.googleLinked ? '#15803d' : '#64748b'}}>
+                                                            {user.googleLinked ? 'conectat' : 'neconectat inca'}
+                                                        </span>
+                                                    )}
+                                                    <button onClick={() => changeEmail(user)} style={{background:'white', border:'1px solid #e2e8f0', borderRadius:'8px', padding:'3px 9px', fontSize:'0.75rem', fontWeight:'700', cursor:'pointer', flexShrink:0}}>Schimba</button>
+                                                </span>
+                                            </div>
+                                        )}
                                         {user.phoneNumber && (
                                             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 11px', background:'#f8fafc', borderRadius:'8px'}}>
                                                 <span style={{fontSize:'0.78rem', color:'#64748b', fontWeight:'600'}}>Telefon</span>
@@ -324,24 +437,29 @@ const AdminDashboard = () => {
                                     </>
                                 )}
 
-                                {/* Password reveal — cached client-side after first decrypt */}
-                                <div style={{marginTop:'4px', background:'#f8fafc', padding:'10px 14px', borderRadius:'10px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px'}}>
-                                    <span style={{fontFamily:'monospace', fontSize:'1rem', fontWeight:'800', color: visiblePasswords[user.id] ? '#dc2626' : '#cbd5e1', letterSpacing: visiblePasswords[user.id] ? 'normal' : '0.15em'}}>
-                                        {visiblePasswords[user.id] ? visiblePasswords[user.id] : '••••••••'}
-                                    </span>
-                                    <button
-                                        onClick={() => revealPassword(user.id, user.password)}
-                                        style={{
-                                            background: visiblePasswords[user.id] ? '#fee2e2' : 'white',
-                                            color: visiblePasswords[user.id] ? '#dc2626' : '#334155',
-                                            border: '1px solid #e2e8f0',
-                                            padding:'7px 13px', borderRadius:'8px', cursor:'pointer',
-                                            fontWeight:'800', fontSize:'0.8rem', flexShrink:0
-                                        }}
-                                    >
-                                        {visiblePasswords[user.id] ? 'Ascunde' : 'Vezi Parola'}
-                                    </button>
-                                </div>
+                                {/* Password reset — the temporary password is shown once, here */}
+                                {(() => {
+                                    const kind = isLeaderView ? 'LEADER' : 'CHILD';
+                                    const temp = tempPasswords[`${kind}-${user.id}`];
+                                    return temp ? (
+                                        <div style={{marginTop:'4px', background:'#fefce8', border:'1px solid #fde68a', padding:'10px 14px', borderRadius:'10px'}}>
+                                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px'}}>
+                                                <span style={{fontFamily:'monospace', fontSize:'1.1rem', fontWeight:'900', color:'#92400e', letterSpacing:'0.05em'}}>{temp}</span>
+                                                <button onClick={() => copy(temp)} style={{background:'white', border:'1px solid #fde68a', padding:'7px 13px', borderRadius:'8px', cursor:'pointer', fontWeight:'800', fontSize:'0.8rem', color:'#92400e', flexShrink:0}}>Copiaza</button>
+                                            </div>
+                                            <div style={{fontSize:'0.75rem', color:'#92400e', marginTop:'6px'}}>
+                                                Parola temporara: spune-i-o lui {user.name}. La prima logare va alege una noua. Nu o vei mai putea vedea dupa ce iesi.
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div style={{marginTop:'4px', background:'#f8fafc', padding:'10px 14px', borderRadius:'10px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:'10px'}}>
+                                            <span style={{fontSize:'0.78rem', color:'#64748b', fontWeight:'600'}}>Parola</span>
+                                            <button onClick={() => resetPassword(kind, user)} style={{background:'white', color:'#334155', border:'1px solid #e2e8f0', padding:'7px 13px', borderRadius:'8px', cursor:'pointer', fontWeight:'800', fontSize:'0.8rem', flexShrink:0}}>
+                                                Reseteaza parola
+                                            </button>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     );
@@ -350,6 +468,7 @@ const AdminDashboard = () => {
                     <div style={{textAlign:'center', color:'#94a3b8', padding:'40px', fontStyle:'italic'}}>Nu am gasit niciun rezultat.</div>
                 )}
             </div>}
+            </>}
         </div>
     );
 };

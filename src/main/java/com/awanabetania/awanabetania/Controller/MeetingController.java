@@ -8,6 +8,7 @@ import com.awanabetania.awanabetania.Repository.ChildRepository;
 import com.awanabetania.awanabetania.Repository.MeetingRepository;
 import com.awanabetania.awanabetania.Repository.ScoreRepository;
 import com.awanabetania.awanabetania.Repository.WarningRepository;
+import com.awanabetania.awanabetania.Service.SeasonService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +39,7 @@ public class MeetingController {
     @Autowired private WarningRepository warningRepository;
     @Autowired private ScoreRepository scoreRepository;
     @Autowired private ChildRepository childRepository;
+    @Autowired private SeasonService seasonService;
 
     /**
      * Returns all meetings that have not yet been closed, ordered by date ascending.
@@ -57,6 +59,7 @@ public class MeetingController {
      */
     @PostMapping("/add")
     public Meeting addMeeting(@RequestBody Meeting meeting) {
+        meeting.setSeasonId(seasonService.currentId());
         return meetingRepository.save(meeting);
     }
 
@@ -112,7 +115,9 @@ public class MeetingController {
                 .map(s -> s.getChild().getId())
                 .distinct()
                 .toList();
-        List<Warning> activeWarnings = warningRepository.findBySuspensionTrueAndRemainingMeetingsGreaterThan(0);
+        // Suspensions of a closed season ended with it
+        List<Warning> activeWarnings = warningRepository
+                .findBySeasonIdAndSuspensionTrueAndRemainingMeetingsGreaterThan(seasonService.currentId(), 0);
 
         for (Warning w : activeWarnings) {
             if (presentChildIds.contains(w.getChild().getId())) {

@@ -1,10 +1,13 @@
 package com.awanabetania.awanabetania.Model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -25,6 +28,11 @@ public class Bon {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
+    /** The season this row belongs to (see {@link Season}); set by the server, never by the client. */
+    @JsonIgnore
+    @Column(name = "season_id")
+    private Integer seasonId;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "child_id")
     @JsonIgnoreProperties({"manuals", "progress", "password", "deletionCode", "hibernateLazyInitializer"})
@@ -43,7 +51,11 @@ public class Bon {
     private Integer totalPoints;
 
     /** Current status: PENDING, APPROVED, or REJECTED. */
-    private String status = "PENDING";
+    // Stored as text in the existing VARCHAR column (Hibernate would otherwise expect a
+    // MySQL ENUM column, and schema validation would fail).
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    private BonStatus status = BonStatus.PENDING;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();

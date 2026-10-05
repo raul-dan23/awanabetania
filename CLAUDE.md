@@ -9,11 +9,16 @@
 ## Structura backend
 ```
 src/main/java/com/awanabetania/awanabetania/
-├── Model/       → Child, Score, Meeting, Leader, Department, Sticker, Warning, etc.
-├── Controller/  → REST endpoints
-├── Repository/  → JPA repositories
+├── Controller/  → doar HTTP: primeste DTO (@Valid), cheama serviciul, intoarce DTO
+├── Service/     → regulile de business + @Transactional          (Faza 2, in curs)
+├── Dto/         → record-uri request/response (forma JSON exacta)  (Faza 2, in curs)
+├── Exception/   → ApiException + GlobalExceptionHandler (ProblemDetail)
+├── Security/    → JWT, AuthUser, AdminPinVerifier, SharedSecrets
+├── Model/       → entitati JPA: Child, Score, Meeting, Leader, Bon, BonStatus...
+├── Repository/  → Spring Data JPA
 └── AwanaBetaniaApplication.java
 ```
+Conventiile pentru cod nou sunt in sectiunea „FAZA 2” de mai jos.
 
 ## Modele cheie
 - **Child** — `id`, `name`, `surname`, `seasonPoints`, `dailyPoints`, relatii cu `Score`, `ChildProgress`, `ChildManual`
@@ -63,7 +68,7 @@ Citim UID-ul și îl mapăm la copil în BD. Toate punctele rămân în BD, nu p
 | `Controller/BonController.java` | `POST /api/bons`, `GET /api/bons/pending`, `GET /api/bons/all`, `POST /api/bons/{id}/approve`, `POST /api/bons/{id}/reject` |
 | `Controller/AdminController.java` | `POST /api/admin/nfc-register`, `DELETE /api/admin/nfc-remove/{childId}` — cu `X-Admin-Pin` |
 | `Repository/ProductRepository.java` | Acces BD produse |
-| `Repository/BonRepository.java` | `findByStatusOrderByCreatedAtDesc`, `findAllByOrderByCreatedAtDesc` |
+| `Repository/BonRepository.java` | `findBySeasonIdAndStatusOrderByCreatedAtDesc`, `findBySeasonIdOrderByCreatedAtDesc` (doar sezonul curent) |
 
 **Schema:** tabelele `products` și `bons` sunt în `db/migration/V1__baseline.sql` (vezi secțiunea INFRASTRUCTURĂ).
 
@@ -236,6 +241,46 @@ curl -s localhost:8080/actuator/info   # commit-ul care ruleaza
 
 ---
 
+## FAZA 2 — ARHITECTURA PE STRATURI (in curs, oct. 2026)
+
+Se face pe zone, cate un PR, fiecare cu teste. **Gata: Magazin** (bonuri, produse, carduri NFC,
+endpoint-urile NFC din Control Center). Urmeaza: Scorare/Intalniri, Copii/Lideri/Cont,
+Olimpiada, Departamente/Echipe/Feedback/Notificari/Dashboard/Avertismente.
+
+### Conventii (obligatorii pentru cod nou sau refacut)
+- **Controller → Service → Repository.** Controllerul nu contine logica; serviciul are
+  `@Transactional`. Injectie prin constructor (`@RequiredArgsConstructor`), nu `@Autowired` pe campuri.
+- **DTO-uri** (record-uri in `Dto/`): request cu `@Valid` + `@NotNull/@Positive/@Size`; response cu
+  `from(entity)`. Nu intoarce entitati JPA. **Pastreaza forma JSON** pe care o citeste frontend-ul.
+  Fara `Map<String,Object>` in `@RequestBody` (cast-urile dadeau 500 la input gresit).
+- **Erori:** arunca `ApiException.badRequest/forbidden/notFound/conflict(...)`.
+  `GlobalExceptionHandler` le transforma in ProblemDetail (`application/problem+json`, cu `detail`);
+  input invalid/JSON stricat → 400, niciodata 500. `Frontend/src/auth.js` transforma raspunsul in
+  textul din `detail`, deci `res.text()` din ecrane arata mesajul normal.
+- **Niciodata 401 pentru erori de business** (PIN gresit etc.): frontend-ul trateaza 401 ca sesiune
+  expirata si delogheaza. PIN gresit = 403.
+- **PIN admin:** `AdminPinVerifier.verify(pin)`; secretele se compara cu `SharedSecrets.matches`
+  (timp constant). Header-ul PIN e `required = false`, ca lipsa lui sa dea 403, nu 400.
+- **Puncte si stari:** niciodata citeste-modifica-salveaza. `PointsService.spend` face un singur
+  `UPDATE ... WHERE season_points >= :suma`; tranzitiile de stare (bon PENDING→APPROVED) sunt
+  `UPDATE ... WHERE status = 'PENDING'` si se verifica numarul de randuri. Verificat pe MySQL:
+  logica veche aproba acelasi bon de 8 ori din 8 la cereri simultane.
+- **Enum-uri** in loc de string-uri magice (`BonStatus`). Pe coloane VARCHAR existente:
+  `@Enumerated(STRING) @JdbcTypeCode(SqlTypes.VARCHAR)`, altfel `validate` cere coloana ENUM.
+
+### Teste
+- `Shop/ShopApiTest` (H2, MockMvc): forma JSON, 400/403/404/409, rollback la sold insuficient.
+- `Shop/ShopConcurrencyTest` (MySQL 8 in Docker): aprobari simultane, sold niciodata negativ.
+- `Account/GoogleSignInTest`, `Account/PasswordResetTest`: vezi sectiunea CONTURI.
+- `Season/SeasonTest`, `Season/SeasonMySqlTest`: vezi sectiunea SEZOANE.
+- Total: 70 de teste (`./mvnw verify`).
+
+### De decis
+- `/api/products` si `/api/nfc/**` nu sunt folosite de frontend (Magazinul lucreaza cu calculator,
+  bridge-ul doar cu WebSocket). Candidati la stergere: mai putina suprafata de atac.
+
+---
+
 ## AUTENTIFICARE JWT — IMPLEMENTAT ✅
 
 ### Principiu
@@ -263,8 +308,9 @@ Login ──> POST /api/auth/login ──> { token, user }
 - **Parole:** BCrypt in loc de AES reversibil. Conturile vechi se migreaza automat la
   primul login (`matchesAndUpgrade`) — nimeni nu trebuie sa-si schimbe parola.
 - **Raspunsul de login:** nu mai contine parola (`@JsonProperty(WRITE_ONLY)` pe `Child` si `Leader`).
-- **Coduri de inregistrare:** mutate din sursa in `AUTH_REGISTRATION_CODES`.
-  Cele vechi (`AWANA2024`, `BETANIA`, `DIRECTOR_KEY`) erau publice pe GitHub — nu le mai folosi.
+- **Coduri de inregistrare:** eliminate. Copiii se inscriu singuri; liderii sunt adaugati de
+  director si intra cu Google (vezi sectiunea CONTURI). Codurile vechi (`AWANA2024`, `BETANIA`,
+  `DIRECTOR_KEY`) erau publice pe GitHub.
 - **CORS:** `@CrossOrigin(origins="*")` sters din toate cele 17 controllere; acum
   o singura configuratie centrala, limitata la `CORS_ALLOWED_ORIGINS`.
 - **Default deny:** orice ruta nelistata ca publica cere token. Un controller
@@ -272,7 +318,8 @@ Login ──> POST /api/auth/login ──> { token, user }
 
 ### Rute publice (singurele)
 ```
-POST /api/auth/login, /api/auth/register
+POST /api/auth/login, /api/auth/register (doar copii), /api/auth/google
+GET  /api/auth/config                             (Client ID-ul Google, public)
 GET  /api/olimpiada/session/{code}              ─┐
 GET  /api/olimpiada/session/{code}/round-status  │ arbitru invitat,
 GET  /api/olimpiada/session/{code}/compare       │ nu are cont
@@ -284,7 +331,8 @@ POST /api/olimpiada/session/{code}/extra        ─┘
 ### Autorizare pe roluri (audit oct. 2026)
 Oricine isi poate crea cont de copil fara cod, deci „autentificat” nu inseamna „de incredere”.
 - `ROLE_CHILD` ajunge DOAR la: `GET /api/stickers`, `GET /api/dashboard/stats`,
-  `GET|PUT|DELETE /api/children/{id}` (doar propriul id), `POST /api/account/request-deletion`.
+  `GET|PUT|DELETE /api/children/{id}` (doar propriul id), `POST /api/account/request-deletion`,
+  `POST /api/account/password`.
 - `/api/admin/**` — doar Director/Coordonator (plus PIN).
 - Restul — `ROLE_LEADER`.
 - Identitatea vine din token: `AuthUser.current()`. Nu folosi niciodata `id`/`role`/`leaderId`
@@ -308,19 +356,122 @@ orice apel adaugat ulterior sa fie autentificat automat.
 Fara ele aplicatia **nu porneste**:
 ```bash
 export JWT_SECRET='...'                  # minim 32 caractere
-export AUTH_REGISTRATION_CODES='COD1,COD2'
 export CORS_ALLOWED_ORIGINS='https://awana.betania-tm.ro'
 ```
+Optional: `GOOGLE_CLIENT_ID` (`auth.google.client-id`); fara el butonul Google nu apare.
+`AUTH_REGISTRATION_CODES` nu mai e folosita.
 `AES_SECRET_KEY` ramane necesara — migreaza parolele vechi. Se poate scoate dupa ce
 toti utilizatorii s-au logat macar o data.
 
 ### Teste
 `src/test/java/.../Security/SecurityIntegrationTest.java` — 9 teste pe H2 in-memory:
 acces anonim respins, token falsificat respins, login functional, parola absenta din
-raspuns, migrare AES→BCrypt, cod de inregistrare vechi respins, rutele de arbitru
-invitat inca publice. Ruleaza cu `./mvnw verify` (25 de teste in total, cu
-`SecurityAuditTest` si `DatabaseMigrationTest`).
+raspuns, migrare AES→BCrypt, liderii nu se pot inregistra singuri, rutele de arbitru
+invitat inca publice. Ruleaza cu `./mvnw verify`.
 
+---
+
+## CONTURI: GOOGLE PENTRU LIDERI, RESETARE PAROLA — IMPLEMENTAT ✅
+
+### Google (doar lideri)
+- Flux: butonul Google Identity Services din browser → `credential` (ID token, JWT semnat de
+  Google) → `POST /api/auth/google` → serverul il verifica → acelasi `{ token, user }` ca la login.
+- Verificare (`Security/GoogleIdTokenVerifier`): semnatura cu cheile publice Google (JWKS),
+  `iss`, `aud` = Client ID-ul nostru, expirare, `email_verified`. Doar Client ID, fara client secret.
+- **Google e optional.** Fara `auth.google.client-id`: nu apare nimic despre Google (buton, card in
+  profil, rand in Control Center — `Frontend/src/googleConfig.js`, `useGoogleSignIn()`), iar
+  `/api/auth/google` da 404.
+- **Doar pe invitatie:** directorul adauga liderul (`POST /api/admin/leaders`). Cu Google configurat
+  si adresa data: fara parola. Altfel raspunsul contine `temporaryPassword` (aratata o data in cardul
+  liderului, schimbata obligatoriu la prima intrare).
+  Prima intrare leaga `google_sub` (id-ul permanent Google); urmatoarele cauta dupa el.
+  Cont Google necunoscut → 403. Liderii existenti isi leaga contul din „Contul Meu”
+  (`POST /api/account/google`) sau directorul le pune adresa (`PUT /api/admin/leaders/{id}/email`,
+  care sterge legatura veche). Parola lor veche continua sa mearga.
+- `/api/auth/register` accepta doar copii; liderii primesc 403.
+- Copiii nu folosesc Google (multi nu au cont Google propriu).
+- Pasii din Google Cloud Console + depanare: `docs/OPERATIONS.md`, sectiunea 8.
+
+### Resetare parola (in loc de „arata parola”)
+- BCrypt nu se decripteaza, deci parolele nu se pot afisa; `/api/admin/decrypt-password` e sters.
+- `POST /api/admin/reset-password` (director + PIN) → parola temporara `xxxx-xxxx`, aratata o data
+  in Control Center. Contul primeste `password_change_required`; login-ul intoarce
+  `mustChangePassword` si `Login.jsx` cere parola noua (`ChangePassword.jsx`) inainte de aplicatie.
+- `POST /api/account/password` — schimbarea propriei parole, cu parola curenta (gresita = 403).
+- O singura regula pentru parole: 6–64 caractere (`PasswordService`).
+
+### Fisiere
+| Fisier | Descriere |
+|---|---|
+| `Security/GoogleIdTokenVerifier.java`, `GoogleSignInConfig.java` | Verificarea ID token-ului Google |
+| `Service/GoogleSignInService.java` | Intrare cu Google + legarea contului din profil |
+| `Service/LeaderAccountService.java` | Adaugare lider pe invitatie, schimbarea adresei |
+| `Service/PasswordService.java` | Hash, regula de lungime, resetare, schimbare |
+| `Frontend/src/components/GoogleSignInButton.jsx` | Butonul oficial Google (script incarcat o data) |
+| `Frontend/src/components/ChangePassword.jsx` | Parola noua dupa o resetare |
+| Migrari `V2`–`V4` | `password_change_required`; `leaders.email` + `leaders.google_sub` (unice) |
+
+### Teste
+`Account/GoogleSignInTest` (token-uri semnate cu o cheie RSA generata, verificate cu validatorul
+din productie: semnatura straina, alt `aud`, expirat, email neverificat, cont neinvitat, legare;
+copiii nu vad adresele Google ale directorilor in `/api/dashboard/stats`), `Account/NoGoogleTest`
+(aplicatia fara Client ID: liderul adaugat primeste parola temporara) si `Account/PasswordResetTest`.
+
+
+---
+
+## SEZOANE — IMPLEMENTAT ✅
+
+### Principiu
+Un sezon = un an de club. Copiii si liderii raman de la un sezon la altul; datele de sezon
+pornesc de la zero, iar sezonul incheiat ramane de citit (nu se sterge nimic).
+- Tabel `seasons` (`name` unic, `start_date`, `end_date`, `status` ACTIVE/CLOSED). Mereu exact un ACTIVE.
+- `season_id` pe `scores`, `meetings`, `leader_evaluations`, `warnings`, `bons`. Orice cod nou care
+  creeaza randuri in tabelele astea pune `seasonId = seasonService.currentId()`, iar listele filtreaza
+  pe sezonul curent. Nu folosi interogari fara sezon pe ele (cele vechi au fost sterse).
+- Contoarele tinute pe `Child` (puncte, streak, prezente...) se copiaza in `season_child_results` la
+  inchidere, apoi se pun pe zero. Punctele castigate/cheltuite si avertismentele se numara din
+  randurile sezonului, care raman in BD.
+
+### Sezon nou (Control Center → Sezoane, director + PIN)
+`SeasonService.startNew`, o singura tranzactie:
+- **Se reseteaza:** `season_points`, `daily_points`, streak, prezente, lectii, `last_attendance_date`,
+  insigne, `has_manual/has_shirt/has_hat`, suspendari, echipa; `child_progress.manuals_count`;
+  lista `child_manual` (copiata ca JSON in arhiva); `leaders.rating`; notificarile FEEDBACK,
+  SHIRT_ELIGIBLE, HAT_ELIGIBLE (ascunse); bonurile PENDING (respinse).
+- **Raman:** copiii, liderii, datele de contact, conturile, cardurile NFC, stickerele
+  (`child_progress.last_sticker_id`), anunturile, cererile de stergere a contului.
+- Intalnirile neinchise trec in sezonul nou. **Blocat** cat timp o intalnire neinchisa are punctaje.
+- Protectie la dublu-click / doi directori: cererea poarta `currentSeasonId`; inchiderea e
+  `UPDATE ... WHERE status = 'ACTIVE'` cu verificarea numarului de randuri (vezi conventiile Faza 2).
+
+### Primul sezon si deploy-ul
+- Migrarile V5–V11 doar adauga (coloane `season_id` nullable). Primul sezon il creeaza
+  `SeasonStartup` la pornire (inclusiv in pre-flight): numit dupa anul de club al primei intalniri
+  (ex. `2025–2026`), cu toate datele existente. Directorul il poate redenumi.
+- La fiecare pornire, randurile fara sezon (scrise de versiunea veche in pre-flight sau dupa un
+  rollback) intra in sezonul activ.
+
+### Endpoint-uri
+- `GET /api/seasons` — lista (lideri); `GET /api/seasons/{id}/results` — clasamentul unui sezon incheiat
+  (409 cat ruleaza).
+- `GET /api/admin/seasons/preview`, `POST /api/admin/seasons` `{currentSeasonId, name}`,
+  `PUT /api/admin/seasons/{id}` `{name}` — director + PIN.
+- `GET /api/dashboard/stats` contine `season` (numele sezonului curent).
+
+### Fisiere
+| Fisier | Descriere |
+|---|---|
+| `Model/Season.java`, `SeasonStatus.java`, `SeasonChildResult.java` | Sezonul si arhiva per copil |
+| `Service/SeasonService.java`, `SeasonStartup.java` | Sezon nou, arhiva, primul sezon, preluarea randurilor fara sezon |
+| `Controller/SeasonController.java`, `SeasonAdminController.java` | Citire (lideri) / administrare (director + PIN) |
+| `Frontend/src/components/SeasonsPanel.jsx` | Control Center → Sezoane: sezonul curent, sezon nou, rezultate |
+
+### Teste
+- `Season/SeasonTest` (H2): scenariu complet prin endpoint-uri (punctaj, avertisment, evaluare, bon)
+  → sezon nou → tot ce trebuie e pe zero, nimic nu e sters, arhiva corecta; dublu-click; intalnire
+  deschisa; PIN/rol/nume; copiii nu vad sezoanele; preluarea randurilor fara sezon.
+- `Season/SeasonMySqlTest` (MySQL 8): 4 directori simultan → un singur sezon nou, arhiva o singura data.
 
 ---
 
@@ -339,7 +490,7 @@ Toate `findAll()` + stream filter din controlleri au fost înlocuite cu query-ur
 
 | Controller | Fix aplicat |
 |---|---|
-| `ScoreController` | `findByChildIdAndMeetingId` + `findByChildIdOrderByMeeting_DateDesc` |
+| `ScoreController` | `findByChildIdAndMeetingId` + `findByChildIdAndSeasonIdOrderByMeeting_DateDesc` |
 | `MeetingController` | `findByMeetingId` + `findBySuspensionTrueAndRemainingMeetingsGreaterThan(0)` |
 | `AuthController` | `findByNameIgnoreCase` (child + leader) în loc de `findAll().stream().filter()` |
 | `DashboardController` | `findByRoleIgnoreCaseIn(List.of("director","coordonator"))` |
@@ -359,7 +510,7 @@ Doua lucruri sunt in istoricul public si nu pot fi sterse prin cod:
 - **Parola MySQL** `application.properties`, comentata, prezenta in 5 commit-uri.
   → schimb-o pe server; rotatia e singurul fix real.
 - **Codurile de inregistrare** vechi, din `beta1.0` incoace.
-  → deja inlocuite cu `AUTH_REGISTRATION_CODES`; cele vechi nu mai functioneaza.
+  → codurile de inregistrare au fost eliminate cu totul; nu mai deschid nimic.
 
 Optional: `git filter-repo` pentru curatarea istoricului, sau trecerea repo-ului pe privat.
 
@@ -368,8 +519,6 @@ Optional: `git filter-repo` pentru curatarea istoricului, sau trecerea repo-ului
 ### 🔵 ÎMBUNĂTĂȚIRI VIITOARE
 
 #### Ramase din auditul de securitate (oct. 2026)
-- **Inregistrare ca DIRECTOR cu orice cod de lider** — rolul vine din formular. Separa
-  codurile: `AUTH_DIRECTOR_CODES` pentru Director/Coordonator.
 - **Fara limitare de incercari** la login si la PIN-ul admin (PIN-ul are doar 4 cifre). Adauga rate limit.
 - **Olimpiada** — `/extra` public accepta orice valoare si orice nume de arbitru; doua
   valori `Integer.MAX` dau total negativ (overflow). Pune o limita (ex. 0 < puncte ≤ 10000).
@@ -377,10 +526,12 @@ Optional: `git filter-repo` pentru curatarea istoricului, sau trecerea repo-ului
   -999999 dintr-o greseala de tastare.
 - **NFC bridge** — WebSocket pe localhost fara verificare de `Origin`: orice site deschis
   pe laptopul contabilului poate citi UID-urile. UID-ul se poate clona; nu e autentificare puternica.
-- **Input invalid → 500** (amount text la NFC, place lipsa la Olimpiada, nume >255 caractere).
-  Adauga `@Valid` + un `@RestControllerAdvice`.
-- **Approve bon** — fara blocare: doua aprobari simultane pot trece amandoua. `@Version` pe `Bon`.
+- **Input invalid → 500** in controllerele inca nerefacute (`Map` in `@RequestBody`: Olimpiada,
+  echipe, departamente...). Rezolvat pentru Magazin; restul se rezolva pe masura ce trec in Faza 2.
 - **Telefonul directorului** e hardcodat in `DataInitializer` (repo public).
+- **Registru Copii → „Atribuie Manual”** apeleaza `POST /api/children/{id}/assign-manual`, care nu
+  mai exista in backend (disparut in „awanabetania 3.0”): butonul nu face nimic, fara niciun mesaj.
+  De refacut (cu `seasonId`, ca manualele sa tina de sezon) sau de scos.
 
 #### Prioritate înaltă
 - ~~JWT / Autentificare reală~~ — implementat.

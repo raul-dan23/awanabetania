@@ -1,26 +1,29 @@
 package com.awanabetania.awanabetania.Controller;
 
 import com.awanabetania.awanabetania.DataInitializer;
+import com.awanabetania.awanabetania.Dto.AuthConfigResponse;
+import com.awanabetania.awanabetania.Dto.GoogleCredentialRequest;
+import com.awanabetania.awanabetania.Exception.ApiException;
 import com.awanabetania.awanabetania.Model.*;
 import com.awanabetania.awanabetania.Repository.ChildRepository;
-import com.awanabetania.awanabetania.Repository.DepartmentRepository;
 import com.awanabetania.awanabetania.Repository.LeaderRepository;
+import com.awanabetania.awanabetania.Security.GoogleIdTokenVerifier;
 import com.awanabetania.awanabetania.Security.JwtService;
+import com.awanabetania.awanabetania.Service.GoogleSignInService;
+import com.awanabetania.awanabetania.Service.PasswordService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
- * Handles authentication (login) and account registration for both children and leaders.
+ * Handles authentication (password login, and "Continue with Google" for leaders) and the
+ * registration of child accounts. Leaders are added by the director in the Control Center.
  * Passwords are hashed with BCrypt; legacy AES and plain-text values are rehashed the first
  * time their owner logs in. Login accepts either a generated username or the legacy plain
  * name to support accounts created before the username migration, and returns a signed JWT
@@ -36,18 +39,20 @@ public class AuthController {
     @Autowired
     private JwtService jwtService;
 
-    /** Leader registration codes, supplied via the AUTH_REGISTRATION_CODES environment variable. */
-    @Value("${auth.registration-codes}")
-    private String registrationCodes;
+    @Autowired
+    private PasswordService passwordService;
+
+    @Autowired
+    private GoogleSignInService googleSignInService;
+
+    @Autowired
+    private GoogleIdTokenVerifier googleIdTokenVerifier;
 
     @Autowired
     private LeaderRepository leaderRepository;
 
     @Autowired
     private ChildRepository childRepository;
-
-    @Autowired
-    private DepartmentRepository departmentRepository;
 
     /**
      * Authenticates a user and returns a signed token together with their account.
@@ -75,8 +80,9 @@ public class AuthController {
                 Child child = childOpt.get();
                 if (matchesAndUpgrade(child.getPassword(), rawPassword, child::setPassword,
                                       () -> childRepository.save(child))) {
-                    return ResponseEntity.ok(
-                            session(jwtService.issue(child.getUsername(), "CHILD", child.getId(), null), child));
+                    return ResponseEntity.ok(session(
+                            jwtService.issue(child.getUsername(), "CHILD", child.getId(), null),
+                            child, child.isPasswordChangeRequired()));
                 }
             }
         } else {
@@ -98,12 +104,32 @@ public class AuthController {
                     }
                     return ResponseEntity.ok(session(
                             jwtService.issue(leader.getUsername(), "LEADER", leader.getId(), leader.getRole()),
-                            leader));
+                            leader, leader.isPasswordChangeRequired()));
                 }
             }
         }
 
         return ResponseEntity.status(401).body("Invalid credentials.");
+    }
+
+    /**
+     * "Continue with Google" for leaders: the browser sends the ID token from Google's
+     * button, and a leader on the director's list gets the same session as a password login.
+     *
+     * @return 200 with {@code {token, user}}; 403 if the Google account has no access;
+     *         404 if Google sign-in is not configured
+     */
+    @PostMapping("/google")
+    public Map<String, Object> google(@Valid @RequestBody GoogleCredentialRequest request) {
+        Leader leader = googleSignInService.signIn(request.credential());
+        return session(jwtService.issue(leader.getUsername(), "LEADER", leader.getId(), leader.getRole()),
+                leader, false);
+    }
+
+    /** Settings the login screen reads before anyone is logged in: the Google client id, if any. */
+    @GetMapping("/config")
+    public AuthConfigResponse config() {
+        return new AuthConfigResponse(googleIdTokenVerifier.clientId());
     }
 
     /**
@@ -142,26 +168,27 @@ public class AuthController {
     }
 
     /**
-     * Builds the login response: the signed token plus the account entity.
+     * Builds the login response: the signed token, the account entity, and whether the
+     * account must choose a new password first (after a reset by the director).
      * The entity's password field is annotated write-only, so no credential material
      * is serialised here.
      */
-    private Map<String, Object> session(String token, Object user) {
+    private Map<String, Object> session(String token, Object user, boolean mustChangePassword) {
         Map<String, Object> body = new HashMap<>();
         body.put("token", token);
         body.put("user", user);
+        body.put("mustChangePassword", mustChangePassword);
         return body;
     }
 
     /**
-     * Creates a new Child or Leader account.
-     * A unique username is generated from the name and surname. If the base username is
-     * already taken, a random 3-digit suffix is appended.
-     * Leaders must supply a valid registration code; the password is BCrypt-hashed before storage.
+     * Creates a child account. A unique username is generated from the name and surname;
+     * if it is taken, a random 3-digit suffix is appended. Leaders cannot register here:
+     * the director adds them in the Control Center.
      *
-     * @param request registration payload (role, name, surname, password, plus role-specific fields)
-     * @return 200 with a confirmation message and generated username on success;
-     *         400 if validation fails (duplicate leader, invalid code)
+     * @param request registration payload (name, surname, password, birth date, parent details)
+     * @return 200 with a confirmation message and the generated username; 400 invalid
+     *         password; 403 for any role other than CHILD
      */
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
@@ -179,7 +206,7 @@ public class AuthController {
                 baseUsername += new java.util.Random().nextInt(1000);
             }
             newChild.setUsername(baseUsername);
-            newChild.setPassword(passwordEncoder.encode(request.getPassword()));
+            newChild.setPassword(passwordService.hash(request.getPassword()));
             newChild.setBirthDate(request.getBirthDate());
             newChild.setParentName(request.getParentName());
             newChild.setParentPhone(request.getParentPhone());
@@ -198,63 +225,13 @@ public class AuthController {
 
             childRepository.save(newChild);
             return ResponseEntity.ok("Child account created! Username: " + baseUsername);
-        } else {
-            if (!isValidCode(request.getRegistrationCode())) {
-                return ResponseEntity.badRequest().body("Invalid registration code. Ask the director for a valid code.");
-            }
-
-            boolean exists = leaderRepository.findByNameAndSurname(request.getName(), request.getSurname()).isPresent();
-            if (exists) {
-                return ResponseEntity.badRequest().body("A leader with this name already exists.");
-            }
-
-            Leader newLeader = new Leader();
-            newLeader.setName(request.getName());
-            newLeader.setSurname(request.getSurname());
-
-            String baseUsername = DataInitializer.generateCleanUsername(request.getName(), request.getSurname());
-            if (leaderRepository.findByUsername(baseUsername).isPresent()) {
-                baseUsername += new java.util.Random().nextInt(1000);
-            }
-            newLeader.setUsername(baseUsername);
-            newLeader.setPassword(passwordEncoder.encode(request.getPassword()));
-            newLeader.setRole(request.getRole());
-            newLeader.setPhoneNumber(request.getPhoneNumber());
-            newLeader.setRating(0.0f);
-
-            if (request.getDepartmentIds() != null && !request.getDepartmentIds().isEmpty()) {
-                Set<Department> selectedDepts = new HashSet<>();
-                for (Integer deptId : request.getDepartmentIds()) {
-                    departmentRepository.findById(deptId).ifPresent(selectedDepts::add);
-                }
-                newLeader.setDepartments(selectedDepts);
-            }
-
-            leaderRepository.save(newLeader);
-            return ResponseEntity.ok("Leader account created! Username: " + baseUsername);
         }
+        // Leaders no longer register themselves: whoever had a registration code could
+        // register as director. The director adds them in the Control Center.
+        throw ApiException.forbidden("Leaders are added by the director in the Control Center.");
     }
 
     private static boolean isBlank(String s) {
         return s == null || s.isBlank();
-    }
-
-    /**
-     * Validates a leader registration code against the configured list.
-     * <p>
-     * The codes previously lived in this file, which meant anyone reading the public
-     * repository could register themselves as a director. They now come from the
-     * {@code AUTH_REGISTRATION_CODES} environment variable and can be rotated without
-     * a code change.
-     *
-     * @param code the code submitted by the registrant
-     * @return {@code true} if the code is in the configured list
-     */
-    private boolean isValidCode(String code) {
-        if (code == null || code.trim().isEmpty()) return false;
-        return Arrays.stream(registrationCodes.split(","))
-                .map(String::trim)
-                .filter(c -> !c.isEmpty())
-                .anyMatch(c -> c.equals(code.trim()));
     }
 }

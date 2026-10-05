@@ -40,6 +40,9 @@ export function installAuthFetch({ onUnauthorized } = {}) {
 
         let request = input;
         let options = init;
+        // Only a rejected token means "session expired"; a 401 to a request sent without one
+        // (registration page, login screen) must not reload the page.
+        const sentToken = isOwnApi && !!getToken();
 
         if (isOwnApi) {
             const token = getToken();
@@ -60,11 +63,32 @@ export function installAuthFetch({ onUnauthorized } = {}) {
 
         // The login call legitimately answers 401 on wrong credentials — leave it alone.
         const isLogin = url.includes('/auth/login');
-        if (isOwnApi && !isLogin && response.status === 401) {
+        if (isOwnApi && !isLogin && sentToken && response.status === 401) {
             clearToken();
             if (onUnauthorized) onUnauthorized();
         }
 
-        return response;
+        return isOwnApi && !response.ok ? readableError(response) : response;
     };
+}
+
+/**
+ * The API reports errors as RFC 7807 problem JSON ({"status":409,"detail":"..."}).
+ * The screens read error bodies with res.text() and show them to the user as they are,
+ * so hand them just the human-readable `detail`. Anything else passes through unchanged.
+ */
+async function readableError(response) {
+    const type = response.headers.get('content-type') || '';
+    if (!type.includes('application/problem+json')) return response;
+    try {
+        const problem = await response.clone().json();
+        if (!problem || typeof problem.detail !== 'string') return response;
+        return new Response(problem.detail, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        });
+    } catch {
+        return response;
+    }
 }

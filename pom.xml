@@ -52,6 +52,16 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
+		<!-- Verifies "Sign in with Google" ID tokens against Google's public keys (JWKS) -->
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-oauth2-jose</artifactId>
+		</dependency>
+		<!-- Bean Validation (@Valid, @NotNull...) on request DTOs -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
 		<!-- /actuator/health and /actuator/info, used by deploy.sh to confirm the new version is live -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

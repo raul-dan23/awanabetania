@@ -1,97 +1,51 @@
 package com.awanabetania.awanabetania.Controller;
 
-import com.awanabetania.awanabetania.Model.Product;
-import com.awanabetania.awanabetania.Repository.ProductRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
+import com.awanabetania.awanabetania.Dto.ProductRequest;
+import com.awanabetania.awanabetania.Dto.ProductResponse;
+import com.awanabetania.awanabetania.Security.AdminPinVerifier;
+import com.awanabetania.awanabetania.Service.ProductService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * Manages the product catalog for the end-of-season fair.
- * Read operations are public; create, update, and delete require the admin PIN
- * supplied via the {@code X-Admin-Pin} request header.
- */
+/** The fair's product catalog. Any leader can list it; changes need the admin PIN. */
 @RestController
 @RequestMapping("/api/products")
+@RequiredArgsConstructor
 public class ProductController {
 
-    @Autowired
-    private ProductRepository productRepository;
+    private final ProductService productService;
+    private final AdminPinVerifier pinVerifier;
 
-    @Value("${admin.pin}")
-    private String adminPin;
-
-    /** Returns {@code true} if the supplied PIN matches the configured admin PIN. */
-    private boolean isPinValid(String pin) {
-        return adminPin != null && adminPin.equals(pin);
-    }
-
-    /**
-     * Returns all products (available and unavailable).
-     *
-     * @return list of all {@link Product} entities
-     */
     @GetMapping
-    public List<Product> getAll() {
-        return productRepository.findAll();
+    public List<ProductResponse> all() {
+        return productService.all();
     }
 
-    /**
-     * Creates a new product. New products are available by default.
-     *
-     * @param pin     admin PIN from the {@code X-Admin-Pin} header
-     * @param product product data from the request body
-     * @return 200 with the saved entity; 403 on invalid PIN
-     */
+    /** 400 invalid, 403 wrong PIN. */
     @PostMapping
-    public ResponseEntity<?> create(
-            @RequestHeader("X-Admin-Pin") String pin,
-            @RequestBody Product product) {
-        if (!isPinValid(pin)) return ResponseEntity.status(403).body("Unauthorized.");
-        product.setAvailable(true);
-        return ResponseEntity.ok(productRepository.save(product));
+    public ProductResponse create(@RequestHeader(value = "X-Admin-Pin", required = false) String pin,
+                                  @Valid @RequestBody ProductRequest request) {
+        pinVerifier.verify(pin);
+        return productService.create(request);
     }
 
-    /**
-     * Updates an existing product.
-     *
-     * @param id      the product's primary key
-     * @param pin     admin PIN from the {@code X-Admin-Pin} header
-     * @param updated updated product fields from the request body
-     * @return 200 with the updated entity; 403 on invalid PIN; 404 if not found
-     */
+    /** 400 invalid, 403 wrong PIN, 404 unknown product. */
     @PutMapping("/{id}")
-    public ResponseEntity<?> update(
-            @PathVariable Integer id,
-            @RequestHeader("X-Admin-Pin") String pin,
-            @RequestBody Product updated) {
-        if (!isPinValid(pin)) return ResponseEntity.status(403).body("Unauthorized.");
-        Product p = productRepository.findById(id).orElse(null);
-        if (p == null) return ResponseEntity.notFound().build();
-        p.setName(updated.getName());
-        p.setPointPrice(updated.getPointPrice());
-        p.setCategory(updated.getCategory());
-        p.setAvailable(updated.getAvailable());
-        return ResponseEntity.ok(productRepository.save(p));
+    public ProductResponse update(@PathVariable Integer id,
+                                  @RequestHeader(value = "X-Admin-Pin", required = false) String pin,
+                                  @Valid @RequestBody ProductRequest request) {
+        pinVerifier.verify(pin);
+        return productService.update(id, request);
     }
 
-    /**
-     * Permanently deletes a product.
-     *
-     * @param id  the product's primary key
-     * @param pin admin PIN from the {@code X-Admin-Pin} header
-     * @return 200 on success; 403 on invalid PIN; 404 if not found
-     */
+    /** 403 wrong PIN, 404 unknown product. */
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> delete(
-            @PathVariable Integer id,
-            @RequestHeader("X-Admin-Pin") String pin) {
-        if (!isPinValid(pin)) return ResponseEntity.status(403).body("Unauthorized.");
-        if (!productRepository.existsById(id)) return ResponseEntity.notFound().build();
-        productRepository.deleteById(id);
-        return ResponseEntity.ok().build();
+    public void delete(@PathVariable Integer id,
+                       @RequestHeader(value = "X-Admin-Pin", required = false) String pin) {
+        pinVerifier.verify(pin);
+        productService.delete(id);
     }
 }
