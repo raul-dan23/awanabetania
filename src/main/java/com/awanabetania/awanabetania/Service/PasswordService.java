@@ -74,12 +74,26 @@ public class PasswordService {
         } else {
             Leader leader = leaderRepository.findById(id)
                     .orElseThrow(() -> ApiException.notFound("Leader not found."));
-            leader.setPassword(passwordEncoder.encode(temporary));
-            leader.setPasswordChangeRequired(true);
+            setTemporary(leader, temporary);
             username = leaderRepository.save(leader).getUsername();
         }
         log.info("Password reset for {} #{} ({}) by leader #{}", kind, id, username, director.id());
         return new TemporaryPasswordResponse(username, temporary);
+    }
+
+    /**
+     * Gives a new leader account a random password that must be replaced at the first login
+     * (the caller saves the leader), and returns it to be shown once.
+     */
+    public String issueTemporary(Leader leader) {
+        String temporary = generate();
+        setTemporary(leader, temporary);
+        return temporary;
+    }
+
+    private void setTemporary(Leader leader, String temporary) {
+        leader.setPassword(passwordEncoder.encode(temporary));
+        leader.setPasswordChangeRequired(true);
     }
 
     /**

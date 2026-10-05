@@ -4,8 +4,7 @@ import AwanaLogo from '../AwanaLogo';
 
 /**
  * Registration form for children (birth date, parent name, parent phone).
- * Leaders do not register here: the director adds them in the Control Center and they
- * sign in with "Continua cu Google".
+ * Leaders do not register here: the director adds them in the Control Center.
  *
  * On success, shows the assigned username and redirects to login after 4.5s.
  *
@@ -115,7 +114,7 @@ const Register = ({ onSwitchToLogin }) => {
                     </form>
 
                     <p style={{fontSize:'0.82rem', color:'var(--text-secondary)', textAlign:'center', margin:'14px 0 0'}}>
-                        Esti lider? Nu ai nevoie de cont nou: directorul te adauga, iar tu intri cu <strong>Continua cu Google</strong>.
+                        Esti lider? Nu iti faci cont aici: te adauga directorul, din Control Center.
                     </p>
 
                     <p className="auth-switch" onClick={onSwitchToLogin}>

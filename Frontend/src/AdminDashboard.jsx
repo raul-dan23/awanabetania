@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { API_URL } from './config';
 import SeasonsPanel from './components/SeasonsPanel';
+import { useGoogleSignIn } from './googleConfig';
 
 /**
  * PIN-protected admin panel. Gives access to three views:
@@ -20,9 +21,11 @@ const AdminDashboard = () => {
     const [sortBy, setSortBy] = useState('name');
     // Temporary passwords from resets, keyed "CHILD-12" / "LEADER-3", shown until the page is left
     const [tempPasswords, setTempPasswords] = useState({});
-    // "Adauga lider" form: leaders sign in with Google at the address entered here
+    // "Adauga lider" form: the new leader signs in with Google at the address entered here,
+    // or, while Google sign-in is not configured, with a temporary password shown once
     const [showInvite, setShowInvite] = useState(false);
     const [invite, setInvite] = useState({ name: '', surname: '', email: '', role: 'LEADER' });
+    const googleAvailable = useGoogleSignIn();
 
     /**
      * Loads the full user list (leaders + children) from the admin endpoint.
@@ -78,7 +81,11 @@ const AdminDashboard = () => {
             .catch(err => toast.error(typeof err === 'string' && err ? err : 'Resetarea a esuat.'));
     };
 
-    /** Adds a leader who will sign in with "Continua cu Google" at the given address. */
+    /**
+     * Adds a leader. With Google configured and an address given, they sign in with
+     * "Continua cu Google"; otherwise the server returns a temporary password, shown in
+     * the new leader's card like a reset one.
+     */
     const inviteLeader = (e) => {
         e.preventDefault();
         fetch(`${API_URL}/admin/leaders`, {
@@ -88,7 +95,13 @@ const AdminDashboard = () => {
         })
             .then(res => res.ok ? res.json() : res.text().then(t => Promise.reject({ status: res.status, text: t })))
             .then(added => {
-                toast.success(`${added.name} ${added.surname} a fost adaugat. Poate intra cu Google (${added.email}).`);
+                if (added.temporaryPassword) {
+                    setTempPasswords(prev => ({ ...prev, [`LEADER-${added.id}`]: added.temporaryPassword }));
+                    setSearchTerm(added.name);   // brings the new card, with the password, into view
+                    toast.success(`${added.name} ${added.surname} a fost adaugat. Username-ul si parola temporara sunt in cardul lui.`);
+                } else {
+                    toast.success(`${added.name} ${added.surname} a fost adaugat. Poate intra cu Google (${added.email}).`);
+                }
                 setInvite({ name: '', surname: '', email: '', role: 'LEADER' });
                 setShowInvite(false);
                 fetchData();
@@ -260,7 +273,7 @@ const AdminDashboard = () => {
                 </div>
             )}
 
-            {/* Add a leader: they sign in with Google, no registration code */}
+            {/* Add a leader: with Google, or a temporary password while Google is not set up */}
             {viewMode === 'LEADERS' && (
                 <div style={{marginBottom:'16px'}}>
                     {!showInvite ? (
@@ -274,13 +287,19 @@ const AdminDashboard = () => {
                                 <input className="login-input" style={{marginBottom:0}} placeholder="Prenume" required value={invite.name} onChange={e => setInvite({ ...invite, name: e.target.value })} />
                                 <input className="login-input" style={{marginBottom:0}} placeholder="Nume" required value={invite.surname} onChange={e => setInvite({ ...invite, surname: e.target.value })} />
                             </div>
-                            <input className="login-input" style={{marginBottom:0}} type="email" placeholder="Adresa Google (ex: ion@gmail.com)" required value={invite.email} onChange={e => setInvite({ ...invite, email: e.target.value })} />
+                            <input className="login-input" style={{marginBottom:0}} type="email"
+                                   placeholder={googleAvailable ? 'Adresa Google (ex: ion@gmail.com)' : 'Adresa Gmail (optional, pentru mai tarziu)'}
+                                   required={!!googleAvailable} value={invite.email} onChange={e => setInvite({ ...invite, email: e.target.value })} />
                             <select className="login-input" style={{marginBottom:0}} value={invite.role} onChange={e => setInvite({ ...invite, role: e.target.value })}>
                                 <option value="LEADER">Lider</option>
                                 <option value="COORDONATOR">Coordonator</option>
                                 <option value="DIRECTOR">Director</option>
                             </select>
-                            <div style={{fontSize:'0.78rem', color:'#64748b'}}>Liderul intra pe pagina de login cu „Continua cu Google", folosind exact aceasta adresa.</div>
+                            <div style={{fontSize:'0.78rem', color:'#64748b'}}>
+                                {googleAvailable
+                                    ? 'Liderul intra pe pagina de login cu „Continua cu Google", folosind exact aceasta adresa.'
+                                    : 'Dupa ce apesi Adauga, vezi in cardul liderului username-ul si o parola temporara. La prima intrare isi alege parola lui.'}
+                            </div>
                             <div style={{display:'flex', gap:'8px'}}>
                                 <button type="button" onClick={() => setShowInvite(false)} style={{flex:1, padding:'10px', borderRadius:'10px', border:'1px solid #e2e8f0', background:'#f8fafc', cursor:'pointer', fontWeight:'700'}}>Renunta</button>
                                 <button type="submit" style={{flex:2, padding:'10px', borderRadius:'10px', border:'none', background:'#2563eb', color:'white', cursor:'pointer', fontWeight:'800'}}>Adauga</button>
@@ -344,18 +363,20 @@ const AdminDashboard = () => {
 
                                 {isLeaderView && (
                                     <>
-                                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:'8px', padding:'7px 11px', background:'#f8fafc', borderRadius:'8px'}}>
-                                            <span style={{fontSize:'0.78rem', color:'#64748b', fontWeight:'600'}}>Google</span>
-                                            <span style={{display:'flex', alignItems:'center', gap:'8px', minWidth:0}}>
-                                                <span style={{fontWeight:'700', color:'#1e293b', fontSize:'0.85rem', overflow:'hidden', textOverflow:'ellipsis'}}>{user.email || '—'}</span>
-                                                {user.email && (
-                                                    <span style={{fontSize:'0.68rem', fontWeight:'800', padding:'1px 8px', borderRadius:'20px', background: user.googleLinked ? '#dcfce7' : '#f1f5f9', color: user.googleLinked ? '#15803d' : '#64748b'}}>
-                                                        {user.googleLinked ? 'conectat' : 'neconectat inca'}
-                                                    </span>
-                                                )}
-                                                <button onClick={() => changeEmail(user)} style={{background:'white', border:'1px solid #e2e8f0', borderRadius:'8px', padding:'3px 9px', fontSize:'0.75rem', fontWeight:'700', cursor:'pointer', flexShrink:0}}>Schimba</button>
-                                            </span>
-                                        </div>
+                                        {googleAvailable && (
+                                            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', gap:'8px', padding:'7px 11px', background:'#f8fafc', borderRadius:'8px'}}>
+                                                <span style={{fontSize:'0.78rem', color:'#64748b', fontWeight:'600'}}>Google</span>
+                                                <span style={{display:'flex', alignItems:'center', gap:'8px', minWidth:0}}>
+                                                    <span style={{fontWeight:'700', color:'#1e293b', fontSize:'0.85rem', overflow:'hidden', textOverflow:'ellipsis'}}>{user.email || '—'}</span>
+                                                    {user.email && (
+                                                        <span style={{fontSize:'0.68rem', fontWeight:'800', padding:'1px 8px', borderRadius:'20px', background: user.googleLinked ? '#dcfce7' : '#f1f5f9', color: user.googleLinked ? '#15803d' : '#64748b'}}>
+                                                            {user.googleLinked ? 'conectat' : 'neconectat inca'}
+                                                        </span>
+                                                    )}
+                                                    <button onClick={() => changeEmail(user)} style={{background:'white', border:'1px solid #e2e8f0', borderRadius:'8px', padding:'3px 9px', fontSize:'0.75rem', fontWeight:'700', cursor:'pointer', flexShrink:0}}>Schimba</button>
+                                                </span>
+                                            </div>
+                                        )}
                                         {user.phoneNumber && (
                                             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 11px', background:'#f8fafc', borderRadius:'8px'}}>
                                                 <span style={{fontSize:'0.78rem', color:'#64748b', fontWeight:'600'}}>Telefon</span>

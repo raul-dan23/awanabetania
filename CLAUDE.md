@@ -273,7 +273,7 @@ Olimpiada, Departamente/Echipe/Feedback/Notificari/Dashboard/Avertismente.
 - `Shop/ShopConcurrencyTest` (MySQL 8 in Docker): aprobari simultane, sold niciodata negativ.
 - `Account/GoogleSignInTest`, `Account/PasswordResetTest`: vezi sectiunea CONTURI.
 - `Season/SeasonTest`, `Season/SeasonMySqlTest`: vezi sectiunea SEZOANE.
-- Total: 67 de teste (`./mvnw verify`).
+- Total: 70 de teste (`./mvnw verify`).
 
 ### De decis
 - `/api/products` si `/api/nfc/**` nu sunt folosite de frontend (Magazinul lucreaza cu calculator,
@@ -378,7 +378,12 @@ invitat inca publice. Ruleaza cu `./mvnw verify`.
   Google) → `POST /api/auth/google` → serverul il verifica → acelasi `{ token, user }` ca la login.
 - Verificare (`Security/GoogleIdTokenVerifier`): semnatura cu cheile publice Google (JWKS),
   `iss`, `aud` = Client ID-ul nostru, expirare, `email_verified`. Doar Client ID, fara client secret.
-- **Doar pe invitatie:** directorul adauga liderul cu adresa Gmail (`POST /api/admin/leaders`).
+- **Google e optional.** Fara `auth.google.client-id`: nu apare nimic despre Google (buton, card in
+  profil, rand in Control Center — `Frontend/src/googleConfig.js`, `useGoogleSignIn()`), iar
+  `/api/auth/google` da 404.
+- **Doar pe invitatie:** directorul adauga liderul (`POST /api/admin/leaders`). Cu Google configurat
+  si adresa data: fara parola. Altfel raspunsul contine `temporaryPassword` (aratata o data in cardul
+  liderului, schimbata obligatoriu la prima intrare).
   Prima intrare leaga `google_sub` (id-ul permanent Google); urmatoarele cauta dupa el.
   Cont Google necunoscut → 403. Liderii existenti isi leaga contul din „Contul Meu”
   (`POST /api/account/google`) sau directorul le pune adresa (`PUT /api/admin/leaders/{id}/email`,
@@ -409,7 +414,8 @@ invitat inca publice. Ruleaza cu `./mvnw verify`.
 ### Teste
 `Account/GoogleSignInTest` (token-uri semnate cu o cheie RSA generata, verificate cu validatorul
 din productie: semnatura straina, alt `aud`, expirat, email neverificat, cont neinvitat, legare;
-copiii nu vad adresele Google ale directorilor in `/api/dashboard/stats`) si `Account/PasswordResetTest`.
+copiii nu vad adresele Google ale directorilor in `/api/dashboard/stats`), `Account/NoGoogleTest`
+(aplicatia fara Client ID: liderul adaugat primeste parola temporara) si `Account/PasswordResetTest`.
 
 
 ---

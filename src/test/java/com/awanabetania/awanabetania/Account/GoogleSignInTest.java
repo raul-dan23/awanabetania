@@ -82,7 +82,7 @@ class GoogleSignInTest {
 
     @BeforeEach
     void seed() throws Exception {
-        for (String username : new String[]{"google.director", "mariaionescu", "google.leader", "dangheorghe"}) {
+        for (String username : new String[]{"google.director", "mariaionescu", "google.leader", "dangheorghe", "farageorgescu"}) {
             leaderRepository.findByUsername(username).ifPresent(l -> {
                 l.getDepartments().clear();
                 leaderRepository.delete(l);
@@ -261,6 +261,26 @@ class GoogleSignInTest {
                         .header("X-Admin-Pin", "9999").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"A\",\"surname\":\"B\",\"email\":\"a@b.ro\",\"role\":\"LEADER\"}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("with Google configured, a leader added with an address gets no password; one added without gets a temporary password")
+    void inviteWithAndWithoutAddress() throws Exception {
+        JsonNode google = json.readTree(asDirector(post("/api/admin/leaders"),
+                        "{\"name\":\"Maria\",\"surname\":\"Ionescu\",\"email\":\"maria@gmail.com\",\"role\":\"LEADER\"}")
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertThat(google.get("temporaryPassword").isNull()).isTrue();
+        assertThat(leaderRepository.findById(google.get("id").asInt()).orElseThrow().getPassword()).isNull();
+
+        JsonNode noAddress = json.readTree(asDirector(post("/api/admin/leaders"),
+                        "{\"name\":\"Fara\",\"surname\":\"Georgescu\",\"email\":\"\",\"role\":\"LEADER\"}")
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        String temporary = noAddress.get("temporaryPassword").asText();
+        assertThat(temporary).matches("[a-z2-9]{4}-[a-z2-9]{4}");
+        assertThat(noAddress.get("email").isNull()).isTrue();
+        passwordLogin(noAddress.get("username").asText(), temporary, "LEADER")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mustChangePassword").value(true));
     }
 
     @Test

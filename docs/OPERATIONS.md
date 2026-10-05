@@ -220,7 +220,9 @@ Un cont Google care nu e în listă e refuzat, deci nu se poate crea nimeni sing
 
 Serverul are nevoie doar de **Client ID**, care e public (apare oricum în pagina de login).
 Nu se folosește niciun *client secret* și niciun redirect.
-Fără Client ID configurat, butonul Google nu apare și totul merge ca înainte.
+Google e opțional. Fără Client ID, aplicația nu arată nimic despre Google, toată lumea intră cu
+utilizator și parolă, iar un lider adăugat din Control Center primește o parolă temporară (vezi 8.3).
+Poți configura Google oricând mai târziu.
 
 ### 8.1 Client ID-ul în Google Cloud Console (o singură dată, ~10 minute)
 
@@ -276,7 +278,10 @@ Local, aceeași valoare se pune în `.env`, ca `GOOGLE_CLIENT_ID=…`.
 ### 8.3 Liderii
 
 - **Lider nou:** Control Center → *Lideri* → *+ Adauga lider* → nume, adresa Gmail, rol.
-  Liderul intră apoi cu „Continuă cu Google” pe adresa aceea. Nu primește parolă.
+  - Cu Google configurat: liderul intră cu „Continuă cu Google” pe adresa aceea. Nu primește parolă.
+  - Fără Google (sau fără adresă): în cardul liderului apar username-ul și o parolă temporară,
+    o singură dată. I le dai liderului; la prima intrare își alege parola lui. După ce
+    configurezi Google, își poate lega contul din *Contul Meu*.
 - **Lider existent** (are deja parolă), una din două:
   - singur: intră cu parola → *Contul Meu* → *Cont Google* → alege contul;
   - directorul: Control Center → *Lideri* → rândul *Google* → *Schimba* → adresa liderului.

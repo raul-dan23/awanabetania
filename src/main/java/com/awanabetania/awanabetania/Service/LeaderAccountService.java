@@ -2,11 +2,16 @@ package com.awanabetania.awanabetania.Service;
 
 import com.awanabetania.awanabetania.DataInitializer;
 import com.awanabetania.awanabetania.Dto.InviteLeaderRequest;
+import com.awanabetania.awanabetania.Dto.InvitedLeaderResponse;
 import com.awanabetania.awanabetania.Dto.LeaderAccountResponse;
 import com.awanabetania.awanabetania.Exception.ApiException;
 import com.awanabetania.awanabetania.Model.Leader;
 import com.awanabetania.awanabetania.Repository.LeaderRepository;
+import com.awanabetania.awanabetania.Security.AuthUser;
+import com.awanabetania.awanabetania.Security.GoogleIdTokenVerifier;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,26 +21,31 @@ import java.util.Locale;
 /**
  * Leader accounts as the director manages them. Leaders no longer register themselves with
  * a code (whoever had a code could register as director); the director adds them with
- * their Google address and role.
+ * their role and, for "Continue with Google", their Google address.
  */
 @Service
 @RequiredArgsConstructor
 public class LeaderAccountService {
 
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final Logger log = LoggerFactory.getLogger(LeaderAccountService.class);
 
     private final LeaderRepository leaderRepository;
+    private final PasswordService passwordService;
+    private final GoogleIdTokenVerifier googleVerifier;
 
     /**
-     * Adds a leader who signs in with Google. No password is set; the director can give
-     * one later with a password reset if the leader needs it.
+     * Adds a leader. With a Google address and Google sign-in configured, they sign in with
+     * Google and get no password. Otherwise they get a temporary password, returned once for
+     * the director to pass on, which they replace at the first login; once Google is set up
+     * they can link it from their profile.
      *
      * @throws ApiException 409 when the address is already used
      */
     @Transactional
-    public LeaderAccountResponse invite(InviteLeaderRequest request) {
-        String email = normalize(request.email());
-        if (leaderRepository.findByEmailIgnoreCase(email).isPresent()) {
+    public InvitedLeaderResponse invite(InviteLeaderRequest request, AuthUser director) {
+        String email = request.email() == null || request.email().isBlank() ? null : normalize(request.email());
+        if (email != null && leaderRepository.findByEmailIgnoreCase(email).isPresent()) {
             throw ApiException.conflict("Another leader already uses " + email + ".");
         }
         Leader leader = new Leader();
@@ -46,7 +56,11 @@ public class LeaderAccountService {
         leader.setPhoneNumber(request.phoneNumber());
         leader.setUsername(uniqueUsername(leader.getName(), leader.getSurname()));
         leader.setRating(0.0f);
-        return LeaderAccountResponse.from(leaderRepository.save(leader));
+        String temporary = email == null || !googleVerifier.enabled() ? passwordService.issueTemporary(leader) : null;
+        Leader saved = leaderRepository.save(leader);
+        log.info("Leader #{} ({}) added by leader #{}, signing in with {}", saved.getId(), saved.getUsername(),
+                director.id(), temporary == null ? "Google" : "a temporary password");
+        return InvitedLeaderResponse.from(saved, temporary);
     }
 
     /**

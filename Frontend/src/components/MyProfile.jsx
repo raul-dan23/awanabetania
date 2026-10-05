@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config';
 import { toast } from 'sonner';
 import GoogleSignInButton from './GoogleSignInButton';
+import { useGoogleSignIn } from '../googleConfig';
 
 /**
  * Personal profile page. Shows and allows editing of the user's own data.
@@ -26,6 +27,7 @@ const MyProfile = ({ user, onUpdateUser }) => {
     const [showDeleteInput, setShowDeleteInput] = useState(false);
     const [deleteCode, setDeleteCode] = useState('');
     const [myFeedbacks, setMyFeedbacks] = useState([]);
+    const googleAvailable = useGoogleSignIn();
     const [showFeedback, setShowFeedback] = useState(false);
 
     useEffect(() => {
@@ -277,7 +279,8 @@ const MyProfile = ({ user, onUpdateUser }) => {
                         </div>
                     )}
 
-                    {!isChild && (
+                    {/* Only once Google sign-in is configured on the server */}
+                    {!isChild && googleAvailable && (
                         <div className="card">
                             <p className="db-section-title">Cont Google</p>
                             {user.googleLinked ? (

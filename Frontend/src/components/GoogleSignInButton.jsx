@@ -1,20 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { API_URL } from '../config';
+import { loadGoogleClientId } from '../googleConfig';
 
-// Shared by every button on the page: the server settings and Google's script load once.
-let configPromise = null;
+// Shared by every button on the page: Google's script loads once.
 let scriptPromise = null;
-
-/** The public Google client id configured on the server, or null. */
-function loadClientId() {
-    if (!configPromise) {
-        configPromise = fetch(`${API_URL}/auth/config`)
-            .then(r => (r.ok ? r.json() : {}))
-            .then(cfg => cfg.googleClientId || null)
-            .catch(() => null);
-    }
-    return configPromise;
-}
 
 /** Google Identity Services, the script behind the official "Sign in with Google" button. */
 function loadGoogleScript() {
@@ -52,7 +40,7 @@ const GoogleSignInButton = ({ onCredential, text = 'continue_with', caption = nu
 
     useEffect(() => {
         let cancelled = false;
-        loadClientId()
+        loadGoogleClientId()
             .then(clientId => {
                 if (!clientId) return null;
                 return loadGoogleScript().then(() => {

@@ -3,6 +3,7 @@ package com.awanabetania.awanabetania.Controller;
 import com.awanabetania.awanabetania.Dto.CardAssignedResponse;
 import com.awanabetania.awanabetania.Dto.CardAssignmentRequest;
 import com.awanabetania.awanabetania.Dto.InviteLeaderRequest;
+import com.awanabetania.awanabetania.Dto.InvitedLeaderResponse;
 import com.awanabetania.awanabetania.Dto.LeaderAccountResponse;
 import com.awanabetania.awanabetania.Dto.LeaderEmailRequest;
 import com.awanabetania.awanabetania.Dto.MessageResponse;
@@ -75,12 +76,15 @@ public class AdminController {
         return new MessageResponse("Card dissociated.");
     }
 
-    /** Adds a leader who signs in with Google at the given address. 400, 403, 409. */
+    /**
+     * Adds a leader: with Google when an address is given and Google sign-in is configured,
+     * otherwise with a temporary password returned once. 400, 403, 409.
+     */
     @PostMapping("/leaders")
-    public LeaderAccountResponse inviteLeader(@RequestHeader(value = "X-Admin-Pin", required = false) String pin,
+    public InvitedLeaderResponse inviteLeader(@RequestHeader(value = "X-Admin-Pin", required = false) String pin,
                                               @Valid @RequestBody InviteLeaderRequest request) {
         pinVerifier.verify(pin);
-        return leaderAccountService.invite(request);
+        return leaderAccountService.invite(request, AuthUser.current());
     }
 
     /**
