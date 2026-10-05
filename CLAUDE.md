@@ -18,7 +18,7 @@ src/main/java/com/awanabetania/awanabetania/
 ├── Repository/  → Spring Data JPA
 └── AwanaBetaniaApplication.java
 ```
-Conventiile pentru cod nou sunt in sectiunea „FAZA 2” de mai jos.
+Conventiile pentru cod nou sunt in sectiunea „FAZA 2” de mai jos. Ce mai e de facut: `docs/ROADMAP.md`.
 
 ## Modele cheie
 - **Child** — `id`, `name`, `surname`, `seasonPoints`, `dailyPoints`, relatii cu `Score`, `ChildProgress`, `ChildManual`
@@ -285,8 +285,7 @@ Olimpiada, Departamente/Echipe/Feedback/Notificari/Dashboard/Avertismente.
 - Total: 78 de teste (`./mvnw verify`).
 
 ### De decis
-- `/api/products` si `/api/nfc/**` nu sunt folosite de frontend (Magazinul lucreaza cu calculator,
-  bridge-ul doar cu WebSocket). Candidati la stergere: mai putina suprafata de atac.
+- `/api/products` si `/api/nfc/**` nu sunt folosite de frontend: vezi `docs/ROADMAP.md`, task-ul S10.
 
 ---
 
@@ -510,51 +509,7 @@ Repository-uri noi adăugate: `ScoreRepository.findByMeetingId`, `WarningReposit
 
 ---
 
-### 🔴 CRITIC
-
-#### 1. ~~Nicio autentificare pe endpoint-uri~~ — REZOLVAT
-Spring Security + JWT, vezi sectiunea "AUTENTIFICARE JWT" de mai sus.
-
-#### 2. Secrete expuse in istoricul git (repo public) — DE FACUT DE MANA
-Doua lucruri sunt in istoricul public si nu pot fi sterse prin cod:
-- **Parola MySQL** `application.properties`, comentata, prezenta in 5 commit-uri.
-  → schimb-o pe server; rotatia e singurul fix real.
-- **Codurile de inregistrare** vechi, din `beta1.0` incoace.
-  → codurile de inregistrare au fost eliminate cu totul; nu mai deschid nimic.
-
-Optional: `git filter-repo` pentru curatarea istoricului, sau trecerea repo-ului pe privat.
-
----
-
-### 🔵 ÎMBUNĂTĂȚIRI VIITOARE
-
-#### Ramase din auditul de securitate (oct. 2026)
-- **Fara limitare de incercari** la login si la PIN-ul admin (PIN-ul are doar 4 cifre). Adauga rate limit.
-- **Olimpiada** — `/extra` public accepta orice valoare si orice nume de arbitru; doua
-  valori `Integer.MAX` dau total negativ (overflow). Pune o limita (ex. 0 < puncte ≤ 10000).
-- **`extraPoints` negativ nelimitat** in `ScoreController` — un lider poate scadea
-  -999999 dintr-o greseala de tastare.
-- **NFC bridge** — WebSocket pe localhost fara verificare de `Origin`: orice site deschis
-  pe laptopul contabilului poate citi UID-urile. UID-ul se poate clona; nu e autentificare puternica.
-- **Input invalid → 500** in controllerele inca nerefacute (`Map` in `@RequestBody`: Olimpiada,
-  echipe, departamente...). Rezolvat pentru Magazin; restul se rezolva pe masura ce trec in Faza 2.
-- **Telefonul directorului** e hardcodat in `DataInitializer` (repo public).
-- **Registru Copii → „Atribuie Manual”** apeleaza `POST /api/children/{id}/assign-manual`, care nu
-  mai exista in backend (disparut in „awanabetania 3.0”): butonul nu face nimic, fara niciun mesaj.
-  De refacut (cu `seasonId`, ca manualele sa tina de sezon) sau de scos.
-
-#### Prioritate înaltă
-- ~~JWT / Autentificare reală~~ — implementat.
-- **HTTPS forțat** — obligatoriu pentru producție.
-- **Reactivarea testelor de controller** — cele 6 fisiere din `src/test/.../Controller/`
-  sunt comentate integral (incep cu `/**`) si nu ruleaza.
-
-#### Prioritate medie
-- **React Router** — navigare pe URL; suportă butonul Back și link-uri directe.
-- **Context API sau Zustand** — starea globală (`user`, `page`) fără prop drilling.
-- **Error Boundaries** — fallback vizibil la crash React în loc de ecran alb.
-- **WebSockets** — înlocuiește polling-ul din TeamsManager (acum 5s).
-
-#### Prioritate scăzută
-- **TypeScript** — type safety pentru props și răspunsuri API.
-- **Separare completă componente** — App.jsx mai conține logică de routing.
+### De facut
+Lista completa a ce a ramas, pe etape: pasi manuali pe server si GitHub, securitate, restul Fazei 2,
+organizare. Fiecare task are fisierele si criteriul de „gata”: **`docs/ROADMAP.md`**.
+Cand termini un task, bifeaza-l acolo si actualizeaza sectiunile de mai sus.
