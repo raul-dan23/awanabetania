@@ -11,5 +11,6 @@ Type=oneshot
 User=awana
 WorkingDirectory=/var/www/html
 ExecStart=/var/www/html/scripts/backup-db.sh daily
-# Copie in afara serverului (optional, necesita rclone configurat pentru utilizatorul awana):
-#Environment=BACKUP_RCLONE_REMOTE=gdrive:awana-backups
+# Copia pe Google Drive si cate backup-uri raman pe server se seteaza in
+# /var/www/html/application.properties (backup.rclone-remote, backup.keep-local), ca pentru
+# orice backup: vezi docs/OPERATIONS.md, sectiunea "Backup si restaurare".

@@ -125,9 +125,13 @@ main() {
     if [ "${SKIP_BACKUP:-}" = "1" ]; then
         warn "SKIP_BACKUP=1: fara backup."
     else
-        local out
-        out="$("$APP_DIR/scripts/backup-db.sh" pre-deploy)" \
-            || fail "Backup-ul a esuat; nu continui fara backup. (In urgente: SKIP_BACKUP=1 ./deploy.sh)"
+        local out rc=0
+        out="$("$APP_DIR/scripts/backup-db.sh" pre-deploy)" || rc=$?
+        if [ "$rc" -eq 3 ]; then
+            warn "Copia backup-ului in afara serverului a esuat; backup-ul de pe server exista, continui."
+        elif [ "$rc" -ne 0 ]; then
+            fail "Backup-ul a esuat; nu continui fara backup. (In urgente: SKIP_BACKUP=1 ./deploy.sh)"
+        fi
         echo "$out"
         BACKUP_FILE="$(sed -n 's/^Backup: \(.*\) (.*/\1/p' <<< "$out")"
     fi

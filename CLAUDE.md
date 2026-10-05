@@ -234,10 +234,18 @@ curl -s localhost:8080/actuator/info   # commit-ul care ruleaza
   orbeste poate crea bucle de request-uri).
 
 ### Backup — `scripts/`
-- `backup-db.sh [eticheta]` → `~/awanabetania-backups/*.sql.gz`, retentie 30 zile, scriere atomica,
-  credentialele din `application.properties` (fara parola in linia de comanda). Optional rclone.
+- `backup-db.sh [eticheta]` → `~/awanabetania-backups/*.sql.gz`, scriere atomica, credentialele din
+  `application.properties` (fara parola in linia de comanda).
+- Setari in `/var/www/html/application.properties` (citite de script, deci valabile pentru orice
+  backup): `backup.rclone-remote` (copie pe Google Drive cu rclone) si `backup.keep-local`
+  (cate raman pe server, implicit 10; cel nou ramane mereu).
+- Cod de iesire 3 = backup facut pe server, copia pe Drive a esuat: `deploy.sh`, `restore-db.sh` si
+  sezonul nou continua cu un avertisment. Orice alt cod != 0 = niciun backup, deci se opresc.
 - `restore-db.sh <fisier>` → confirmare, backup pre-restore, stop serviciu, inlocuire tabele, start.
-- Zilnic: `ops/systemd/awanabetania-backup.{service,timer}` (03:17). Instalare: `docs/OPERATIONS.md`.
+  Restaureaza dintr-o copie temporara: backup-ul pre-restore poate sterge fisierul sursa (keep-local).
+- Automat: inainte de deploy (`pre-deploy`), inainte de un sezon nou (`pre-season`, din aplicatie:
+  `Service/BackupService`, proprietatea `backup.script`; esec → 503 si sezonul nu porneste) si,
+  optional, zilnic: `ops/systemd/awanabetania-backup.{service,timer}` (03:17). Instalare: `docs/OPERATIONS.md`.
 
 ---
 
@@ -272,8 +280,9 @@ Olimpiada, Departamente/Echipe/Feedback/Notificari/Dashboard/Avertismente.
 - `Shop/ShopApiTest` (H2, MockMvc): forma JSON, 400/403/404/409, rollback la sold insuficient.
 - `Shop/ShopConcurrencyTest` (MySQL 8 in Docker): aprobari simultane, sold niciodata negativ.
 - `Account/GoogleSignInTest`, `Account/PasswordResetTest`: vezi sectiunea CONTURI.
-- `Season/SeasonTest`, `Season/SeasonMySqlTest`: vezi sectiunea SEZOANE.
-- Total: 70 de teste (`./mvnw verify`).
+- `Season/SeasonTest`, `Season/SeasonMySqlTest`, `Season/SeasonBackupTest`: vezi sectiunea SEZOANE.
+- `Service/BackupServiceTest`: codurile de iesire ale scriptului de backup (cu scripturi de proba).
+- Total: 78 de teste (`./mvnw verify`).
 
 ### De decis
 - `/api/products` si `/api/nfc/**` nu sunt folosite de frontend (Magazinul lucreaza cu calculator,
@@ -434,7 +443,8 @@ pornesc de la zero, iar sezonul incheiat ramane de citit (nu se sterge nimic).
   randurile sezonului, care raman in BD.
 
 ### Sezon nou (Control Center → Sezoane, director + PIN)
-`SeasonService.startNew`, o singura tranzactie:
+`SeasonService.startNew`: intai backup-ul bazei (`BackupService`, eticheta `pre-season`; daca esueaza,
+503 si nu se schimba nimic), apoi o singura tranzactie:
 - **Se reseteaza:** `season_points`, `daily_points`, streak, prezente, lectii, `last_attendance_date`,
   insigne, `has_manual/has_shirt/has_hat`, suspendari, echipa; `child_progress.manuals_count`;
   lista `child_manual` (copiata ca JSON in arhiva); `leaders.rating`; notificarile FEEDBACK,
